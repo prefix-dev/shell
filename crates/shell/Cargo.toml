@@ -1,0 +1,27 @@
+[package]
+name = "shell"
+version = "0.1.0"
+edition.workspace = true
+authors = ["The prefix-dev/shell team <hi@prefix.dev>"]
+description = "A cross-platform, bash compatible shell"
+categories.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+readme.workspace = true
+default-run = "shell"
+publish = false
+
+[[bin]]
+name = "shell"
+path = "src/main.rs"
+
+[features]
+
+[dependencies]
+deno_task_shell = { path = "../deno_task_shell" }
+tokio = "1.39.2"
+
+[package.metadata.release]
+# Dont publish the binary
+release = false

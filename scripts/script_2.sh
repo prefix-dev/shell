@@ -1,0 +1,2 @@
+ls;
+cat Cargo.toml

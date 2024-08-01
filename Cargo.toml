@@ -1,0 +1,11 @@
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+
+[workspace.package]
+categories = ["development-tools"]
+homepage = "https://github.com/prefix-dev/shell"
+repository = "https://github.com/prefix-dev/shell"
+license = "BSD-3-Clause"
+edition = "2021"
+readme = "README.md"
