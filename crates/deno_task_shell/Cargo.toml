@@ -25,6 +25,7 @@ os_pipe = { version = "1.1.4", optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
 monch = "0.5.0"
 thiserror = "1.0.58"
+pest = "2.6.0"
 
 [dev-dependencies]
 parking_lot = "0.12.1"

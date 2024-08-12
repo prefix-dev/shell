@@ -1,0 +1,69 @@
+WHITESPACE = _{ " " | "\t" | ("\\" ~ WHITESPACE+ ~ NEWLINE) }
+
+
+file = _{ SOI ~ sequential_list ~ EOI }
+
+sequential_list = {
+    (sequential_list_item ~ (";" | "\n"))* ~ sequential_list_item
+}
+
+sequential_list_item = { async_prefix? ~ sequence }
+
+async_prefix = { "&" }
+
+sequence = {env_var | pipeline}
+
+env_var = { text ~ "=" ~ word }
+
+text = { char+ }
+
+char = _{ ASCII_ALPHANUMERIC | "_" | "." }
+
+env_var_char = _{ ASCII_ALPHANUMERIC | "_" }
+
+variable = { env_var_char+ }
+
+word = { quoted_word | unquoted_word }
+
+unquoted_word = _{ word_part+ }
+
+// Word Part section
+word_part = { !("$" ~ ("$" | "#" | "*")) ~ ("$?" 
+    | ("\\$" ~ word_part) 
+    | ("$" ~ !(variable | "("))
+    | ("\\" ~ ("`" | "\"" | ")" | "(" | "'" | " ") ~ word_part)
+    | ("$(" ~ sequential_list ~ ")")
+    | ("$" ~ variable)
+    | quoted_word
+    | char) }
+
+quoted_word = { (single_quoted_word | double_quoted_word)+ }
+
+single_quoted_word = _{ "'" ~ word_part* ~ "'" }
+
+double_quoted_word = _{ "\"" ~ word_part* ~ "\"" }
+
+pipeline = { negation_prefix? ~ pipesequence }
+
+negation_prefix = { "!" }
+
+pipesequence = { command ~ (pipesequence_operator ~ pipesequence)? }
+
+pipesequence_operator = { "|" | "|&" }
+
+command = { subshell | simple_command }
+
+subshell = { "(" ~ sequential_list ~ ")" }
+
+simple_command = { env_var* ~ command_args* }
+
+command_args = {
+    (shell_arg)+ ~
+    (list_op | pipesequence_operator | ")")?
+}
+
+list_op = _{ sequential_list_op | async_prefix }
+
+sequential_list_op = _{ ";" }
+
+shell_arg = { word }
