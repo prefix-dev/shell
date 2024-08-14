@@ -1,69 +1,101 @@
-WHITESPACE = _{ " " | "\t" | ("\\" ~ WHITESPACE+ ~ NEWLINE) }
+// Define valid characters for identifiers
+VALID_CHAR = _{ ASCII_ALPHANUMERIC | "_" | "." | "/" | "!" | "," }
 
+// Valid characters for environment variable names
+ENV_VAR_CHAR = _{ ASCII_ALPHANUMERIC | "_" }
 
-file = _{ SOI ~ sequential_list ~ EOI }
+// Environment variable names consist of one or more valid characters
+VARIABLE = { ENV_VAR_CHAR+ }
 
-sequential_list = {
-    (sequential_list_item ~ (";" | "\n"))* ~ sequential_list_item
+// Define allowed whitespace characters including spaces, tabs, and escaped newlines
+whitespace = _{ " " | "\t" | ("\\" ~ whitespace+ ~ NEWLINE) }
+
+// A word can be either quoted or unquoted
+WORD = { QUOTED_WORD | UNQUOTED_WORD }
+
+// Unquoted words are made up of one or more word parts, separated by optional whitespace
+UNQUOTED_WORD = _{ WORD_PART ~ (whitespace* ~ WORD_PART)* }
+
+// The structure of word parts
+WORD_PART = _{
+    // TODO: The below are not supported yet
+    !("$" ~ ("$" | "#" | "*")) 
+    ~ (
+        "$?" // Special variable for the last command's exit status
+        | ("\\$" ~ WORD_PART) // Escaped dollar sign followed by a word part
+        | ("$" ~ !(VARIABLE | "(")) // A dollar sign not followed by a variable or parenthesis
+        | ("\\" ~ ("`" | "\"" | ")" | "(" | "'" | " ") ~ WORD_PART) // Escaped special characters
+        | ("$(" ~ SEQUENTIAL_LIST ~ ")") // Command substitution
+        | ("$" ~ VARIABLE) // Variable substitution
+        | QUOTED_WORD // Quoted word
+        | TEXT // Regular text
+    ) 
 }
 
-sequential_list_item = { async_prefix? ~ sequence }
+QUOTED_WORD = { (SINGLE_QUOTED_WORD | DOUBLE_QUOTED_WORD)+ }
 
-async_prefix = { "&" }
+SINGLE_QUOTED_WORD = { "'" ~ WORD_PART ~ (whitespace* ~ WORD_PART)* ~ "'" }
 
-sequence = {env_var | pipeline}
+DOUBLE_QUOTED_WORD = { "\"" ~ WORD_PART ~ (whitespace* ~ WORD_PART)* ~ "\"" }
 
-env_var = { text ~ "=" ~ word }
+// Environment variable assignment in the format: <IDENTIFIER> = <WORD>
+ENV_VAR_ASSIGNMENT = { VARIABLE ~ "=" ~ WORD ~ whitespace* }
 
-text = { char+ }
+// Identifiers consist of one or more valid characters
+TEXT = { VALID_CHAR+ }
 
-char = _{ ASCII_ALPHANUMERIC | "_" | "." }
+// A pipeline can optionally start with a negation prefix and consists of a sequence of commands
+PIPELINE = { NEGATION_PREFIX? ~ whitespace* ~ PIPE_SEQUENCE }
 
-env_var_char = _{ ASCII_ALPHANUMERIC | "_" }
+NEGATION_PREFIX = { "!" }
 
-variable = { env_var_char+ }
+// A pipe sequence consists of a command followed by an optional pipeline operator and another command
+PIPE_SEQUENCE = { COMMAND ~ whitespace* ~ (PIPE_OPERATOR ~ whitespace* ~ PIPE_SEQUENCE)? }
 
-word = { quoted_word | unquoted_word }
+// Pipeline operators for piping output between commands
+PIPE_OPERATOR = { STDOUT | STDERR }
 
-unquoted_word = _{ word_part+ }
+STDOUT = { "|" }
 
-// Word Part section
-word_part = { !("$" ~ ("$" | "#" | "*")) ~ ("$?" 
-    | ("\\$" ~ word_part) 
-    | ("$" ~ !(variable | "("))
-    | ("\\" ~ ("`" | "\"" | ")" | "(" | "'" | " ") ~ word_part)
-    | ("$(" ~ sequential_list ~ ")")
-    | ("$" ~ variable)
-    | quoted_word
-    | char) }
+STDERR = { "|&" }
 
-quoted_word = { (single_quoted_word | double_quoted_word)+ }
+// A command can be a subshell or a simple command
+COMMAND = { SUBSHELL | SIMPLE_COMMAND }
 
-single_quoted_word = _{ "'" ~ word_part* ~ "'" }
+// Subshell commands enclosed in parentheses
+SUBSHELL = { "(" ~ whitespace* ~ SEQUENTIAL_LIST ~ whitespace* ~ ")" }
 
-double_quoted_word = _{ "\"" ~ word_part* ~ "\"" }
+// A simple command consists of optional environment variable assignments followed by command arguments
+SIMPLE_COMMAND = { ENV_VAR_ASSIGNMENT* ~ COMMAND_ARGUMENTS* }
 
-pipeline = { negation_prefix? ~ pipesequence }
-
-negation_prefix = { "!" }
-
-pipesequence = { command ~ (pipesequence_operator ~ pipesequence)? }
-
-pipesequence_operator = { "|" | "|&" }
-
-command = { subshell | simple_command }
-
-subshell = { "(" ~ sequential_list ~ ")" }
-
-simple_command = { env_var* ~ command_args* }
-
-command_args = {
-    (shell_arg)+ ~
-    (list_op | pipesequence_operator | ")")?
+// Command arguments that exclude certain operators and are separated by whitespace
+COMMAND_ARGUMENTS = {
+    !(LIST_OPERATOR | PIPE_OPERATOR | ")") ~
+    (SHELL_ARG ~ (whitespace+ ~ SHELL_ARG)* ~ whitespace*) 
 }
 
-list_op = _{ sequential_list_op | async_prefix }
+// Shell arguments are simply words
+SHELL_ARG = _{ WORD }
 
-sequential_list_op = _{ ";" }
+// List operators: Sequential list operators or async prefixes
+LIST_OPERATOR = _{ SEQUENTIAL_LIST_OPERATOR | ASYNC_PREFIX }
 
-shell_arg = { word }
+// Sequential list operator represented by the semicolon
+SEQUENTIAL_LIST_OPERATOR = _{ ";" }
+
+// An optional async prefix represented by the '&' character
+ASYNC_PREFIX = { "&" }
+
+// A sequence is an environment variable assignment or a pipeline, followed by optional whitespace
+SEQUENCE = { (ENV_VAR_ASSIGNMENT | PIPELINE) ~ whitespace* }
+
+// A sequential item can optionally start with an async prefix followed by a sequence
+SEQUENTIAL_ITEM = { ASYNC_PREFIX? ~ SEQUENCE }
+
+// A list of sequential items separated by either semicolons or newlines
+SEQUENTIAL_LIST = {
+    (SEQUENTIAL_ITEM ~ whitespace* ~ (";" | "\n"))* ~ whitespace* ~ SEQUENTIAL_ITEM
+}
+
+// Entry point: The entire file should match a list of sequential items
+FILE = _{ SOI ~ SEQUENTIAL_LIST ~ EOI }

@@ -1,0 +1,1 @@
+echo "Double word" 'Single word'
