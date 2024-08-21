@@ -1,1 +1,2 @@
-echo "Double word" 'Single word'
+ls;
+cat Cargo.toml

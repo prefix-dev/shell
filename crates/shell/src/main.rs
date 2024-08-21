@@ -11,11 +11,14 @@ async fn main() {
 
     // read text from stdin and print it
     let script_text = std::fs::read_to_string(&args[1]).unwrap();
-    println!("Executing:\n\n{}\n\n-----------------------------------\n\n", script_text);
+    println!(
+        "Executing:\n\n{}\n\n-----------------------------------\n\n",
+        script_text
+    );
 
     let list = deno_task_shell::parser::parse(&script_text).unwrap();
 
-    // execute
+    // // execute
     let env_vars = std::env::vars().collect();
 
     let cwd = std::env::current_dir().expect("Failed to get current directory");

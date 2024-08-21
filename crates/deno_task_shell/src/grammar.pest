@@ -1,119 +1,184 @@
-// Define allowed whitespace characters including spaces, tabs, and escaped newlines
+// grammar.pest
+
+// Whitespace and comments
 WHITESPACE = _{ " " | "\t" | ("\\" ~ WHITESPACE* ~ NEWLINE) }
+COMMENT = _{ "#" ~ (!NEWLINE ~ ANY)* }
 
-// Define valid characters for identifiers
-VALID_CHAR = _{ ASCII_ALPHANUMERIC | "_" | "." | "/" | "!" | "," }
+// Basic tokens
+WORD_WITH_EQUAL = ${ "="? ~ (!(WHITESPACE | OPERATOR | NEWLINE) ~ ANY)+ }
+WORD = ${ (!(WHITESPACE | OPERATOR | NEWLINE) ~ ANY)+ }
+QUOTED_WORD = ${ DOUBLE_QUOTED | SINGLE_QUOTED }
+DOUBLE_QUOTED = @{ "\"" ~ (!"\"" ~ ANY)* ~ "\"" }
+SINGLE_QUOTED = @{ "'" ~ (!"'" ~ ANY)* ~ "'" }
+NAME = ${ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+ASSIGNMENT_WORD = ${ NAME ~ "=" ~ WORD }
+IO_NUMBER = @{ ASCII_DIGIT+ }
 
-VALID_CHAR_WITH_WHITESPACE = _{ VALID_CHAR | WHITESPACE }
+// Special tokens
+AND_IF = { "&&" }
+OR_IF = { "||" }
+DSEMI = { ";;" }
+LESS = { "<" }
+GREAT = { ">" }
+DLESS = { "<<" }
+DGREAT = { ">>" }
+LESSAND = { "<&" }
+GREATAND = { ">&" }
+LESSGREAT = { "<>" }
+DLESSDASH = { "<<-" }
+CLOBBER = { ">|" }
+AMPERSAND = { "&" }
 
-// Valid characters for environment variable names
-ENV_VAR_CHAR = _{ ASCII_ALPHANUMERIC | "_" }
-
-// Environment variable names consist of one or more valid characters
-VARIABLE = ${ ENV_VAR_CHAR+ }
-
-// A word can be either quoted or unquoted
-WORD = _{ QUOTED_WORD | UNQUOTED_WORD }
-
-// Unquoted words are made up of one or more word parts, separated by optional whitespace
-UNQUOTED_WORD = { UNQUOTED_WORD_PART+ }
-
-// The structure of word parts
-UNQUOTED_WORD_PART = ${
-    // TODO: The below are not supported yet
-    !("$" ~ ("$" | "#" | "*")) 
-    ~ (
-        "$?" // Special variable for the last command's exit status
-        | ("\\$" ~ UNQUOTED_WORD_PART) // Escaped dollar sign followed by a word part
-        | ("$(" ~ SEQUENTIAL_LIST ~ ")") // Command substitution
-        | ("$" ~ !(VARIABLE | "(")) // A dollar sign not followed by a variable or parenthesis
-        | ("\\" ~ ("`" | "\"" | ")" | "(" | "'" | " ") ~ UNQUOTED_WORD_PART) // Escaped special characters
-        | ("$" ~ VARIABLE) // Variable substitution
-        | QUOTED_WORD // Quoted word
-        | TEXT // Regular text
-    ) 
+// Operators
+OPERATOR = _{
+    AND_IF | OR_IF | DSEMI | DLESS | DGREAT | LESSAND | GREATAND | LESSGREAT | DLESSDASH | CLOBBER |
+    "(" | ")" | "{" | "}" | ";" | "&" | "|" | "<" | ">" | "!"
 }
 
-QUOTED_WORD_PART = ${
-    // TODO: The below are not supported yet
-    !("$" ~ ("$" | "#" | "*")) 
-    ~ (
-        "$?" // Special variable for the last command's exit status
-        | ("\\$" ~ QUOTED_WORD_PART) // Escaped dollar sign followed by a word part
-        | ("$" ~ !(VARIABLE | "(")) // A dollar sign not followed by a variable or parenthesis
-        | ("\\" ~ ("`" | "\"" | ")" | "(" | "'" | " ") ~ QUOTED_WORD_PART) // Escaped special characters
-        | ("$(" ~ SEQUENTIAL_LIST ~ ")") // Command substitution
-        | ("$" ~ VARIABLE) // Variable substitution
-        | QUOTED_WORD // Quoted word
-        | TEXT_WITH_WHITESPACE // Regular text or whitespace
-    ) 
+// Reserved words
+If = { "if" }
+Then = { "then" }
+Else = { "else" }
+Elif = { "elif" }
+Fi = { "fi" }
+Do = { "do" }
+Done = { "done" }
+Case = { "case" }
+Esac = { "esac" }
+While = { "while" }
+Until = { "until" }
+For = { "for" }
+Lbrace = { "{" }
+Rbrace = { "}" }
+Bang = { "!" }
+In = { "in" }
+Stdout = { "|" }
+StdoutStderr = { "|&" }
+
+RESERVED_WORD = _{
+    If | Then | Else | Elif | Fi | Do | Done |
+    Case | Esac | While | Until | For |
+    Lbrace | Rbrace | Bang | In |
+    Stdout | StdoutStderr
 }
 
-QUOTED_WORD = { (SINGLE_QUOTED_WORD | DOUBLE_QUOTED_WORD)+ }
+// Main grammar rules
+complete_command = _{ (list ~ separator)* ~ list ~ separator? }
+list = { and_or ~ (separator_op ~ and_or)* ~ separator_op? }
+and_or = { pipeline ~ ((AND_IF | OR_IF) ~ linebreak ~ pipeline)* }
+pipeline = { Bang? ~ pipe_sequence }
+pipe_sequence = { command ~ (Stdout | StdoutStderr ~ linebreak ~ pipe_sequence)* }
 
-SINGLE_QUOTED_WORD = { "'" ~ QUOTED_WORD_PART ~ ("\""* ~ QUOTED_WORD_PART)* ~ "'" }
-
-DOUBLE_QUOTED_WORD = { "\"" ~ QUOTED_WORD_PART ~ ("\""* ~ QUOTED_WORD_PART)* ~ "\"" }
-
-// Environment variable assignment in the format: <IDENTIFIER> = <WORD>
-ENV_VAR_ASSIGNMENT = { VARIABLE ~ "=" ~ WORD }
-
-// Identifiers consist of one or more valid characters
-TEXT = ${ VALID_CHAR+ }
-
-// Text can include whitespace used inside quoted words
-TEXT_WITH_WHITESPACE = { VALID_CHAR_WITH_WHITESPACE+ }
-
-// A pipeline can optionally start with a negation prefix and consists of a sequence of commands
-PIPELINE = { NEGATION_PREFIX? ~ PIPE_SEQUENCE }
-
-NEGATION_PREFIX = { "!" }
-
-// A pipe sequence consists of a command followed by an optional pipeline operator and another command
-PIPE_SEQUENCE = { COMMAND ~ (PIPE_OPERATOR ~ PIPE_SEQUENCE)? }
-
-// Pipeline operators for piping output between commands
-PIPE_OPERATOR = { STDOUT | STDERR }
-
-STDOUT = { "|" }
-
-STDERR = { "|&" }
-
-// A command can be a subshell or a simple command
-COMMAND = { SUBSHELL | SIMPLE_COMMAND }
-
-// Subshell commands enclosed in parentheses
-SUBSHELL = { "(" ~ SEQUENTIAL_LIST ~ ")" }
-
-// A simple command consists of optional environment variable assignments followed by command arguments
-SIMPLE_COMMAND = { ENV_VAR_ASSIGNMENT* ~ COMMAND_ARGUMENTS* }
-
-// Command arguments that exclude certain operators and are separated by whitespace
-COMMAND_ARGUMENTS = {
-    !(LIST_OPERATOR | PIPE_OPERATOR | ")") ~
-    SHELL_ARG+
+command = {
+    simple_command |
+    compound_command ~ redirect_list? |
+    function_definition
 }
 
-// Shell arguments are simply words
-SHELL_ARG = _{ WORD }
+compound_command = {
+    brace_group |
+    subshell |
+    for_clause |
+    case_clause |
+    if_clause |
+    while_clause |
+    until_clause
+}
 
-// List operators: Sequential list operators or async prefixes
-LIST_OPERATOR = { SEQUENTIAL_LIST_OPERATOR | ASYNC_PREFIX }
+subshell = { "(" ~ compound_list ~ ")" }
+compound_list = { (newline_list? ~ term ~ separator?)+ }
+term = { and_or ~ (separator ~ and_or)* }
 
-// Sequential list operator represented by the semicolon
-SEQUENTIAL_LIST_OPERATOR = { ";" }
+for_clause = {
+    For ~ name ~ linebreak ~
+    (linebreak ~ In ~ wordlist? ~ sequential_sep)? ~
+    linebreak ~ do_group
+}
 
-// An optional async prefix represented by the '&' character
-ASYNC_PREFIX = { "&" }
+case_clause = {
+    Case ~ WORD ~ linebreak ~
+    linebreak ~ In ~ linebreak ~
+    (case_list | case_list_ns)? ~
+    Esac
+}
 
-// A sequence is an environment variable assignment or a pipeline, followed by optional whitespace
-SEQUENCE = { (ENV_VAR_ASSIGNMENT | PIPELINE) }
+case_list = {
+    case_item+
+}
 
-// A sequential item can optionally start with an async prefix followed by a sequence
-SEQUENTIAL_ITEM = { ASYNC_PREFIX? ~ SEQUENCE }
+case_list_ns = {
+    case_item_ns+
+}
 
-// A list of sequential items separated by either semicolons or newlines
-SEQUENTIAL_LIST = { (SEQUENTIAL_ITEM ~ (";" | "\n"))* ~ SEQUENTIAL_ITEM }
+case_item = {
+    "("? ~ pattern ~ ")" ~ (compound_list | linebreak) ~ DSEMI ~ linebreak
+}
 
-// Entry point: The entire file should match a list of sequential items
-FILE = _{ SOI ~ SEQUENTIAL_LIST ~ EOI }
+case_item_ns = {
+    "("? ~ pattern ~ ")" ~ compound_list? ~ linebreak
+}
+
+pattern = {
+    (Esac | WORD) ~ ("|" ~ WORD)*
+}
+
+if_clause = {
+    If ~ compound_list ~
+    Then ~ compound_list ~
+    else_part? ~
+    Fi
+}
+
+else_part = {
+    Elif ~ compound_list ~ Then ~ else_part |
+    Else ~ compound_list
+}
+
+while_clause = { While ~ compound_list ~ do_group }
+until_clause = { Until ~ compound_list ~ do_group }
+
+function_definition = { fname ~ "(" ~ ")" ~ linebreak ~ function_body }
+function_body = { compound_command ~ redirect_list? }
+
+fname = @{ RESERVED_WORD | NAME | WORD_WITH_EQUAL | ASSIGNMENT_WORD }
+name = @{ NAME }
+
+brace_group = { Lbrace ~ compound_list ~ Rbrace }
+do_group = { Do ~ compound_list ~ Done }
+
+simple_command = {
+    cmd_prefix ~ cmd_word ~ cmd_suffix? |
+    cmd_prefix |
+    cmd_name ~ cmd_suffix?
+}
+
+cmd_prefix = { (io_redirect | ASSIGNMENT_WORD)+ }
+cmd_suffix = { (io_redirect | QUOTED_WORD | WORD)+ }
+cmd_name = @{ (RESERVED_WORD | WORD) }
+cmd_word = @{ WORD_WITH_EQUAL | ASSIGNMENT_WORD }
+
+redirect_list = { io_redirect+ }
+io_redirect = { (IO_NUMBER | AMPERSAND)? ~ (io_file | io_here) }
+io_file = { 
+    LESS ~ filename | 
+    GREAT ~ filename | 
+    DGREAT ~ filename | 
+    LESSAND ~ filename | 
+    GREATAND ~ filename | 
+    LESSGREAT ~ filename | 
+    CLOBBER ~ filename
+}
+filename = @{ WORD }
+io_here = { (DLESS | DLESSDASH) ~ here_end }
+here_end = @{ ("\"" ~ WORD ~ "\"") | WORD }
+
+newline_list = { NEWLINE+ }
+linebreak = _{ NEWLINE* }
+separator_op = { "&" | ";" }
+separator = _{ separator_op ~ linebreak | newline_list }
+sequential_sep = { ";" ~ linebreak | newline_list }
+
+wordlist = { WORD+ }
+
+// Entry point
+FILE = { SOI ~ complete_command ~ EOI }
