@@ -1,1 +1,1 @@
-echo "Double word" 'Single word'
+echo "Hello, world" | grep "Hello" > output.txt && cat output.txt

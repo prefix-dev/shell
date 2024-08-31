@@ -1,1 +1,2 @@
-echo $PATH;
+echo $PATH
+echo "Hello, world"
