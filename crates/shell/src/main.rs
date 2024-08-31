@@ -18,7 +18,7 @@ async fn main() {
 
     let list = deno_task_shell::parser::parse(&script_text).unwrap();
 
-    // // execute
+    // execute
     let env_vars = std::env::vars().collect();
 
     let cwd = std::env::current_dir().expect("Failed to get current directory");
