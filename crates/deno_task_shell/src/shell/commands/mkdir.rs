@@ -170,13 +170,17 @@ mod test {
       "cannot create directory 'file.txt': File exists"
     );
 
-    assert_eq!(execute_mkdir(
-      dir.path(),
-      vec!["-p".to_string(), "file.txt".to_string()],
-    )
-    .await
-    .err()
-    .unwrap().to_string(), "cannot create directory 'file.txt': File exists");
+    assert_eq!(
+            execute_mkdir(
+                dir.path(),
+                vec!["-p".to_string(), "file.txt".to_string()],
+            )
+            .await
+            .err()
+            .unwrap()
+            .to_string(),
+            "cannot create directory 'file.txt': File exists"
+        );
 
     assert_eq!(
       execute_mkdir(dir.path(), vec!["folder".to_string()],)

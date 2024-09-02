@@ -1,2 +1,1 @@
-ls;
-cat Cargo.toml
+echo "Hello, world" | grep "Hello" > output.txt && cat output.txt
