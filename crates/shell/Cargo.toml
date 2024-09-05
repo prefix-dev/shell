@@ -19,7 +19,10 @@ path = "src/main.rs"
 [features]
 
 [dependencies]
+anyhow = "1.0.86"
+clap = { version = "4.5.17", features = ["derive"] }
 deno_task_shell = { path = "../deno_task_shell" }
+rustyline = "14.0.0"
 tokio = "1.39.2"
 
 [package.metadata.release]
