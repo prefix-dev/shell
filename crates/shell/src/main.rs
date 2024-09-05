@@ -30,7 +30,6 @@ struct Options {
     file: Option<PathBuf>,
 }
 
-
 async fn interactive() -> anyhow::Result<()> {
     let mut rl = DefaultEditor::new()?;
 
@@ -74,7 +73,6 @@ async fn interactive() -> anyhow::Result<()> {
 
     Ok(())
 }
-
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
