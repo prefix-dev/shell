@@ -8,7 +8,7 @@ use repl::MyHelper;
 use rustyline::error::ReadlineError;
 use rustyline::{CompletionType, Config, EditMode, Editor};
 
-use uu_ls::uumain;
+use uu_ls::uumain as uu_ls;
 
 mod repl;
 
@@ -64,10 +64,8 @@ async fn interactive() -> anyhow::Result<()> {
                 rl.add_history_entry(line.as_str())?;
 
                 if line.starts_with("ls") {
-                    println!("ls is running: {}", line);
-                    let args = line.split_whitespace().skip(1).map(|s| OsString::from(s)).collect::<Vec<OsString>>();
-                    println!("Args: {:?}", args);
-                    uumain(args.into_iter());
+                    let args = line.split_whitespace().map(|s| OsString::from(s)).collect::<Vec<OsString>>();
+                    uu_ls(args.into_iter());
                     continue;
                 }
                 // Process the input (here  we just echo it back)
