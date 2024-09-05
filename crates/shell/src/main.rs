@@ -1,9 +1,16 @@
+use std::ffi::OsString;
 use std::path::PathBuf;
 
 use anyhow::Context;
+use clap::builder::OsStr;
 use clap::Parser;
+use repl::MyHelper;
 use rustyline::error::ReadlineError;
-use rustyline::DefaultEditor;
+use rustyline::{CompletionType, Config, EditMode, Editor};
+
+use uu_ls::uumain;
+
+mod repl;
 
 async fn execute(text: &str) -> anyhow::Result<i32> {
     let list = deno_task_shell::parser::parse(text)?;
@@ -31,23 +38,39 @@ struct Options {
 }
 
 async fn interactive() -> anyhow::Result<()> {
-    let mut rl = DefaultEditor::new()?;
+    let config = Config::builder()
+        .history_ignore_space(true)
+        .completion_type(CompletionType::List)
+        .edit_mode(EditMode::Emacs)
+        .build();
+
+    let mut rl = Editor::with_config(config)?;
+
+    rl.set_helper(Some(MyHelper::default()));
 
     let mut prev_exit_code = 0;
     loop {
         // Display the prompt and read a line
-        let readline = if prev_exit_code == 0 {
-            rl.readline(">>> ")
-        } else {
-            rl.readline("xxx ")
-        };
+        let readline = rl.readline(">>> ");
+        // let readline = if prev_exit_code == 0 {
+        //     rl.readline(">>> ")
+        // } else {
+        //     rl.readline("xxx ")
+        // };
 
         match readline {
             Ok(line) => {
                 // Add the line to history
                 rl.add_history_entry(line.as_str())?;
 
-                // Process the input (here we just echo it back)
+                if line.starts_with("ls") {
+                    println!("ls is running: {}", line);
+                    let args = line.split_whitespace().skip(1).map(|s| OsString::from(s)).collect::<Vec<OsString>>();
+                    println!("Args: {:?}", args);
+                    uumain(args.into_iter());
+                    continue;
+                }
+                // Process the input (here  we just echo it back)
                 prev_exit_code = execute(&line).await.context("Failed to execute")?;
 
                 // Check for exit command
