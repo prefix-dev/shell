@@ -6,7 +6,9 @@ pub use commands::ExecuteCommandArgsContext;
 pub use commands::ShellCommand;
 pub use commands::ShellCommandContext;
 pub use execute::execute;
-pub use execute::execute_with_pipes;
+pub use execute::{
+  execute_sequential_list, execute_with_pipes, AsyncCommandBehavior,
+};
 pub use types::pipe;
 pub use types::EnvChange;
 pub use types::ExecuteResult;
