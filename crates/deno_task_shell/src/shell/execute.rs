@@ -116,12 +116,13 @@ pub async fn execute_with_pipes(
 }
 
 #[derive(Debug, PartialEq)]
-enum AsyncCommandBehavior {
+pub enum AsyncCommandBehavior {
   Wait,
   Yield,
 }
 
-fn execute_sequential_list(
+/// Execute a `SequentialList` of commands in a deno_task_shell environment.
+pub fn execute_sequential_list(
   list: SequentialList,
   mut state: ShellState,
   stdin: ShellPipeReader,

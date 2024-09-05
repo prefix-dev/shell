@@ -2,26 +2,34 @@ use std::path::PathBuf;
 
 use anyhow::Context;
 use clap::Parser;
+use deno_task_shell::{
+    execute_sequential_list, AsyncCommandBehavior, ExecuteResult, ShellPipeReader, ShellPipeWriter,
+    ShellState,
+};
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
 
-async fn execute(text: &str) -> anyhow::Result<i32> {
+async fn execute(text: &str, state: &mut ShellState) -> anyhow::Result<i32> {
     let list = deno_task_shell::parser::parse(text)?;
 
-    // execute
-    let env_vars = std::env::vars().collect();
-
-    let cwd = std::env::current_dir().context("Failed to get current directory")?;
-
-    let exit_code = deno_task_shell::execute(
+    // spawn a sequential list and pipe its output to the environment
+    let result = execute_sequential_list(
         list,
-        env_vars,
-        &cwd,
-        Default::default(), // custom commands
+        state.clone(),
+        ShellPipeReader::stdin(),
+        ShellPipeWriter::stdout(),
+        ShellPipeWriter::stderr(),
+        AsyncCommandBehavior::Wait,
     )
     .await;
 
-    Ok(exit_code)
+    match result {
+        ExecuteResult::Continue(exit_code, changes, _) => {
+            state.apply_changes(&changes);
+            Ok(exit_code)
+        }
+        ExecuteResult::Exit(_, _) => Ok(0),
+    }
 }
 
 #[derive(Parser)]
@@ -30,8 +38,16 @@ struct Options {
     file: Option<PathBuf>,
 }
 
+fn init_state() -> ShellState {
+    let env_vars = std::env::vars().collect();
+    let cwd = std::env::current_dir().unwrap();
+    ShellState::new(env_vars, &cwd, Default::default())
+}
+
 async fn interactive() -> anyhow::Result<()> {
     let mut rl = DefaultEditor::new()?;
+
+    let mut state = init_state();
 
     let mut prev_exit_code = 0;
     loop {
@@ -48,7 +64,9 @@ async fn interactive() -> anyhow::Result<()> {
                 rl.add_history_entry(line.as_str())?;
 
                 // Process the input (here we just echo it back)
-                prev_exit_code = execute(&line).await.context("Failed to execute")?;
+                prev_exit_code = execute(&line, &mut state)
+                    .await
+                    .context("Failed to execute")?;
 
                 // Check for exit command
                 if line.trim().eq_ignore_ascii_case("exit") {
@@ -80,7 +98,8 @@ async fn main() -> anyhow::Result<()> {
 
     if let Some(file) = options.file {
         let script_text = std::fs::read_to_string(&file).unwrap();
-        execute(&script_text).await?;
+        let mut state = init_state();
+        execute(&script_text, &mut state).await?;
     } else {
         interactive().await?;
     }
