@@ -1,22 +1,8 @@
-/// Entry point of the `shell` cli.
-#[tokio::main]
-async fn main() {
-    // read text of argv[1] and print it
-    let args: Vec<String> = std::env::args().collect();
-    println!("args: {:?}", args);
-    if args.len() < 2 {
-        println!("Usage: {} <script>", args[0]);
-        std::process::exit(1);
-    }
+use rustyline::error::ReadlineError;
+use rustyline::DefaultEditor;
 
-    // read text from stdin and print it
-    let script_text = std::fs::read_to_string(&args[1]).unwrap();
-    println!(
-        "Executing:\n\n{}\n\n-----------------------------------\n\n",
-        script_text
-    );
-
-    let list = deno_task_shell::parser::parse(&script_text).unwrap();
+async fn execute(text: &str) {
+    let list = deno_task_shell::parser::parse(text).unwrap();
 
     // execute
     let env_vars = std::env::vars().collect();
@@ -31,5 +17,45 @@ async fn main() {
     )
     .await;
 
-    std::process::exit(exit_code);
+}
+
+#[tokio::main]
+async fn main() -> rustyline::Result<()> {
+    // Create a new rustyline editor
+    let mut rl = DefaultEditor::new()?;
+
+    loop {
+        // Display the prompt and read a line
+        let readline = rl.readline(">>> ");
+
+        match readline {
+            Ok(line) => {
+                // Add the line to history
+                rl.add_history_entry(line.as_str())?;
+
+                // Process the input (here we just echo it back)
+                execute(&line).await;
+
+                // Check for exit command
+                if line.trim().eq_ignore_ascii_case("exit") {
+                    println!("Exiting...");
+                    break;
+                }
+            }
+            Err(ReadlineError::Interrupted) => {
+                println!("CTRL-C");
+                break;
+            }
+            Err(ReadlineError::Eof) => {
+                println!("CTRL-D");
+                break;
+            }
+            Err(err) => {
+                println!("Error: {:?}", err);
+                break;
+            }
+        }
+    }
+
+    Ok(())
 }

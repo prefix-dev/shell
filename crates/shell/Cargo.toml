@@ -20,6 +20,7 @@ path = "src/main.rs"
 
 [dependencies]
 deno_task_shell = { path = "../deno_task_shell" }
+rustyline = "14.0.0"
 tokio = "1.39.2"
 
 [package.metadata.release]
