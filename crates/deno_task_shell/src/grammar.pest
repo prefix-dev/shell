@@ -28,10 +28,10 @@ QUOTED_PENDING_WORD = ${ (
     QUOTED_CHAR
 )* }
 
-UNQUOTED_ESCAPE_CHAR = ${ ("\\" ~ "$" | "$" ~ !"(" ~ !VARIABLE) | "\\" ~ ("`" | "\"" | "(" | ")")* }
+UNQUOTED_ESCAPE_CHAR = ${ ("\\" ~ "$" | "$" ~ !"(" ~ !VARIABLE) | "\\" ~ (" " | "`" | "\"" | "(" | ")")* }
 QUOTED_ESCAPE_CHAR = ${ "\\" ~ "$" | "$" ~ !"(" ~ !VARIABLE | "\\" ~ ("`" | "\"" | "(" | ")" | "'")* }
 
-UNQUOTED_CHAR = ${ ("\\" ~ " ") | !(WHITESPACE | "~" | "(" | ")" | "{" | "}" | "<" | ">" | "|" | "&" | ";" | "\"" | "'") ~ ANY }
+UNQUOTED_CHAR = ${ ("\\" ~ " ") | !("~" | "(" | ")" | "{" | "}" | "<" | ">" | "|" | "&" | ";" | "\"" | "'" | "$") ~ ANY }
 QUOTED_CHAR = ${ !"\"" ~ ANY }
 
 VARIABLE = ${ (ASCII_ALPHANUMERIC | "_")+ }
@@ -64,7 +64,7 @@ EXIT_STATUS = ${ "$?" }
 // Operators
 OPERATOR = _{
     AND_IF | OR_IF | DSEMI | DLESS | DGREAT | LESSAND | GREATAND | LESSGREAT | DLESSDASH | CLOBBER |
-    "(" | ")" | "{" | "}" | ";" | "&" | "|" | "<" | ">" | "!"
+    "(" | ")" | "{" | "}" | ";" | "&" | "|" | "<" | ">"
 }
 
 // Reserved words
@@ -96,12 +96,12 @@ RESERVED_WORD = _{
 
 // Main grammar rules
 complete_command = { list? ~ (separator+ ~ list)* ~ separator? }
-list = { and_or ~ (separator_op ~ and_or)* ~ separator_op? }
-and_or = { (pipeline | ASSIGNMENT_WORD+) ~ ((AND_IF | OR_IF) ~ linebreak ~ and_or)? }
-pipeline = { Bang? ~ pipe_sequence }
-pipe_sequence = { command ~ ((StdoutStderr | Stdout) ~ linebreak ~ pipe_sequence)? }
+list = !{ and_or ~ (separator_op ~ and_or)* ~ separator_op? }
+and_or = !{ (pipeline | ASSIGNMENT_WORD+) ~ ((AND_IF | OR_IF) ~ linebreak ~ and_or)? }
+pipeline = !{ Bang? ~ pipe_sequence }
+pipe_sequence = !{ command ~ ((StdoutStderr | Stdout) ~ linebreak ~ pipe_sequence)? }
 
-command = {
+command = !{
     simple_command |
     compound_command ~ redirect_list? |
     function_definition
@@ -117,9 +117,9 @@ compound_command = {
     until_clause
 }
 
-subshell = { "(" ~ compound_list ~ ")" }
-compound_list = { (newline_list? ~ term ~ separator?)+ }
-term = { and_or ~ (separator ~ and_or)* }
+subshell = !{ "(" ~ compound_list ~ ")" }
+compound_list = !{ (newline_list? ~ term ~ separator?)+ }
+term = !{ and_or ~ (separator ~ and_or)* }
 
 for_clause = {
     For ~ name ~ linebreak ~
@@ -127,70 +127,70 @@ for_clause = {
     linebreak ~ do_group
 }
 
-case_clause = {
+case_clause = !{
     Case ~ UNQUOTED_PENDING_WORD ~ linebreak ~
     linebreak ~ In ~ linebreak ~
     (case_list | case_list_ns)? ~
     Esac
 }
 
-case_list = {
+case_list = !{
     case_item+
 }
 
-case_list_ns = {
+case_list_ns = !{
     case_item_ns+
 }
 
-case_item = {
+case_item = !{
     "("? ~ pattern ~ ")" ~ (compound_list | linebreak) ~ DSEMI ~ linebreak
 }
 
-case_item_ns = {
+case_item_ns = !{
     "("? ~ pattern ~ ")" ~ compound_list? ~ linebreak
 }
 
-pattern = {
+pattern = !{
     (Esac | UNQUOTED_PENDING_WORD) ~ ("|" ~ UNQUOTED_PENDING_WORD)*
 }
 
-if_clause = {
+if_clause = !{
     If ~ compound_list ~
     Then ~ compound_list ~
     else_part? ~
     Fi
 }
 
-else_part = {
+else_part = !{
     Elif ~ compound_list ~ Then ~ else_part |
     Else ~ compound_list
 }
 
-while_clause = { While ~ compound_list ~ do_group }
-until_clause = { Until ~ compound_list ~ do_group }
+while_clause = !{ While ~ compound_list ~ do_group }
+until_clause = !{ Until ~ compound_list ~ do_group }
 
-function_definition = { fname ~ "(" ~ ")" ~ linebreak ~ function_body }
-function_body = { compound_command ~ redirect_list? }
+function_definition = !{ fname ~ "(" ~ ")" ~ linebreak ~ function_body }
+function_body = !{ compound_command ~ redirect_list? }
 
 fname = @{ RESERVED_WORD | NAME | ASSIGNMENT_WORD | UNQUOTED_PENDING_WORD }
 name = @{ NAME } 
 
-brace_group = { Lbrace ~ compound_list ~ Rbrace }
-do_group = { Do ~ compound_list ~ Done }
+brace_group = !{ Lbrace ~ compound_list ~ Rbrace }
+do_group = !{ Do ~ compound_list ~ Done }
 
-simple_command = {
-    cmd_prefix ~ WHITESPACE* ~ cmd_word ~ WHITESPACE* ~ cmd_suffix? |
-    (!cmd_prefix ~ cmd_name ~ WHITESPACE* ~ cmd_suffix?)
+simple_command = !{
+    cmd_prefix ~ cmd_word ~ cmd_suffix? |
+    (!cmd_prefix ~ cmd_name ~ cmd_suffix?)
 }
 
-cmd_prefix = { (io_redirect | ASSIGNMENT_WORD)+ }
-cmd_suffix = { (io_redirect | QUOTED_WORD | UNQUOTED_PENDING_WORD)+ }
+cmd_prefix = !{ (io_redirect | ASSIGNMENT_WORD)+ }
+cmd_suffix = !{ (io_redirect | UNQUOTED_PENDING_WORD)+ }
 cmd_name = @{ (RESERVED_WORD | UNQUOTED_PENDING_WORD) }
 cmd_word = @{ (ASSIGNMENT_WORD | UNQUOTED_PENDING_WORD) }
 
-redirect_list = { io_redirect+ }
-io_redirect = { (IO_NUMBER | AMPERSAND)? ~ (io_file | io_here) }
-io_file = { 
+redirect_list = !{ io_redirect+ }
+io_redirect = !{ (IO_NUMBER | AMPERSAND)? ~ (io_file | io_here) }
+io_file = !{ 
     LESS ~ filename | 
     GREAT ~ filename | 
     DGREAT ~ filename | 
@@ -200,16 +200,16 @@ io_file = {
     CLOBBER ~ filename
 }
 filename = _{ FILE_NAME_PENDING_WORD }
-io_here = { (DLESS | DLESSDASH) ~ here_end }
+io_here = !{ (DLESS | DLESSDASH) ~ here_end }
 here_end = @{ ("\"" ~ UNQUOTED_PENDING_WORD ~ "\"") | UNQUOTED_PENDING_WORD }
 
 newline_list = _{ NEWLINE+ }
 linebreak = _{ NEWLINE* }
 separator_op = { "&" | ";" }
 separator = _{ separator_op ~ linebreak | newline_list }
-sequential_sep = { ";" ~ linebreak | newline_list }
+sequential_sep = !{ ";" ~ linebreak | newline_list }
 
-wordlist = { UNQUOTED_PENDING_WORD+ }
+wordlist = !{ UNQUOTED_PENDING_WORD+ }
 
 // Entry point
 FILE = { SOI ~ complete_command ~ EOI }
