@@ -62,11 +62,19 @@ async fn interactive() -> anyhow::Result<()> {
 
     let mut state = init_state();
 
+    let home = std::env::var("HOME").unwrap();
+
     let mut prev_exit_code = 0;
     loop {
         // Display the prompt and read a line
         let readline = if prev_exit_code == 0 {
-            rl.readline(&format!("{:?} >>> ", state.cwd().to_string_lossy()))
+            let cwd = state.cwd().to_string_lossy().to_string();
+            let prompt = if cwd.starts_with(&home) {
+                format!("~{}$ ", cwd.strip_prefix(&home).unwrap().replace('\\', "/"))
+            } else {
+                format!("{}$ ", cwd)
+            };
+            rl.readline(&prompt)
         } else {
             rl.readline("xxx ")
         };
