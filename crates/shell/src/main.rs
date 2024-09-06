@@ -62,11 +62,23 @@ async fn interactive() -> anyhow::Result<()> {
 
     let mut state = init_state();
 
+    let home = dirs::home_dir().context("Couldn't get home directory")?;
+
     let mut prev_exit_code = 0;
     loop {
         // Display the prompt and read a line
         let readline = if prev_exit_code == 0 {
-            rl.readline(&format!("{:?} >>> ", state.cwd().to_string_lossy()))
+            let cwd = state.cwd().to_string_lossy().to_string();
+            let home_str = home
+                .to_str()
+                .context("Couldn't convert home directory path to UTF-8 string")?;
+
+            let prompt = cwd
+                .strip_prefix(home_str)
+                .map(|stripped| format!("~{}$ ", stripped.replace('\\', "/")))
+                .unwrap_or_else(|| format!("{}$ ", cwd));
+
+            rl.readline(&prompt)
         } else {
             rl.readline("xxx ")
         };

@@ -26,6 +26,7 @@ futures = "0.3.30"
 rustyline = "14.0.0"
 tokio = "1.39.2"
 uu_ls = "0.0.27"
+dirs = "5.0.1"
 
 [package.metadata.release]
 # Dont publish the binary
