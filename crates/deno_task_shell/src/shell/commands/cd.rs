@@ -38,7 +38,13 @@ impl ShellCommand for CdCommand {
 }
 
 fn execute_cd(cwd: &Path, args: Vec<String>) -> Result<PathBuf> {
-  let path = parse_args(args)?;
+  // create a new vector to avoid modifying the original
+  let mut args = args;
+  if args.is_empty() {
+    // append `~` to args
+    args.push("~".to_string());
+  }
+  let path = parse_args(args.clone())?;
   let new_dir = if path == "~" {
     dirs::home_dir()
       .ok_or_else(|| anyhow::anyhow!("Home directory not found"))?
