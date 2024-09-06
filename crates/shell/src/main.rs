@@ -1,13 +1,24 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
+use std::rc::Rc;
 
 use anyhow::Context;
 use clap::Parser;
 use deno_task_shell::{
-    execute_sequential_list, AsyncCommandBehavior, ExecuteResult, ShellPipeReader, ShellPipeWriter,
-    ShellState,
+    execute_sequential_list, AsyncCommandBehavior, ExecuteResult, ShellCommand, ShellPipeReader,
+    ShellPipeWriter, ShellState,
 };
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
+
+mod commands;
+
+fn commands() -> HashMap<String, Rc<dyn ShellCommand>> {
+    HashMap::from([(
+        "ls".to_string(),
+        Rc::new(commands::LsCommand) as Rc<dyn ShellCommand>,
+    )])
+}
 
 async fn execute(text: &str, state: &mut ShellState) -> anyhow::Result<i32> {
     let list = deno_task_shell::parser::parse(text)?;
@@ -26,6 +37,8 @@ async fn execute(text: &str, state: &mut ShellState) -> anyhow::Result<i32> {
     match result {
         ExecuteResult::Continue(exit_code, changes, _) => {
             state.apply_changes(&changes);
+            // set CWD to the last command's CWD
+            std::env::set_current_dir(state.cwd()).context("Failed to set CWD")?;
             Ok(exit_code)
         }
         ExecuteResult::Exit(_, _) => Ok(0),
@@ -41,7 +54,7 @@ struct Options {
 fn init_state() -> ShellState {
     let env_vars = std::env::vars().collect();
     let cwd = std::env::current_dir().unwrap();
-    ShellState::new(env_vars, &cwd, Default::default())
+    ShellState::new(env_vars, &cwd, commands())
 }
 
 async fn interactive() -> anyhow::Result<()> {

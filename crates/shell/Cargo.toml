@@ -22,8 +22,10 @@ path = "src/main.rs"
 anyhow = "1.0.86"
 clap = { version = "4.5.17", features = ["derive"] }
 deno_task_shell = { path = "../deno_task_shell" }
+futures = "0.3.30"
 rustyline = "14.0.0"
 tokio = "1.39.2"
+uu_ls = "0.0.27"
 
 [package.metadata.release]
 # Dont publish the binary
