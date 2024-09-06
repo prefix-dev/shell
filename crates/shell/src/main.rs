@@ -66,6 +66,9 @@ async fn interactive() -> anyhow::Result<()> {
 
     let mut prev_exit_code = 0;
     loop {
+        // Reset cancellation flag
+        state.reset_cancellation_token();
+
         // Display the prompt and read a line
         let readline = if prev_exit_code == 0 {
             let cwd = state.cwd().to_string_lossy().to_string();
@@ -77,7 +80,6 @@ async fn interactive() -> anyhow::Result<()> {
                 .strip_prefix(home_str)
                 .map(|stripped| format!("~{}$ ", stripped.replace('\\', "/")))
                 .unwrap_or_else(|| format!("{}$ ", cwd));
-
             rl.readline(&prompt)
         } else {
             rl.readline("xxx ")

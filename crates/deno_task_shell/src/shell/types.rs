@@ -159,6 +159,10 @@ impl ShellState {
     state.token = self.token.child_token();
     state
   }
+
+  pub fn reset_cancellation_token(&mut self) {
+    self.token = CancellationToken::default();
+  }
 }
 
 #[derive(Debug, PartialEq, Eq)]
