@@ -684,19 +684,10 @@ fn parse_word(pair: Pair<Rule>) -> Result<Word> {
         match part.as_rule() {
           Rule::EXIT_STATUS => parts.push(WordPart::Variable("?".to_string())),
           Rule::UNQUOTED_CHAR => {
-            let char = part.as_str().chars().next().unwrap();
-            let text = if char == '~' {
-                dirs::home_dir()
-                    .map(|p| p.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| "~".to_string())
+            if let Some(WordPart::Text(ref mut text)) = parts.last_mut() {
+              text.push(part.as_str().chars().next().unwrap());
             } else {
-                char.to_string()
-            };
-
-            if let Some(WordPart::Text(ref mut existing_text)) = parts.last_mut() {
-                existing_text.push_str(&text);
-            } else {
-                parts.push(WordPart::Text(text));
+              parts.push(WordPart::Text(part.as_str().to_string()));
             }
           }
           Rule::UNQUOTED_ESCAPE_CHAR => {
