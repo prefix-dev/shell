@@ -41,7 +41,7 @@ pub fn parse_arg_kinds(flags: &mut [String]) -> Vec<ArgKind> {
     } else if arg == "--" {
       had_dash_dash = true;
     } else if arg.starts_with("--") {
-      result.push(ArgKind::LongFlag(&arg.strip_prefix("--").unwrap()));
+      result.push(ArgKind::LongFlag(arg.strip_prefix("--").unwrap()));
     } else if arg.starts_with('-') {
       if arg.parse::<f64>().is_ok() {
         result.push(ArgKind::Arg(arg));
