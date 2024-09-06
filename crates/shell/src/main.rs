@@ -65,11 +65,7 @@ async fn interactive() -> anyhow::Result<()> {
     let mut prev_exit_code = 0;
     loop {
         // Display the prompt and read a line
-        let readline = if prev_exit_code == 0 {
-            rl.readline(&format!("{:?} >>> ", state.cwd().to_string_lossy()))
-        } else {
-            rl.readline("xxx ")
-        };
+        let readline = rl.readline(&format!("{}$ ", state.cwd().to_string_lossy().to_string()));
 
         match readline {
             Ok(line) => {
