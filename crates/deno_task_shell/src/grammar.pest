@@ -31,7 +31,7 @@ QUOTED_PENDING_WORD = ${ (
 UNQUOTED_ESCAPE_CHAR = ${ ("\\" ~ "$" | "$" ~ !"(" ~ !VARIABLE) | "\\" ~ (" " | "`" | "\"" | "(" | ")")* }
 QUOTED_ESCAPE_CHAR = ${ "\\" ~ "$" | "$" ~ !"(" ~ !VARIABLE | "\\" ~ ("`" | "\"" | "(" | ")" | "'")* }
 
-UNQUOTED_CHAR = ${ ("\\" ~ " ") | !("~" | "(" | ")" | "{" | "}" | "<" | ">" | "|" | "&" | ";" | "\"" | "'" | "$") ~ ANY }
+UNQUOTED_CHAR = ${ ("\\" ~ " ") | !("(" | ")" | "{" | "}" | "<" | ">" | "|" | "&" | ";" | "\"" | "'" | "$") ~ ANY }
 QUOTED_CHAR = ${ !"\"" ~ ANY }
 
 VARIABLE = ${ (ASCII_ALPHANUMERIC | "_")+ }

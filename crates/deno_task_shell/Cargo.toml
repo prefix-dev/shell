@@ -26,6 +26,7 @@ serde = { version = "1", features = ["derive"], optional = true }
 thiserror = "1.0.58"
 pest = "2.6.0"
 pest_derive = "2.6.0"
+dirs = "5.0.1"
 
 [dev-dependencies]
 parking_lot = "0.12.1"

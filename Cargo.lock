@@ -260,6 +260,7 @@ name = "deno_task_shell"
 version = "0.17.0"
 dependencies = [
  "anyhow",
+ "dirs",
  "futures",
  "glob",
  "os_pipe",

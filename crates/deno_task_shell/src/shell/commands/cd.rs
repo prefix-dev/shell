@@ -39,7 +39,12 @@ impl ShellCommand for CdCommand {
 
 fn execute_cd(cwd: &Path, args: Vec<String>) -> Result<PathBuf> {
   let path = parse_args(args)?;
-  let new_dir = cwd.join(&path);
+  let new_dir = if path == "~" {
+    dirs::home_dir()
+      .ok_or_else(|| anyhow::anyhow!("Home directory not found"))?
+  } else {
+    cwd.join(&path)
+  };
   let new_dir = match new_dir.parse_dot() {
     Ok(path) => path.to_path_buf(),
     // fallback to canonicalize path just in case
