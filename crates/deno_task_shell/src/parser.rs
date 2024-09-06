@@ -332,6 +332,8 @@ struct ShellParser;
 pub fn parse(input: &str) -> Result<SequentialList> {
   let mut pairs = ShellParser::parse(Rule::FILE, input)?;
 
+  // println!("pairs: {:?}", pairs);
+
   parse_file(pairs.next().unwrap())
 }
 
@@ -402,11 +404,13 @@ fn parse_compound_list(
       Rule::newline_list => {
         // Ignore newlines
       }
+      Rule::separator_op => {
+        if let Some(last) = items.last_mut() {
+          last.is_async = item.as_str() == "&";
+        }
+      }
       _ => {
-        return Err(anyhow::anyhow!(
-          "Unexpected rule in compound_list: {:?}",
-          item.as_rule()
-        ));
+        anyhow::bail!("Unexpected rule in compound_list: {:?}", item.as_rule());
       }
     }
   }
@@ -494,6 +498,7 @@ fn parse_shell_var(pair: Pair<Rule>) -> Result<Sequence> {
 }
 
 fn parse_pipeline(pair: Pair<Rule>) -> Result<Sequence> {
+  let pipeline_str = pair.as_str();
   let mut inner = pair.into_inner();
 
   // Check if the first element is Bang (negation)
@@ -501,7 +506,16 @@ fn parse_pipeline(pair: Pair<Rule>) -> Result<Sequence> {
     .next()
     .ok_or_else(|| anyhow::anyhow!("Expected pipeline content"))?;
   let (negated, pipe_sequence) = if first.as_rule() == Rule::Bang {
-    // If it's Bang, the next element should be the pipe_sequence
+    // If it's Bang, check for whitespace
+    if pipeline_str.len() > 1
+      && !pipeline_str[1..2].chars().next().unwrap().is_whitespace()
+    {
+      anyhow::bail!(
+        "Perhaps you meant to add a space after the exclamation point to negate the command?\n  ! {}", 
+        pipeline_str
+      );
+    }
+    // Get the actual pipe sequence after whitespace
     let pipe_sequence = inner.next().ok_or_else(|| {
       anyhow::anyhow!("Expected pipe sequence after negation")
     })?;
@@ -669,11 +683,36 @@ fn parse_word(pair: Pair<Rule>) -> Result<Word> {
       for part in pair.into_inner() {
         match part.as_rule() {
           Rule::EXIT_STATUS => parts.push(WordPart::Variable("?".to_string())),
-          Rule::UNQUOTED_ESCAPE_CHAR | Rule::UNQUOTED_CHAR => {
+          Rule::UNQUOTED_CHAR => {
             if let Some(WordPart::Text(ref mut text)) = parts.last_mut() {
               text.push(part.as_str().chars().next().unwrap());
             } else {
               parts.push(WordPart::Text(part.as_str().to_string()));
+            }
+          }
+          Rule::UNQUOTED_ESCAPE_CHAR => {
+            let mut chars = part.as_str().chars();
+            let mut escaped_char = String::new();
+            while let Some(c) = chars.next() {
+              match c {
+                '\\' => {
+                  let next_char = chars.next().unwrap_or('\0');
+                  escaped_char.push(next_char);
+                }
+                '$' => {
+                  escaped_char.push(c);
+                  break;
+                }
+                _ => {
+                  escaped_char.push(c);
+                  break;
+                }
+              }
+            }
+            if let Some(WordPart::Text(ref mut text)) = parts.last_mut() {
+              text.push_str(&escaped_char);
+            } else {
+              parts.push(WordPart::Text(escaped_char));
             }
           }
           Rule::SUB_COMMAND => {
