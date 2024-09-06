@@ -4,14 +4,16 @@ use std::rc::Rc;
 
 use anyhow::Context;
 use clap::Parser;
+use completion::ShellCompleter;
 use deno_task_shell::{
     execute_sequential_list, AsyncCommandBehavior, ExecuteResult, ShellCommand, ShellPipeReader,
     ShellPipeWriter, ShellState,
 };
 use rustyline::error::ReadlineError;
-use rustyline::DefaultEditor;
+use rustyline::{CompletionType, Config, Editor};
 
 mod commands;
+mod completion;
 
 fn commands() -> HashMap<String, Rc<dyn ShellCommand>> {
     HashMap::from([(
@@ -67,7 +69,16 @@ fn init_state() -> ShellState {
 }
 
 async fn interactive() -> anyhow::Result<()> {
-    let mut rl = DefaultEditor::new()?;
+    let config = Config::builder()
+        .history_ignore_space(true)
+        .completion_type(CompletionType::List)
+        .build();
+
+    let mut rl = Editor::with_config(config)?;
+
+    let h = ShellCompleter {};
+
+    rl.set_helper(Some(h));
 
     let mut state = init_state();
 
