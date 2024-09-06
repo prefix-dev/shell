@@ -1,4 +1,4 @@
-name: CI
+name: Typos
 on:
   push:
     branches:
@@ -9,7 +9,7 @@ on:
 jobs:
 
   typos:
-    name: Spell Check with Typos
+    name: spell check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Actions Repository
