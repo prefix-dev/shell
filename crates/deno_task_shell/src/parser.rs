@@ -330,7 +330,7 @@ pub enum RedirectOpOutput {
 struct ShellParser;
 
 pub fn parse(input: &str) -> Result<SequentialList> {
-  let mut pairs = ShellParser::parse(Rule::FILE, input)?; 
+  let mut pairs = ShellParser::parse(Rule::FILE, input)?;
 
   // println!("pairs: {:?}", pairs);
 
@@ -410,10 +410,7 @@ fn parse_compound_list(
         }
       }
       _ => {
-        anyhow::bail!(
-          "Unexpected rule in compound_list: {:?}",
-          item.as_rule()
-        );
+        anyhow::bail!("Unexpected rule in compound_list: {:?}", item.as_rule());
       }
     }
   }
@@ -510,7 +507,9 @@ fn parse_pipeline(pair: Pair<Rule>) -> Result<Sequence> {
     .ok_or_else(|| anyhow::anyhow!("Expected pipeline content"))?;
   let (negated, pipe_sequence) = if first.as_rule() == Rule::Bang {
     // If it's Bang, check for whitespace
-    if pipeline_str.len() > 1 && !pipeline_str[1..2].chars().next().unwrap().is_whitespace() {
+    if pipeline_str.len() > 1
+      && !pipeline_str[1..2].chars().next().unwrap().is_whitespace()
+    {
       anyhow::bail!(
         "Perhaps you meant to add a space after the exclamation point to negate the command?\n  ! {}", 
         pipeline_str
@@ -709,7 +708,7 @@ fn parse_word(pair: Pair<Rule>) -> Result<Word> {
                   break;
                 }
               }
-            };
+            }
             if let Some(WordPart::Text(ref mut text)) = parts.last_mut() {
               text.push_str(&escaped_char);
             } else {
