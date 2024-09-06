@@ -62,25 +62,15 @@ async fn interactive() -> anyhow::Result<()> {
 
     let mut state = init_state();
 
-    let home = if cfg!(windows) {
-        std::env::var("USERPROFILE").unwrap_or_else(|_| {
-            format!(
-                "{}{}",
-                std::env::var("HOMEDRIVE").expect("HOMEDRIVE not set"),
-                std::env::var("HOMEPATH").expect("HOMEPATH not set")
-            )
-        })
-    } else {
-        std::env::var("HOME").expect("HOME not set")
-    };
+    let home = dirs::home_dir().unwrap();
 
     let mut prev_exit_code = 0;
     loop {
         // Display the prompt and read a line
         let readline = if prev_exit_code == 0 {
             let cwd = state.cwd().to_string_lossy().to_string();
-            let prompt = if cwd.starts_with(&home) {
-                format!("~{}$ ", cwd.strip_prefix(&home).unwrap().replace('\\', "/"))
+            let prompt = if let Some(stripped) = cwd.strip_prefix(home.to_str().unwrap()) {
+                format!("~{}$ ", stripped.replace('\\', "/"))
             } else {
                 format!("{}$ ", cwd)
             };
