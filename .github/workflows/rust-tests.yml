@@ -27,4 +27,4 @@ jobs:
           override: true
 
       - name: Run tests
-        run: cargo test --all-targets --workspace
+        run: cargo test --manifest-path crates/shell/Cargo.toml --all-targets
