@@ -63,13 +63,7 @@ fn parse_args(mut args: Vec<String>) -> Result<String> {
   for arg in args {
     match arg {
       ArgKind::Arg(arg) => {
-        if arg.contains('~') {
-          let home_dir = dirs::home_dir().unwrap();
-          let arg = arg.replacen("~", home_dir.to_string_lossy().as_ref(), 1);
-          paths.push(arg);
-        } else {
-          paths.push(arg.to_string());
-        }
+        paths.push(arg);
       }
       _ => arg.bail_unsupported()?,
     }
