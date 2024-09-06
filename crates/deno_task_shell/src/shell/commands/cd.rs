@@ -42,7 +42,8 @@ fn execute_cd(cwd: &Path, args: Vec<String>) -> Result<PathBuf> {
   let mut args = args;
   if args.is_empty() {
     // append homedir to args
-    args.push("~".to_string());
+    let home_dir = dirs::home_dir().unwrap();
+    args.push(home_dir.to_string_lossy().to_string());
   }
   let path = parse_args(args.clone())?;
   let new_dir = cwd.join(&path);
