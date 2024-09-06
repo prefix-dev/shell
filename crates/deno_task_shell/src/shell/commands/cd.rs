@@ -40,7 +40,8 @@ impl ShellCommand for CdCommand {
 fn execute_cd(cwd: &Path, args: Vec<String>) -> Result<PathBuf> {
   let path = parse_args(args)?;
   let new_dir = if path == "~" {
-    dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Home directory not found"))?
+    dirs::home_dir()
+      .ok_or_else(|| anyhow::anyhow!("Home directory not found"))?
   } else {
     cwd.join(&path)
   };
