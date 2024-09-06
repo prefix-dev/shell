@@ -5,7 +5,7 @@ use futures::FutureExt;
 use super::test_builder::TestBuilder;
 use super::types::ExecuteResult;
 
-const FOLDER_SEPERATOR: char = if cfg!(windows) { '\\' } else { '/' };
+const FOLDER_SEPARATOR: char = if cfg!(windows) { '\\' } else { '/' };
 
 #[tokio::test]
 async fn commands() {
@@ -274,7 +274,7 @@ async fn async_commands() {
 }
 
 #[tokio::test]
-async fn command_substition() {
+async fn command_substitution() {
   TestBuilder::new()
     .command("echo $(echo 1)")
     .assert_stdout("1\n")
@@ -659,7 +659,7 @@ async fn pwd() {
     .command("pwd && cd sub_dir && pwd && cd ../ && pwd")
     // the actual temp directory will get replaced here
     .assert_stdout(&format!(
-      "$TEMP_DIR\n$TEMP_DIR{FOLDER_SEPERATOR}sub_dir\n$TEMP_DIR\n"
+      "$TEMP_DIR\n$TEMP_DIR{FOLDER_SEPARATOR}sub_dir\n$TEMP_DIR\n"
     ))
     .run()
     .await;
@@ -684,7 +684,7 @@ async fn subshells() {
     .directory("sub_dir")
     .command("echo $PWD && (cd sub_dir && echo $PWD) && echo $PWD")
     .assert_stdout(&format!(
-      "$TEMP_DIR\n$TEMP_DIR{FOLDER_SEPERATOR}sub_dir\n$TEMP_DIR\n"
+      "$TEMP_DIR\n$TEMP_DIR{FOLDER_SEPARATOR}sub_dir\n$TEMP_DIR\n"
     ))
     .assert_exit_code(0)
     .run()
