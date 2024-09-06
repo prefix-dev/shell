@@ -77,7 +77,7 @@ pub async fn execute(
 /// Executes a `SequentialList` of commands with specified input and output pipes.
 ///
 /// This function accepts a list of commands, a shell state, and pipes for standard input, output, and error.
-/// This function allows the user to retrive the data outputted by the execution and act on it using code.
+/// This function allows the user to retrieve the data outputted by the execution and act on it using code.
 /// This is made public for the use-case of running tests with shell execution in application depending on the library.
 ///
 /// # Arguments

@@ -27,4 +27,5 @@ jobs:
           override: true
 
       - name: Run tests
+        # TODO: run on whole workspace with "cargo test --workspace --all-targets"
         run: cargo test --manifest-path crates/shell/Cargo.toml --all-targets

@@ -3,6 +3,5 @@ extend-exclude = [
   ".git/",
   ".pixi/",
   "**/*.snap",
-  "crates/deno_task_shell",
 ]
 ignore-hidden = false
