@@ -63,7 +63,8 @@ async fn interactive() -> anyhow::Result<()> {
     let mut state = init_state();
 
     let home = std::env::var("USERPROFILE").unwrap_or_else(|_| {
-        format!("{}{}",
+        format!(
+            "{}{}",
             std::env::var("HOMEDRIVE").expect("HOMEDRIVE not set"),
             std::env::var("HOMEPATH").expect("HOMEPATH not set")
         )
