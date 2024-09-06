@@ -14,11 +14,13 @@ impl ShellCommand for LsCommand {
 }
 
 fn execute_ls(context: ShellCommandContext) -> ExecuteResult {
-    let mut args: Vec<OsString> = vec![OsString::from("ls")];
+    let mut args: Vec<OsString> = vec![OsString::from("ls"), OsString::from("--color=auto")];
+
     context
         .args
         .iter()
         .for_each(|arg| args.push(OsString::from(arg)));
+
     let exit_code = uu_ls(args.into_iter());
     ExecuteResult::from_exit_code(exit_code)
 }
