@@ -1,4 +1,9 @@
 name: Typos
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches:
@@ -7,7 +12,6 @@ on:
     branches:
       - main
 jobs:
-
   typos:
     name: spell check
     runs-on: ubuntu-latest
