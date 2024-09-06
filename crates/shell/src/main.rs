@@ -62,13 +62,17 @@ async fn interactive() -> anyhow::Result<()> {
 
     let mut state = init_state();
 
-    let home = std::env::var("USERPROFILE").unwrap_or_else(|_| {
-        format!(
-            "{}{}",
-            std::env::var("HOMEDRIVE").expect("HOMEDRIVE not set"),
-            std::env::var("HOMEPATH").expect("HOMEPATH not set")
-        )
-    });
+    let home = if cfg!(windows) {
+        std::env::var("USERPROFILE").unwrap_or_else(|_| {
+            format!(
+                "{}{}",
+                std::env::var("HOMEDRIVE").expect("HOMEDRIVE not set"),
+                std::env::var("HOMEPATH").expect("HOMEPATH not set")
+            )
+        })
+    } else {
+        std::env::var("HOME").expect("HOME not set")
+    };
 
     let mut prev_exit_code = 0;
     loop {
