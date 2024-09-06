@@ -41,7 +41,7 @@ fn execute_cd(cwd: &Path, args: Vec<String>) -> Result<PathBuf> {
   // create a new vector to avoid modifying the original
   let mut args = args;
   if args.is_empty() {
-    // append '~' to args
+    // append `~` to args
     args.push("~".to_string());
   }
   let path = parse_args(args.clone())?;
