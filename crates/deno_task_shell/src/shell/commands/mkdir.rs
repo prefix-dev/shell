@@ -70,10 +70,10 @@ struct MkdirFlags {
   paths: Vec<String>,
 }
 
-fn parse_args(args: Vec<String>) -> Result<MkdirFlags> {
+fn parse_args(mut args: Vec<String>) -> Result<MkdirFlags> {
   let mut result = MkdirFlags::default();
 
-  for arg in parse_arg_kinds(&args) {
+  for arg in parse_arg_kinds(&mut args) {
     match arg {
       ArgKind::LongFlag("parents") | ArgKind::ShortFlag('p') => {
         result.parents = true;

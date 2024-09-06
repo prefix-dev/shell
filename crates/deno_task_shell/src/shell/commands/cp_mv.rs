@@ -133,10 +133,10 @@ struct CpFlags {
   operations: Vec<(PathWithSpecified, PathWithSpecified)>,
 }
 
-fn parse_cp_args(cwd: &Path, args: Vec<String>) -> Result<CpFlags> {
+fn parse_cp_args(cwd: &Path, mut args: Vec<String>) -> Result<CpFlags> {
   let mut paths = Vec::new();
   let mut recursive = false;
-  for arg in parse_arg_kinds(&args) {
+  for arg in parse_arg_kinds(&mut args) {
     match arg {
       ArgKind::Arg(arg) => {
         paths.push(arg);
@@ -211,9 +211,9 @@ struct MvFlags {
   operations: Vec<(PathWithSpecified, PathWithSpecified)>,
 }
 
-fn parse_mv_args(cwd: &Path, args: Vec<String>) -> Result<MvFlags> {
+fn parse_mv_args(cwd: &Path, mut args: Vec<String>) -> Result<MvFlags> {
   let mut paths = Vec::new();
-  for arg in parse_arg_kinds(&args) {
+  for arg in parse_arg_kinds(&mut args) {
     match arg {
       ArgKind::Arg(arg) => {
         paths.push(arg);

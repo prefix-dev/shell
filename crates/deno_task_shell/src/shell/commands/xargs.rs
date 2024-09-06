@@ -130,7 +130,7 @@ struct XargsFlags {
   is_null_delimited: bool,
 }
 
-fn parse_args(args: Vec<String>) -> Result<XargsFlags> {
+fn parse_args(mut args: Vec<String>) -> Result<XargsFlags> {
   fn parse_delimiter(arg: &str) -> Result<char> {
     let mut chars = arg.chars();
     if let Some(first_char) = chars.next() {
@@ -160,7 +160,7 @@ fn parse_args(args: Vec<String>) -> Result<XargsFlags> {
 
   let mut initial_args = Vec::new();
   let mut delimiter = None;
-  let mut iterator = parse_arg_kinds(&args).into_iter();
+  let mut iterator = parse_arg_kinds(&mut args).into_iter();
   let mut is_null_delimited = false;
   while let Some(arg) = iterator.next() {
     match arg {

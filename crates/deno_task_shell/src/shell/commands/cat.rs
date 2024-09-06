@@ -73,9 +73,9 @@ struct CatFlags {
   paths: Vec<String>,
 }
 
-fn parse_args(args: Vec<String>) -> Result<CatFlags> {
+fn parse_args(mut args: Vec<String>) -> Result<CatFlags> {
   let mut paths = Vec::new();
-  for arg in parse_arg_kinds(&args) {
+  for arg in parse_arg_kinds(&mut args) {
     match arg {
       ArgKind::Arg(file_name) => {
         paths.push(file_name.to_string());

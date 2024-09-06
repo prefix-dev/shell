@@ -89,10 +89,10 @@ struct RmFlags {
   paths: Vec<String>,
 }
 
-fn parse_args(args: Vec<String>) -> Result<RmFlags> {
+fn parse_args(mut args: Vec<String>) -> Result<RmFlags> {
   let mut result = RmFlags::default();
 
-  for arg in parse_arg_kinds(&args) {
+  for arg in parse_arg_kinds(&mut args) {
     match arg {
       ArgKind::LongFlag("recursive")
       | ArgKind::ShortFlag('r')
@@ -106,7 +106,13 @@ fn parse_args(args: Vec<String>) -> Result<RmFlags> {
         result.force = true;
       }
       ArgKind::Arg(path) => {
-        result.paths.push(path.to_string());
+        if path.contains('~') {
+          let home_dir = dirs::home_dir().unwrap();
+          let path = path.replacen("~", home_dir.to_string_lossy().as_ref(), 1);
+          result.paths.push(path.to_string());
+        } else {
+          result.paths.push(path.to_string());
+        }
       }
       ArgKind::LongFlag(_) | ArgKind::ShortFlag(_) => arg.bail_unsupported()?,
     }

@@ -113,10 +113,10 @@ struct HeadFlags {
   lines: u64,
 }
 
-fn parse_args(args: Vec<String>) -> Result<HeadFlags> {
+fn parse_args(mut args: Vec<String>) -> Result<HeadFlags> {
   let mut path: Option<String> = None;
   let mut lines: Option<u64> = None;
-  let mut iterator = parse_arg_kinds(&args).into_iter();
+  let mut iterator = parse_arg_kinds(&mut args).into_iter();
   while let Some(arg) = iterator.next() {
     match arg {
       ArgKind::Arg(file_name) => {

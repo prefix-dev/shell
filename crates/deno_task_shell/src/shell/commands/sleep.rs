@@ -69,11 +69,11 @@ fn parse_arg(arg: &str) -> Result<f64> {
   Ok(arg.parse()?)
 }
 
-fn parse_args(args: Vec<String>) -> Result<u64> {
+fn parse_args(mut args: Vec<String>) -> Result<u64> {
   // the time to sleep is the sum of all the arguments
   let mut total_time_ms = 0;
   let mut had_value = false;
-  for arg in parse_arg_kinds(&args) {
+  for arg in parse_arg_kinds(&mut args) {
     match arg {
       ArgKind::Arg(arg) => match parse_arg(arg) {
         Ok(value_s) => {

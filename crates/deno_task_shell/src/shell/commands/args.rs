@@ -26,27 +26,33 @@ impl<'a> ArgKind<'a> {
   }
 }
 
-pub fn parse_arg_kinds(flags: &[String]) -> Vec<ArgKind> {
+pub fn parse_arg_kinds(flags: &mut [String]) -> Vec<ArgKind> {
   let mut result = Vec::new();
   let mut had_dash_dash = false;
-  for arg in flags {
+  let home_dir = dirs::home_dir().unwrap();
+  let home_dir = home_dir.to_str().unwrap();
+  for arg in flags.iter_mut() {
     if had_dash_dash {
+      let arg_clone = arg.clone();
+      arg.replace_range(.., &arg_clone.replace('~', home_dir));
       result.push(ArgKind::Arg(arg));
     } else if arg == "-" {
       result.push(ArgKind::Arg("-"));
     } else if arg == "--" {
       had_dash_dash = true;
-    } else if let Some(flag) = arg.strip_prefix("--") {
-      result.push(ArgKind::LongFlag(flag));
-    } else if let Some(flags) = arg.strip_prefix('-') {
-      if flags.parse::<f64>().is_ok() {
+    } else if arg.starts_with("--") {
+      result.push(ArgKind::LongFlag(&arg.strip_prefix("--").unwrap()));
+    } else if arg.starts_with('-') {
+      if arg.parse::<f64>().is_ok() {
         result.push(ArgKind::Arg(arg));
       } else {
-        for c in flags.chars() {
+        for c in arg.strip_prefix('-').unwrap().chars() {
           result.push(ArgKind::ShortFlag(c));
         }
       }
     } else {
+      let arg_clone = arg.clone();
+      arg.replace_range(.., &arg_clone.replace('~', home_dir));
       result.push(ArgKind::Arg(arg));
     }
   }
@@ -60,7 +66,7 @@ mod test {
 
   #[test]
   fn parses() {
-    let data = vec![
+    let mut data = vec![
       "-f".to_string(),
       "-ab".to_string(),
       "--force".to_string(),
@@ -72,7 +78,7 @@ mod test {
       "--test".to_string(),
       "-t".to_string(),
     ];
-    let args = parse_arg_kinds(&data);
+    let args = parse_arg_kinds(&mut data);
     assert_eq!(
       args,
       vec![
