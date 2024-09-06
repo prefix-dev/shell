@@ -71,7 +71,7 @@ fn init_state() -> ShellState {
 async fn interactive() -> anyhow::Result<()> {
     let config = Config::builder()
         .history_ignore_space(true)
-        .completion_type(CompletionType::List)
+        .completion_type(CompletionType::Circular)
         .build();
 
     let mut rl = Editor::with_config(config)?;
