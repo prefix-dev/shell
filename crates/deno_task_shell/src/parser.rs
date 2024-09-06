@@ -705,6 +705,39 @@ fn parse_word(pair: Pair<Rule>) -> Result<Word> {
       let assignment_str = pair.as_str().to_string();
       parts.push(WordPart::Text(assignment_str));
     }
+    Rule::FILE_NAME_PENDING_WORD => {
+      for part in pair.into_inner() {
+        match part.as_rule() {
+          Rule::UNQUOTED_ESCAPE_CHAR => {
+            if let Some(WordPart::Text(ref mut text)) = parts.last_mut() {
+              text.push(part.as_str().chars().next().unwrap());
+            } else {
+              parts.push(WordPart::Text(part.as_str().to_string()));
+            }
+          }
+          Rule::VARIABLE => {
+            parts.push(WordPart::Variable(part.as_str().to_string()))
+          }
+          Rule::UNQUOTED_CHAR => {
+            if let Some(WordPart::Text(ref mut text)) = parts.last_mut() {
+              text.push(part.as_str().chars().next().unwrap());
+            } else {
+              parts.push(WordPart::Text(part.as_str().to_string()));
+            }
+          }
+          Rule::QUOTED_WORD => {
+            let quoted = parse_quoted_word(part)?;
+            parts.push(quoted);
+          }
+          _ => {
+            return Err(anyhow::anyhow!(
+              "Unexpected rule in FILE_NAME_PENDING_WORD: {:?}",
+              part.as_rule()
+            ))
+          }
+        }
+      }
+    }
     _ => {
       return Err(anyhow::anyhow!(
         "Unexpected rule in word: {:?}",
@@ -907,6 +940,8 @@ mod test {
     assert!(
       parse("deno run --allow-read=. --allow-write=./testing main.ts").is_ok(),
     );
+
+    assert!(parse("echo \"foo\" > out.txt").is_ok());
   }
 
   #[test]
