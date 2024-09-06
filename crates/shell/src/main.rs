@@ -64,13 +64,13 @@ async fn interactive() -> anyhow::Result<()> {
 
     let home = dirs::home_dir().context("Couldn't get home directory")?;
 
-    let mut prev_exit_code = 0;
+    let mut _prev_exit_code = 0;
     loop {
         // Reset cancellation flag
         state.reset_cancellation_token();
 
         // Display the prompt and read a line
-        let readline = if prev_exit_code == 0 {
+        let readline = {
             let cwd = state.cwd().to_string_lossy().to_string();
             let home_str = home
                 .to_str()
@@ -81,8 +81,6 @@ async fn interactive() -> anyhow::Result<()> {
                 .map(|stripped| format!("~{}$ ", stripped.replace('\\', "/")))
                 .unwrap_or_else(|| format!("{}$ ", cwd));
             rl.readline(&prompt)
-        } else {
-            rl.readline("xxx ")
         };
 
         match readline {
@@ -91,7 +89,7 @@ async fn interactive() -> anyhow::Result<()> {
                 rl.add_history_entry(line.as_str())?;
 
                 // Process the input (here we just echo it back)
-                prev_exit_code = execute(&line, &mut state)
+                _prev_exit_code = execute(&line, &mut state)
                     .await
                     .context("Failed to execute")?;
 
