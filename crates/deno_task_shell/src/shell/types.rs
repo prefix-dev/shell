@@ -152,7 +152,7 @@ impl ShellState {
           // and there is no `.git` present.
           // Consequently, we:
           // * Either moved into a subdirectory of a git repository from
-          // oustide
+          // outside
           // * Or moved into a directory that is not inside git repository
           // In the first case we need to recursively search to find the
           // root. This might be slow, so we want to be smart and use the
