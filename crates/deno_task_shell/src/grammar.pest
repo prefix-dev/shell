@@ -8,7 +8,7 @@ COMMENT = _{ "#" ~ (!NEWLINE ~ ANY)* }
 QUOTED_WORD = { DOUBLE_QUOTED | SINGLE_QUOTED }
 
 UNQUOTED_PENDING_WORD = ${
-    (!(WHITESPACE | OPERATOR | NEWLINE) ~ (
+    (!(RESERVED_WORD | WHITESPACE | OPERATOR | NEWLINE) ~ (
         EXIT_STATUS | 
         UNQUOTED_ESCAPE_CHAR | 
         SUB_COMMAND | 
@@ -102,8 +102,8 @@ pipeline = !{ Bang? ~ pipe_sequence }
 pipe_sequence = !{ command ~ ((StdoutStderr | Stdout) ~ linebreak ~ pipe_sequence)? }
 
 command = !{
-    simple_command |
     compound_command ~ redirect_list? |
+    simple_command |
     function_definition
 }
 
@@ -185,7 +185,7 @@ simple_command = !{
 
 cmd_prefix = !{ (io_redirect | ASSIGNMENT_WORD)+ }
 cmd_suffix = !{ (io_redirect | UNQUOTED_PENDING_WORD)+ }
-cmd_name = @{ (RESERVED_WORD | UNQUOTED_PENDING_WORD) }
+cmd_name = @{ (UNQUOTED_PENDING_WORD) }
 cmd_word = @{ (ASSIGNMENT_WORD | UNQUOTED_PENDING_WORD) }
 
 redirect_list = !{ io_redirect+ }

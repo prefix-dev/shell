@@ -574,6 +574,7 @@ fn parse_pipe_sequence(pair: Pair<Rule>) -> Result<PipelineInner> {
 
 fn parse_command(pair: Pair<Rule>) -> Result<Command> {
   let inner = pair.into_inner().next().unwrap();
+  println!("inner: {:?}", inner);
   match inner.as_rule() {
     Rule::simple_command => parse_simple_command(inner),
     Rule::compound_command => parse_compound_command(inner),
@@ -609,7 +610,9 @@ fn parse_simple_command(pair: Pair<Rule>) -> Result<Command> {
         }
       }
       Rule::cmd_word | Rule::cmd_name => {
-        args.push(parse_word(item.into_inner().next().unwrap())?)
+        println!("cmd_word: {:?}", item);
+        println!("cmd_word: {:?}", item.into_inner());
+        // args.push(parse_word(item.into_inner().next().unwrap())?)
       }
       Rule::cmd_suffix => {
         for suffix in item.into_inner() {
