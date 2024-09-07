@@ -1,6 +1,6 @@
 // Copyright 2018-2024 the Deno authors. MIT license.
 
-use anyhow::{bail, Context};
+use anyhow::{bail, Context, Result};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ArgKind<'a> {
@@ -25,7 +25,9 @@ impl<'a> ArgKind<'a> {
   }
 }
 
-pub fn parse_arg_kinds(flags: &mut [String]) -> Result<Vec<ArgKind>, anyhow::Error> {
+pub fn parse_arg_kinds(
+  flags: &mut [String],
+) -> Result<Vec<ArgKind>, anyhow::Error> {
   let mut result = Vec::new();
   let mut had_dash_dash = false;
   let home_str = dirs::home_dir()
