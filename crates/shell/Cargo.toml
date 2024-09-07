@@ -19,12 +19,12 @@ path = "src/main.rs"
 [features]
 
 [dependencies]
-anyhow = "1.0.86"
+anyhow = "1.0.87"
 clap = { version = "4.5.17", features = ["derive"] }
 deno_task_shell = { path = "../deno_task_shell" }
 futures = "0.3.30"
 rustyline = "14.0.0"
-tokio = "1.39.2"
+tokio = "1.40.0"
 uu_ls = "0.0.27"
 dirs = "5.0.1"
 
