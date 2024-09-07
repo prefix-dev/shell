@@ -17,7 +17,7 @@ The project is still very early but can already be used as a daily driver.
 
 macOS:
 
-[macOS](https://github.com/user-attachments/assets/7f5c72ed-2bce-4f64-8a53-792d153cf574)
+[](https://github.com/user-attachments/assets/7f5c72ed-2bce-4f64-8a53-792d153cf574)
 
 Windows:
 
