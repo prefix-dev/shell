@@ -1,11 +1,17 @@
 // Copyright 2018-2024 the Deno authors. MIT license.
 
+use std::path::PathBuf;
+
 use futures::FutureExt;
 
 use super::test_builder::TestBuilder;
 use super::types::ExecuteResult;
 
 const FOLDER_SEPARATOR: char = if cfg!(windows) { '\\' } else { '/' };
+
+fn test_data() -> PathBuf {
+  PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../scripts")
+}
 
 #[tokio::test]
 async fn commands() {
@@ -1480,4 +1486,16 @@ fn no_such_file_error_text() -> &'static str {
   } else {
     "No such file or directory (os error 2)"
   }
+}
+
+#[tokio::test]
+async fn multiline() {
+  let (stdout, _, _) = TestBuilder::new()
+    .command_from_file(&test_data().join("multiline.sh"))
+    .assert_exit_code(0)
+    .ignore_expected_stdout()
+    .run()
+    .await;
+
+  insta::assert_snapshot!(stdout);
 }

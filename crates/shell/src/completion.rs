@@ -38,7 +38,7 @@ impl Completer for ShellCompleter {
 }
 
 fn extract_word(line: &str, pos: usize) -> (usize, &str) {
-    if line.ends_with(" ") {
+    if line.ends_with(' ') {
         return (pos, "");
     }
     let words: Vec<_> = line[..pos].split_whitespace().collect();

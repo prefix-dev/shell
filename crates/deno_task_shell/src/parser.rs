@@ -677,7 +677,6 @@ fn parse_subshell(pair: Pair<Rule>) -> Result<Command> {
 
 fn parse_word(pair: Pair<Rule>) -> Result<Word> {
   let mut parts = Vec::new();
-
   match pair.as_rule() {
     Rule::UNQUOTED_PENDING_WORD => {
       for part in pair.into_inner() {
@@ -803,10 +802,14 @@ fn parse_quoted_word(pair: Pair<Rule>) -> Result<WordPart> {
         match part.as_rule() {
           Rule::EXIT_STATUS => parts.push(WordPart::Text("$?".to_string())),
           Rule::QUOTED_ESCAPE_CHAR => {
+            let val = &part.as_str()[1..];
+            if val == "\n" {
+              continue;
+            }
             if let Some(WordPart::Text(ref mut s)) = parts.last_mut() {
-              s.push_str(part.as_str());
+              s.push_str(val);
             } else {
-              parts.push(WordPart::Text(part.as_str().to_string()));
+              parts.push(WordPart::Text(val.to_string()));
             }
           }
           Rule::SUB_COMMAND => {
@@ -990,7 +993,6 @@ mod test {
         .map_err(|e| anyhow::Error::msg(e.to_string()))?
         .next()
         .unwrap();
-      //   println!("pairs: {:?}", pairs);
       parse_complete_command(pairs)
     };
 

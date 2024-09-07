@@ -5,6 +5,7 @@ use futures::future::LocalBoxFuture;
 use pretty_assertions::assert_eq;
 use std::collections::HashMap;
 use std::fs;
+use std::path::Path;
 use std::path::PathBuf;
 use std::rc::Rc;
 use tokio::task::JoinHandle;
@@ -70,6 +71,7 @@ pub struct TestBuilder {
   expected_exit_code: i32,
   expected_stderr: String,
   expected_stdout: String,
+  ignore_expected_stdout: bool,
   assertions: Vec<TestAssertion>,
 }
 
@@ -99,6 +101,7 @@ impl TestBuilder {
       expected_stderr: Default::default(),
       expected_stdout: Default::default(),
       assertions: Default::default(),
+      ignore_expected_stdout: false,
     }
   }
 
@@ -136,6 +139,13 @@ impl TestBuilder {
 
   pub fn env_var(&mut self, name: &str, value: &str) -> &mut Self {
     self.env_vars.insert(name.to_string(), value.to_string());
+    self
+  }
+
+  // Run a file as a script
+  pub fn command_from_file(&mut self, path: &Path) -> &mut Self {
+    let script = fs::read_to_string(&path).unwrap();
+    self.command(&script);
     self
   }
 
@@ -200,7 +210,12 @@ impl TestBuilder {
     self
   }
 
-  pub async fn run(&mut self) {
+  pub fn ignore_expected_stdout(&mut self) -> &mut Self {
+    self.ignore_expected_stdout = true;
+    self
+  }
+
+  pub async fn run(&mut self) -> (String, String, i32) {
     let list = parse(&self.command).unwrap();
     let cwd = if let Some(temp_dir) = &self.temp_dir {
       temp_dir.cwd.clone()
@@ -227,18 +242,25 @@ impl TestBuilder {
     } else {
       "NO_TEMP_DIR".to_string()
     };
-    assert_eq!(
-      stderr_handle.await.unwrap(),
-      self.expected_stderr.replace("$TEMP_DIR", &temp_dir),
-      "\n\nFailed for: {}",
-      self.command
-    );
-    assert_eq!(
-      stdout_handle.await.unwrap(),
-      self.expected_stdout.replace("$TEMP_DIR", &temp_dir),
-      "\n\nFailed for: {}",
-      self.command
-    );
+
+    let stderr = stderr_handle.await.unwrap();
+
+    let stdout = stdout_handle.await.unwrap();
+    if !self.ignore_expected_stdout {
+      assert_eq!(
+        stderr,
+        self.expected_stderr.replace("$TEMP_DIR", &temp_dir),
+        "\n\nFailed for: {}",
+        self.command
+      );
+
+      assert_eq!(
+        stdout,
+        self.expected_stdout.replace("$TEMP_DIR", &temp_dir),
+        "\n\nFailed for: {}",
+        self.command
+      );
+    }
     assert_eq!(
       exit_code, self.expected_exit_code,
       "\n\nFailed for: {}",
@@ -275,6 +297,8 @@ impl TestBuilder {
         }
       }
     }
+
+    (stdout, stderr, exit_code)
   }
 }
 

@@ -7,7 +7,7 @@
 pub mod parser;
 
 #[cfg(feature = "shell")]
-mod shell;
+pub mod shell;
 
 #[cfg(feature = "shell")]
 pub use shell::*;

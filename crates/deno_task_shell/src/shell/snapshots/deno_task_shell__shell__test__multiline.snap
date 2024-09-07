@@ -1,0 +1,8 @@
+---
+source: crates/deno_task_shell/src/shell/test.rs
+expression: stdout
+---
+foo     bla
+foo
+    bla
+foo " bar

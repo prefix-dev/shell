@@ -26,4 +26,4 @@ mod types;
 #[cfg(test)]
 mod test;
 #[cfg(test)]
-mod test_builder;
+pub mod test_builder;

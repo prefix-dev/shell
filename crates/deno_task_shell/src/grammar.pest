@@ -1,7 +1,6 @@
-// grammar.pest
-
 // Whitespace and comments
-WHITESPACE = _{ " " | "\t" | ("\\" ~ WHITESPACE* ~ NEWLINE) }
+WHITESPACE = _{ " " | "\t" | ESCAPED_NEWLINE }
+ESCAPED_NEWLINE = _{ "\\" ~ NEWLINE }
 COMMENT = _{ "#" ~ (!NEWLINE ~ ANY)* }
 
 // Basic tokens
@@ -25,11 +24,13 @@ QUOTED_PENDING_WORD = ${ (
     QUOTED_ESCAPE_CHAR | 
     SUB_COMMAND | 
     ("$" ~ VARIABLE) |
-    QUOTED_CHAR
+    QUOTED_CHAR |
+    NEWLINE |
+    ESCAPED_NEWLINE
 )* }
 
 UNQUOTED_ESCAPE_CHAR = ${ ("\\" ~ "$" | "$" ~ !"(" ~ !VARIABLE) | "\\" ~ (" " | "`" | "\"" | "(" | ")")* }
-QUOTED_ESCAPE_CHAR = ${ "\\" ~ "$" | "$" ~ !"(" ~ !VARIABLE | "\\" ~ ("`" | "\"" | "(" | ")" | "'")* }
+QUOTED_ESCAPE_CHAR = @{ "\\" ~ ("$" | "`" | "\"" | "(" | ")" | "'" | "\n" | "\r\n") }
 
 UNQUOTED_CHAR = ${ ("\\" ~ " ") | !("(" | ")" | "{" | "}" | "<" | ">" | "|" | "&" | ";" | "\"" | "'" | "$") ~ ANY }
 QUOTED_CHAR = ${ !"\"" ~ ANY }
@@ -38,12 +39,11 @@ VARIABLE = ${ (ASCII_ALPHANUMERIC | "_")+ }
 SUB_COMMAND = { "$(" ~ complete_command ~ ")" }
 
 DOUBLE_QUOTED = @{ "\"" ~ QUOTED_PENDING_WORD ~ "\"" }
-SINGLE_QUOTED = @{ "'" ~ (!"'" ~ ANY)* ~ "'" }
+SINGLE_QUOTED = @{ "'" ~ (!"'" ~ (NEWLINE | ESCAPED_NEWLINE | ANY))* ~ "'" }
 
 NAME = ${ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 ASSIGNMENT_WORD = { NAME ~ "=" ~ UNQUOTED_PENDING_WORD? }
 IO_NUMBER = @{ ASCII_DIGIT+ }
-
 // Special tokens
 AND_IF = { "&&" }
 OR_IF = { "||" }
@@ -59,7 +59,6 @@ DLESSDASH = { "<<-" }
 CLOBBER = { ">|" }
 AMPERSAND = { "&" }
 EXIT_STATUS = ${ "$?" }
-
 
 // Operators
 OPERATOR = _{
@@ -203,8 +202,8 @@ filename = _{ FILE_NAME_PENDING_WORD }
 io_here = !{ (DLESS | DLESSDASH) ~ here_end }
 here_end = @{ ("\"" ~ UNQUOTED_PENDING_WORD ~ "\"") | UNQUOTED_PENDING_WORD }
 
-newline_list = _{ NEWLINE+ }
-linebreak = _{ NEWLINE* }
+newline_list = _{ (NEWLINE | ESCAPED_NEWLINE)+ }
+linebreak = _{ (NEWLINE | ESCAPED_NEWLINE)* }
 separator_op = { "&" | ";" }
 separator = _{ separator_op ~ linebreak | newline_list }
 sequential_sep = !{ ";" ~ linebreak | newline_list }
