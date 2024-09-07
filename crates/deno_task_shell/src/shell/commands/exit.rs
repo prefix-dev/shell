@@ -41,7 +41,7 @@ fn execute_exit(args: Vec<String>) -> Result<i32> {
 }
 
 fn parse_args(mut args: Vec<String>) -> Result<i32> {
-  let args = parse_arg_kinds(&mut args);
+  let args = parse_arg_kinds(&mut args)?;
   let mut paths = Vec::new();
   for arg in args {
     match arg {

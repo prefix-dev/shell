@@ -136,7 +136,7 @@ struct CpFlags {
 fn parse_cp_args(cwd: &Path, mut args: Vec<String>) -> Result<CpFlags> {
   let mut paths = Vec::new();
   let mut recursive = false;
-  for arg in parse_arg_kinds(&mut args) {
+  for arg in parse_arg_kinds(&mut args)? {
     match arg {
       ArgKind::Arg(arg) => {
         paths.push(arg);
@@ -213,7 +213,7 @@ struct MvFlags {
 
 fn parse_mv_args(cwd: &Path, mut args: Vec<String>) -> Result<MvFlags> {
   let mut paths = Vec::new();
-  for arg in parse_arg_kinds(&mut args) {
+  for arg in parse_arg_kinds(&mut args)? {
     match arg {
       ArgKind::Arg(arg) => {
         paths.push(arg);

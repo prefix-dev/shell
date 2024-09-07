@@ -52,7 +52,7 @@ struct PwdFlags {
 
 fn parse_args(mut args: Vec<String>) -> Result<PwdFlags> {
   let mut logical = false;
-  for arg in parse_arg_kinds(&mut args) {
+  for arg in parse_arg_kinds(&mut args)? {
     match arg {
       ArgKind::ShortFlag('L') => {
         logical = true;

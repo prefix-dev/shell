@@ -92,7 +92,7 @@ struct RmFlags {
 fn parse_args(mut args: Vec<String>) -> Result<RmFlags> {
   let mut result = RmFlags::default();
 
-  for arg in parse_arg_kinds(&mut args) {
+  for arg in parse_arg_kinds(&mut args)? {
     match arg {
       ArgKind::LongFlag("recursive")
       | ArgKind::ShortFlag('r')

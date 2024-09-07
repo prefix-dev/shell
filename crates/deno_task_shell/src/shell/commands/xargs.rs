@@ -160,7 +160,7 @@ fn parse_args(mut args: Vec<String>) -> Result<XargsFlags> {
 
   let mut initial_args = Vec::new();
   let mut delimiter = None;
-  let mut iterator = parse_arg_kinds(&mut args).into_iter();
+  let mut iterator = parse_arg_kinds(&mut args)?.into_iter();
   let mut is_null_delimited = false;
   while let Some(arg) = iterator.next() {
     match arg {

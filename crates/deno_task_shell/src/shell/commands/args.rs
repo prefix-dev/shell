@@ -1,7 +1,6 @@
 // Copyright 2018-2024 the Deno authors. MIT license.
 
-use anyhow::bail;
-use anyhow::Result;
+use anyhow::{bail, Context};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ArgKind<'a> {
@@ -11,7 +10,7 @@ pub enum ArgKind<'a> {
 }
 
 impl<'a> ArgKind<'a> {
-  pub fn bail_unsupported(&self) -> Result<()> {
+  pub fn bail_unsupported(&self) -> anyhow::Result<()> {
     match self {
       ArgKind::Arg(arg) => {
         bail!("unsupported argument: {}", arg)
@@ -26,15 +25,17 @@ impl<'a> ArgKind<'a> {
   }
 }
 
-pub fn parse_arg_kinds(flags: &mut [String]) -> Vec<ArgKind> {
+pub fn parse_arg_kinds(flags: &mut [String]) -> Result<Vec<ArgKind>, anyhow::Error> {
   let mut result = Vec::new();
   let mut had_dash_dash = false;
-  let home_dir = dirs::home_dir().unwrap();
-  let home_dir = home_dir.to_str().unwrap();
+  let home_str = dirs::home_dir()
+    .context("Couldn't get home directory")?
+    .to_string_lossy()
+    .into_owned();
   for arg in flags.iter_mut() {
     if had_dash_dash {
       let arg_clone = arg.clone();
-      arg.replace_range(.., &arg_clone.replace('~', home_dir));
+      arg.replace_range(.., &arg_clone.replace('~', &home_str));
       result.push(ArgKind::Arg(arg));
     } else if arg == "-" {
       result.push(ArgKind::Arg("-"));
@@ -52,11 +53,11 @@ pub fn parse_arg_kinds(flags: &mut [String]) -> Vec<ArgKind> {
       }
     } else {
       let arg_clone = arg.clone();
-      arg.replace_range(.., &arg_clone.replace('~', home_dir));
+      arg.replace_range(.., &arg_clone.replace('~', &home_str));
       result.push(ArgKind::Arg(arg));
     }
   }
-  result
+  Ok(result)
 }
 
 #[cfg(test)]
@@ -79,8 +80,9 @@ mod test {
       "-t".to_string(),
     ];
     let args = parse_arg_kinds(&mut data);
+    assert!(args.is_ok());
     assert_eq!(
-      args,
+      args.unwrap(),
       vec![
         ArgKind::ShortFlag('f'),
         ArgKind::ShortFlag('a'),

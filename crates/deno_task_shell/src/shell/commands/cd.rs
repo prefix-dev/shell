@@ -58,7 +58,7 @@ fn execute_cd(cwd: &Path, args: Vec<String>) -> Result<PathBuf> {
 }
 
 fn parse_args(mut args: Vec<String>) -> Result<String> {
-  let args = parse_arg_kinds(&mut args);
+  let args = parse_arg_kinds(&mut args)?;
   let mut paths = Vec::new();
   for arg in args {
     match arg {
