@@ -2,6 +2,8 @@
 
 # shell - cross-platform bash compatible shell
 
+This shell looks and feels like bash, but works **natively on Windows** (and macOS / Linux)! No emulation needed.
+
 The idea of the `shell` project is to build a cross-platform shell that looks and feels similar to bash (while not claiming to be 100% bash compatible).
 The project is written in Rust.
 
@@ -10,7 +12,6 @@ The most common bash commands are implemented and we are linking with the `coreu
 This new shell also already has _tab completion_ for files and directories, and _history_ support thanks to `rustyline`.
 
 The project is still very early but can already be used as a daily driver.
-
 
 [](https://github.com/user-attachments/assets/7f5c72ed-2bce-4f64-8a53-792d153cf574)
 
