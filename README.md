@@ -1,4 +1,4 @@
-![image](https://github.com/user-attachments/assets/9d56a2de-b41a-49a0-b724-f5a948e449fc)
+![image](https://github.com/user-attachments/assets/36707556-b447-4e3e-820a-ed011182f2e0)
 
 # shell - cross-platform bash compatible shell
 
@@ -34,3 +34,7 @@ cargo r
 # To run a script
 cargo r -- -f ./scripts/hello_world.sh
 ```
+
+## License
+
+The project is licensed under the MIT License. It is an extension of the existing `deno_task_shell` project (also licensed under the MIT License, by the authors of `deno`).
