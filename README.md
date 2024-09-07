@@ -1,4 +1,4 @@
-![image](https://github.com/user-attachments/assets/36707556-b447-4e3e-820a-ed011182f2e0)
+![image](https://github.com/user-attachments/assets/74ad3cdd-9890-4b41-b42f-7eaed269f505)
 
 # shell - cross-platform bash compatible shell
 
