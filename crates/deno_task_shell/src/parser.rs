@@ -337,8 +337,6 @@ pub fn debug_parse(input: &str) {
 pub fn parse(input: &str) -> Result<SequentialList> {
   let mut pairs = ShellParser::parse(Rule::FILE, input)?;
 
-  // println!("pairs: {:?}", pairs);
-
   parse_file(pairs.next().unwrap())
 }
 
