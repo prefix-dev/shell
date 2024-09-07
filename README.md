@@ -5,6 +5,8 @@ The project is written in Rust.
 
 The most common bash commands are implemented and we are linking with the `coreutils` crate to provide the most important Unix commands in a cross-platform, memory safe way (such as `mv`, `cp`, `ls`, `cat`, etc.).
 
+This new shell also already has _tab completion_ for files and directories, and _history_ support thanks to `rustyline`.
+
 The project is still very early but can already be used as a daily driver.
 
 ## How to run this
