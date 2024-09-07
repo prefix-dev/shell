@@ -13,8 +13,15 @@ This new shell also already has _tab completion_ for files and directories, and 
 
 The project is still very early but can already be used as a daily driver.
 
-[](https://github.com/user-attachments/assets/7f5c72ed-2bce-4f64-8a53-792d153cf574)
+## Screenshots
 
+macOS:
+
+[macOS](https://github.com/user-attachments/assets/7f5c72ed-2bce-4f64-8a53-792d153cf574)
+
+Windows:
+
+![Windows](https://github.com/user-attachments/assets/f6f40994-f28d-483e-9a79-adcefeb9ae8e)
 
 ## How to run this
 
