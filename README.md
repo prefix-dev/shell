@@ -1,6 +1,6 @@
 ![image](https://github.com/user-attachments/assets/74ad3cdd-9890-4b41-b42f-7eaed269f505)
 
-# shell - cross-platform bash compatible shell
+# 🦀 shell - fast, cross-platform Bash compatible shell 🚀
 
 This shell looks and feels like bash, but works **natively on Windows** (and macOS / Linux)! No emulation needed.
 
