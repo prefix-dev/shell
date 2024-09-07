@@ -329,6 +329,11 @@ pub enum RedirectOpOutput {
 #[grammar = "grammar.pest"]
 struct ShellParser;
 
+pub fn debug_parse(input: &str) {
+  let parsed = ShellParser::parse(Rule::FILE, input);
+  pest_ascii_tree::print_ascii_tree(parsed);
+}
+
 pub fn parse(input: &str) -> Result<SequentialList> {
   let mut pairs = ShellParser::parse(Rule::FILE, input)?;
 
