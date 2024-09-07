@@ -75,6 +75,12 @@ pub struct TestBuilder {
   assertions: Vec<TestAssertion>,
 }
 
+impl Default for TestBuilder {
+  fn default() -> Self {
+    Self::new()
+  }
+}
+
 impl TestBuilder {
   pub fn new() -> Self {
     let env_vars = std::env::vars()
@@ -144,7 +150,7 @@ impl TestBuilder {
 
   // Run a file as a script
   pub fn command_from_file(&mut self, path: &Path) -> &mut Self {
-    let script = fs::read_to_string(&path).unwrap();
+    let script = fs::read_to_string(path).unwrap();
     self.command(&script);
     self
   }
