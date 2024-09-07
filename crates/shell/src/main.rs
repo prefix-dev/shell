@@ -119,8 +119,13 @@ async fn interactive() -> anyhow::Result<()> {
 
             let prompt = cwd
                 .strip_prefix(home_str)
-                .map(|stripped| format!("~{}{git_branch}$ ", stripped.replace('\\', "/")))
-                .unwrap_or_else(|| format!("{}{git_branch}$ ", cwd));
+                .map(|stripped| {
+                    format!(
+                        "\x1b[34m~{}\x1b[31m{git_branch}\x1b[0m$ ",
+                        stripped.replace('\\', "/")
+                    )
+                })
+                .unwrap_or_else(|| format!("\x1b[34m{}\x1b[31m{git_branch}\x1b[0m$ ", cwd));
             rl.readline(&prompt)
         };
 
