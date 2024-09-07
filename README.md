@@ -4,14 +4,16 @@
 
 This shell looks and feels like bash, but works **natively on Windows** (and macOS / Linux)! No emulation needed.
 
-The idea of the `shell` project is to build a cross-platform shell that looks and feels similar to bash (while not claiming to be 100% bash compatible).
+The idea of the `shell` project is to build a cross-platform shell that looks and feels similar to bash (while not claiming to be 100% bash compatible). The `shell` allows you to use platform specific native operations (e.g. `cd 'C:\Program Files (x86)'` on Windows), but it also allows you to use a platform-independent strict subset of bash which enables writing build scripts and instructions that work on all platforms.
+
 The project is written in Rust.
 
 The most common bash commands are implemented and we are linking with the `coreutils` crate to provide the most important Unix commands in a cross-platform, memory safe way (such as `mv`, `cp`, `ls`, `cat`, etc.).
 
 This new shell also already has _tab completion_ for files and directories, and _history_ support thanks to `rustyline`.
 
-The project is still very early but can already be used as a daily driver.
+The project is still very early alpha stage but can already be used as a daily
+driver on all platforms.
 
 ## Screenshots
 
