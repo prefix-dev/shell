@@ -7,12 +7,12 @@ COMMENT = _{ "#" ~ (!NEWLINE ~ ANY)* }
 // Basic tokens
 QUOTED_WORD = { DOUBLE_QUOTED | SINGLE_QUOTED }
 
-UNQUOTED_PENDING_WORD = ${
-    (!(WHITESPACE | OPERATOR | NEWLINE) ~ (
+UNQUOTED_PENDING_WORD = ${ !OPERATOR ~
+    (!(WHITESPACE | NEWLINE) ~ (
         EXIT_STATUS | 
         UNQUOTED_ESCAPE_CHAR | 
         SUB_COMMAND | 
-        ("$" ~ VARIABLE) | 
+        ("$" ~ "{" ~ VARIABLE ~ "}" | "$" ~ VARIABLE) | 
         UNQUOTED_CHAR | 
         QUOTED_WORD
     )
@@ -24,18 +24,18 @@ QUOTED_PENDING_WORD = ${ (
     EXIT_STATUS | 
     QUOTED_ESCAPE_CHAR | 
     SUB_COMMAND | 
-    ("$" ~ VARIABLE) |
+    ("$" ~ "{" ~ VARIABLE ~ "}" | "$" ~ VARIABLE) |
     QUOTED_CHAR
 )* }
 
-UNQUOTED_ESCAPE_CHAR = ${ ("\\" ~ "$" | "$" ~ !"(" ~ !VARIABLE) | "\\" ~ (" " | "`" | "\"" | "(" | ")")* }
-QUOTED_ESCAPE_CHAR = ${ "\\" ~ "$" | "$" ~ !"(" ~ !VARIABLE | "\\" ~ ("`" | "\"" | "(" | ")" | "'")* }
+UNQUOTED_ESCAPE_CHAR = ${ ("\\" ~ "$" | "$" ~ !"(" ~  !"{" ~ !VARIABLE) | "\\" ~ (" " | "`" | "\"" | "(" | ")")* }
+QUOTED_ESCAPE_CHAR = ${ "\\" ~ "$" | "$" ~ !"(" ~ !"{" ~ !VARIABLE | "\\" ~ ("`" | "\"" | "(" | ")" | "'")* }
 
-UNQUOTED_CHAR = ${ ("\\" ~ " ") | !("(" | ")" | "{" | "}" | "<" | ">" | "|" | "&" | ";" | "\"" | "'" | "$") ~ ANY }
+UNQUOTED_CHAR = ${ ("\\" ~ " ") | !("]]" | "[[" | "(" | ")" | "<" | ">" | "|" | "&" | ";" | "\"" | "'" | "$") ~ ANY }
 QUOTED_CHAR = ${ !"\"" ~ ANY }
 
 VARIABLE = ${ (ASCII_ALPHANUMERIC | "_")+ }
-SUB_COMMAND = { "$(" ~ complete_command ~ ")" }
+SUB_COMMAND = { "$(" ~ complete_command ~ ")"}
 
 DOUBLE_QUOTED = @{ "\"" ~ QUOTED_PENDING_WORD ~ "\"" }
 SINGLE_QUOTED = @{ "'" ~ (!"'" ~ ANY)* ~ "'" }
@@ -64,7 +64,7 @@ EXIT_STATUS = ${ "$?" }
 // Operators
 OPERATOR = _{
     AND_IF | OR_IF | DSEMI | DLESS | DGREAT | LESSAND | GREATAND | LESSGREAT | DLESSDASH | CLOBBER |
-    "(" | ")" | "{" | "}" | ";" | "&" | "|" | "<" | ">"
+    "," |"(" | ")" | "{" | "}" | ";" | "&" | "|" | "<" | ">"
 }
 
 // Reserved words
@@ -102,12 +102,13 @@ pipeline = !{ Bang? ~ pipe_sequence }
 pipe_sequence = !{ command ~ ((StdoutStderr | Stdout) ~ linebreak ~ pipe_sequence)? }
 
 command = !{
-    simple_command |
     compound_command ~ redirect_list? |
+    simple_command |
     function_definition
 }
 
 compound_command = {
+    double_square_bracket |
     brace_group |
     subshell |
     for_clause |
@@ -123,9 +124,11 @@ term = !{ and_or ~ (separator ~ and_or)* }
 
 for_clause = {
     For ~ name ~ linebreak ~
-    (linebreak ~ In ~ wordlist? ~ sequential_sep)? ~
-    linebreak ~ do_group
+    (In ~ (brace_group | wordlist)? ~ sequential_sep)? ~
+    do_group
 }
+
+double_square_bracket = !{ "[[" ~ compound_list ~ "]]" }
 
 case_clause = !{
     Case ~ UNQUOTED_PENDING_WORD ~ linebreak ~
@@ -156,14 +159,13 @@ pattern = !{
 
 if_clause = !{
     If ~ compound_list ~
-    Then ~ compound_list ~
-    else_part? ~
-    Fi
+    linebreak ~ Then ~ linebreak ~ compound_list ~ linebreak ~
+    else_part? ~ linebreak ~ Fi
 }
 
 else_part = !{
-    Elif ~ compound_list ~ Then ~ else_part |
-    Else ~ compound_list
+    Elif ~ compound_list ~ Then ~ linebreak ~ else_part |
+    Else ~ linebreak ~ compound_list
 }
 
 while_clause = !{ While ~ compound_list ~ do_group }
@@ -185,7 +187,7 @@ simple_command = !{
 
 cmd_prefix = !{ (io_redirect | ASSIGNMENT_WORD)+ }
 cmd_suffix = !{ (io_redirect | UNQUOTED_PENDING_WORD)+ }
-cmd_name = @{ (RESERVED_WORD | UNQUOTED_PENDING_WORD) }
+cmd_name = @{ !RESERVED_WORD ~ UNQUOTED_PENDING_WORD }
 cmd_word = @{ (ASSIGNMENT_WORD | UNQUOTED_PENDING_WORD) }
 
 redirect_list = !{ io_redirect+ }
