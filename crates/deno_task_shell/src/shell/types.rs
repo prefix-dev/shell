@@ -2,6 +2,7 @@
 
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::fs;
 use std::io::Read;
 use std::io::Write;
 use std::path::Path;
@@ -30,6 +31,11 @@ pub struct ShellState {
   commands: Rc<HashMap<String, Rc<dyn ShellCommand>>>,
   /// Token to cancel execution.
   token: CancellationToken,
+  /// Git repository handling.
+  git_repository: bool, // Is `cwd` inside a git repository?
+  git_root: PathBuf, // Path to the root (`$git_root/.git/HEAD` exists)
+  git_branch: String, // Contents of `$git_root/.git/HEAD`
+  last_command_cd: bool, // Was last command a `cd` (thus git_branch is current)?
 }
 
 impl ShellState {
@@ -47,6 +53,10 @@ impl ShellState {
       cwd: PathBuf::new(),
       commands: Rc::new(commands),
       token: CancellationToken::default(),
+      git_repository: false,
+      git_root: PathBuf::new(),
+      git_branch: String::new(),
+      last_command_cd: false,
     };
     // ensure the data is normalized
     for (name, value) in env_vars {
@@ -58,6 +68,22 @@ impl ShellState {
 
   pub fn cwd(&self) -> &PathBuf {
     &self.cwd
+  }
+
+  pub fn git_repository(&self) -> bool {
+    self.git_repository
+  }
+
+  pub fn git_root(&self) -> &PathBuf {
+    &self.git_root
+  }
+
+  pub fn git_branch(&self) -> &String {
+    &self.git_branch
+  }
+
+  pub fn last_command_cd(&self) -> bool {
+    self.last_command_cd
   }
 
   pub fn env_vars(&self) -> &HashMap<String, String> {
@@ -76,15 +102,75 @@ impl ShellState {
       .or_else(|| self.shell_vars.get(name.as_ref()))
   }
 
+  // Update self.git_branch using self.git_root
+  pub fn update_git_branch(&mut self) {
+    if self.git_repository {
+      match fs::read_to_string(self.git_root().join(".git/HEAD")) {
+        Ok(contents) => {
+          // The git root can still be read, update the git branch
+          self.git_branch = contents.trim().to_string();
+        }
+        Err(_) => {
+          // The git root can no longer be read
+          // (the `.git/HEAD` was removed in the meantime)
+          self.git_repository = false;
+          self.git_branch = "".to_string();
+          self.git_root = "".to_string().into();
+        }
+      };
+    }
+  }
+
+  // TODO: set_cwd() is being called twice
   pub fn set_cwd(&mut self, cwd: &Path) {
     self.cwd = cwd.to_path_buf();
     // $PWD holds the current working directory, so we keep cwd and $PWD in sync
     self
       .env_vars
       .insert("PWD".to_string(), self.cwd.display().to_string());
+    // Handle a git repository
+    // First read the current directory's `.git/HEAD`
+    match fs::read_to_string(cwd.join(".git/HEAD")) {
+      Ok(contents) => {
+        // We are in a git repository in the git root dir
+        self.git_repository = true;
+        self.git_branch = contents.trim().to_string();
+        self.git_root = cwd.to_path_buf();
+      }
+      Err(_) => {
+        if self.git_repository
+          && cwd
+            .display()
+            .to_string()
+            .starts_with(&self.git_root.display().to_string())
+        {
+          // We moved inside the same git repository, but we are not
+          // in the git root dir
+          self.update_git_branch();
+        } else {
+          // We didn't move within the same git repository,
+          // and there is no `.git` present.
+          // Consequently, we:
+          // * Either moved into a subdirectory of a git repository from
+          // outside
+          // * Or moved into a directory that is not inside git repository
+          // In the first case we need to recursively search to find the
+          // root. This might be slow, so we want to be smart and use the
+          // old directory to eliminate search in case we are moving up or
+          // down from the same root. For now we will set no git
+          // repository, which is incorrect for the first case, but will
+          // be fast for the most common use of not being inside a git
+          // repository.
+          self.git_repository = false;
+          self.git_branch = "".to_string();
+          self.git_root = "".to_string().into();
+        }
+      }
+    };
   }
 
   pub fn apply_changes(&mut self, changes: &[EnvChange]) {
+    self.last_command_cd = false;
     for change in changes {
       self.apply_change(change);
     }
@@ -106,6 +192,7 @@ impl ShellState {
       }
       EnvChange::Cd(new_dir) => {
         self.set_cwd(new_dir);
+        self.last_command_cd = true;
       }
     }
   }

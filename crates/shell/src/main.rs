@@ -99,11 +99,28 @@ async fn interactive() -> anyhow::Result<()> {
             let home_str = home
                 .to_str()
                 .context("Couldn't convert home directory path to UTF-8 string")?;
+            if !state.last_command_cd() {
+                state.update_git_branch();
+            }
+            let mut git_branch: String = "".to_string();
+            if state.git_repository() {
+                git_branch = match state.git_branch().strip_prefix("ref: refs/heads/") {
+                    Some(stripped) => stripped.to_string(),
+                    None => {
+                        let mut hash = state.git_branch().to_string();
+                        if hash.len() > 7 {
+                            hash = hash[0..7].to_string() + "...";
+                        }
+                        hash
+                    }
+                };
+                git_branch = "(".to_owned() + &git_branch + ")";
+            }
 
             let prompt = cwd
                 .strip_prefix(home_str)
-                .map(|stripped| format!("~{}$ ", stripped.replace('\\', "/")))
-                .unwrap_or_else(|| format!("{}$ ", cwd));
+                .map(|stripped| format!("~{}{git_branch}$ ", stripped.replace('\\', "/")))
+                .unwrap_or_else(|| format!("{}{git_branch}$ ", cwd));
             rl.readline(&prompt)
         };
 
