@@ -100,8 +100,7 @@ async fn interactive() -> anyhow::Result<()> {
             }
             let mut git_branch: String = "".to_string();
             if state.git_repository() {
-                git_branch = match state.git_branch()
-                        .strip_prefix("ref: refs/heads/") {
+                git_branch = match state.git_branch().strip_prefix("ref: refs/heads/") {
                     Some(stripped) => stripped.to_string(),
                     None => {
                         let mut hash = state.git_branch().to_string();
