@@ -5,6 +5,7 @@ use std::rc::Rc;
 use anyhow::Context;
 use clap::Parser;
 use completion::ShellCompleter;
+use deno_task_shell::parser::debug_parse;
 use deno_task_shell::{
     execute_sequential_list, AsyncCommandBehavior, ExecuteResult, ShellCommand, ShellPipeReader,
     ShellPipeWriter, ShellState,
@@ -60,6 +61,9 @@ async fn execute(text: &str, state: &mut ShellState) -> anyhow::Result<i32> {
 struct Options {
     #[clap(short, long)]
     file: Option<PathBuf>,
+
+    #[clap(short, long)]
+    debug: bool,
 }
 
 fn init_state() -> ShellState {
@@ -144,6 +148,10 @@ async fn main() -> anyhow::Result<()> {
     if let Some(file) = options.file {
         let script_text = std::fs::read_to_string(&file).unwrap();
         let mut state = init_state();
+        if options.debug {
+            debug_parse(&script_text);
+            return Ok(());
+        }
         execute(&script_text, &mut state).await?;
     } else {
         interactive().await?;
