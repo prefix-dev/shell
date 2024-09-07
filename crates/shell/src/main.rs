@@ -76,7 +76,7 @@ async fn interactive() -> anyhow::Result<()> {
 
     let mut rl = Editor::with_config(config)?;
 
-    let h = ShellCompleter {};
+    let h = ShellCompleter::new();
 
     rl.set_helper(Some(h));
 

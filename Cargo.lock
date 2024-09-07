@@ -987,6 +987,7 @@ dependencies = [
  "dirs",
  "futures",
  "rustyline",
+ "serde_json",
  "tokio",
  "uu_ls",
 ]

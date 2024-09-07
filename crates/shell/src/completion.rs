@@ -5,11 +5,34 @@ use rustyline::hint::Hinter;
 use rustyline::validate::Validator;
 use rustyline::{Context, Helper};
 use std::borrow::Cow::{self, Owned};
+use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::path::Path;
+use std::process::Command;
 
-pub struct ShellCompleter;
+pub struct ShellCompleter {
+    generic_completions: HashMap<String, serde_json::Value>,
+}
+
+impl ShellCompleter {
+    pub fn new() -> Self {
+        let mut generic_completions = HashMap::new();
+
+        let contents = include_str!("../data/completions/git.json");
+        if let Ok(json) = serde_json::from_str(&contents) {
+            if let serde_json::Value::Object(map) = json {
+                for (key, value) in map {
+                    generic_completions.insert(key, value);
+                }
+            }
+        }
+
+        ShellCompleter {
+            generic_completions,
+        }
+    }
+}
 
 impl Completer for ShellCompleter {
     type Candidate = Pair;
@@ -24,6 +47,15 @@ impl Completer for ShellCompleter {
         let (start, word) = extract_word(line, pos);
 
         let is_start = start == 0;
+
+        let parts: Vec<&str> = line[..pos].split_whitespace().collect();
+        // Complete generic commands (including git)
+        if !parts.is_empty() && self.generic_completions.contains_key(parts[0]) {
+            complete_generic_commands(self, line, pos, &mut matches);
+            let start = line[..pos].rfind(char::is_whitespace).map_or(0, |i| i + 1);
+            return Ok((start, matches));
+        }
+
         // Complete filenames
         complete_filenames(is_start, word, &mut matches);
 
@@ -119,6 +151,85 @@ fn complete_executables_in_path(is_start: bool, word: &str, matches: &mut Vec<Pa
                     }
                 }
             }
+        }
+    }
+}
+
+fn complete_generic_commands(completer: &ShellCompleter, line: &str, pos: usize, matches: &mut Vec<Pair>) {
+    let parts: Vec<&str> = line[..pos].split_whitespace().collect();
+    if parts.is_empty() {
+        return;
+    }
+
+    let command = parts[0];
+    if let Some(completions) = completer.generic_completions.get(command) {
+        let mut current = completions;
+        let mut partial = "";
+
+        for (i, part) in parts.iter().enumerate().skip(1) {
+            if i == parts.len() - 1 && !line.ends_with(" ") {
+                partial = part;
+                break;
+            }
+
+            if let Some(next) = current.get(part) {
+                current = next;
+            } else {
+                return;
+            }
+        }
+
+        if let Some(default) = current.get("$default") {
+            current = default;
+        }
+
+        match current {
+            serde_json::Value::Object(map) => {
+                if let Some(exec) = map.get("$exec") {
+                    if let Some(cmd) = exec.as_str() {
+                        let output = Command::new("sh")
+                            .arg("-c")
+                            .arg(cmd)
+                            .output()
+                            .expect("Failed to execute command");
+                        let completions = String::from_utf8_lossy(&output.stdout)
+                            .lines()
+                            .filter(|s| s.starts_with(partial))
+                            .map(|s| Pair {
+                                display: s.to_string(),
+                                replacement: s.to_string(),
+                            })
+                            .collect::<Vec<_>>();
+                        matches.extend(completions);
+                    }
+                } else if let Some(input) = map.get("$input") {
+                    if let Some(prompt) = input.as_str() {
+                        println!("{}", prompt);
+                    }
+                } else {
+                    for key in map.keys() {
+                        if key.starts_with(partial) && *key != "$exec" && *key != "$input" && *key != "$default" {
+                            matches.push(Pair {
+                                display: key.clone(),
+                                replacement: key.clone(),
+                            });
+                        }
+                    }
+                }
+            }
+            serde_json::Value::Array(arr) => {
+                for item in arr {
+                    if let Some(s) = item.as_str() {
+                        if s.starts_with(partial) {
+                            matches.push(Pair {
+                                display: s.to_string(),
+                                replacement: s.to_string(),
+                            });
+                        }
+                    }
+                }
+            }
+            _ => {}
         }
     }
 }

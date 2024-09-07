@@ -27,6 +27,7 @@ rustyline = "14.0.0"
 tokio = "1.39.2"
 uu_ls = "0.0.27"
 dirs = "5.0.1"
+serde_json = "1.0.128"
 
 [package.metadata.release]
 # Dont publish the binary

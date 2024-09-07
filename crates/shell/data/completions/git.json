@@ -1,0 +1,43 @@
+{
+  "git": {
+    "add": {
+      "$exec": "git ls-files --others --exclude-standard"
+    },
+    "commit": {
+      "-m": {
+        "$input": "Enter commit message"
+      }
+    },
+    "branch": {
+      "$exec": "git branch --list | sed 's/^[* ] //'"
+    },
+    "checkout": {
+      "$exec": "git branch --list | sed 's/^[* ] //'"
+    },
+    "push": {
+      "origin": {
+        "$exec": "git branch --show-current"
+      }
+    },
+    "pull": {
+      "origin": {
+        "$exec": "git branch --show-current"
+      }
+    },
+    "status": {},
+    "log": {},
+    "rebase": {
+      "-i": {"$exec": "git log --pretty=format:'%h' -n 30"},
+      "--interactive": {"$exec": "git log --pretty=format:'%h' -n 30"},
+      "--continue": {},
+      "--abort": {},
+      "--skip": {},
+      "--edit-todo": {},
+      "--onto": {
+        "$exec": "git branch --list | sed 's/^[* ] //'",
+        "$after": {"$exec": "git log --pretty=format:'%h' -n 30"}
+      },
+      "$default": {"$exec": "git branch --list | sed 's/^[* ] //'"}
+    }
+  }
+}
