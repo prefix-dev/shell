@@ -1,6 +1,6 @@
 // Copyright 2018-2024 the Deno authors. MIT license.
 
-use anyhow::{anyhow, Result, Context};
+use anyhow::{anyhow, Context, Result};
 use pest::iterators::Pair;
 use pest::Parser;
 use pest_derive::Parser;
@@ -909,28 +909,29 @@ fn parse_env_var(pair: Pair<Rule>) -> Result<EnvVar> {
 }
 
 fn parse_assignment_value(pair: Pair<Rule>) -> Result<Word> {
-    let mut parts = Vec::new();
-    
-    for part in pair.into_inner() {
-        match part.as_rule() {
-            Rule::ASSIGNMENT_TILDE_PREFIX => {
-                let tilde_prefix = parse_tilde_prefix(part).context("Failed to parse tilde prefix")?;
-                parts.push(tilde_prefix);
-            }
-            Rule::UNQUOTED_PENDING_WORD => {
-                let word_parts = parse_word(part)?;
-                parts.extend(word_parts.into_parts());
-            }
-            _ => {
-                return Err(anyhow::anyhow!(
-                    "Unexpected rule in assignment value: {:?}",
-                    part.as_rule()
-                ))
-            }
-        }
-    }
+  let mut parts = Vec::new();
 
-    Ok(Word::new(parts))
+  for part in pair.into_inner() {
+    match part.as_rule() {
+      Rule::ASSIGNMENT_TILDE_PREFIX => {
+        let tilde_prefix =
+          parse_tilde_prefix(part).context("Failed to parse tilde prefix")?;
+        parts.push(tilde_prefix);
+      }
+      Rule::UNQUOTED_PENDING_WORD => {
+        let word_parts = parse_word(part)?;
+        parts.extend(word_parts.into_parts());
+      }
+      _ => {
+        return Err(anyhow::anyhow!(
+          "Unexpected rule in assignment value: {:?}",
+          part.as_rule()
+        ))
+      }
+    }
+  }
+
+  Ok(Word::new(parts))
 }
 
 fn parse_io_redirect(pair: Pair<Rule>) -> Result<Redirect> {

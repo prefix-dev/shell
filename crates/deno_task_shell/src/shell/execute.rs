@@ -904,10 +904,13 @@ fn evaluate_word_parts(
 
             current_text.push(TextPart::Quoted(text));
             continue;
-          },
+          }
           WordPart::Tilde(tilde_prefix) => {
             if tilde_prefix.only_tilde() {
-              let home_str = dirs::home_dir().context("Failed to get home directory")?.display().to_string();
+              let home_str = dirs::home_dir()
+                .context("Failed to get home directory")?
+                .display()
+                .to_string();
               current_text.push(TextPart::Text(home_str));
             } else {
               todo!("tilde expansion with user name is not supported");
