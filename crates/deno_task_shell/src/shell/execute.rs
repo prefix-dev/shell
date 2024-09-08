@@ -895,6 +895,10 @@ fn evaluate_word_parts(
 
             current_text.push(TextPart::Quoted(text));
             continue;
+          },
+          WordPart::Tilde(tilde_prefix) => {
+            current_text.push(TextPart::Text(tilde_prefix));
+            continue;
           }
         };
 
