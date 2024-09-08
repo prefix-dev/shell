@@ -4,7 +4,6 @@ use std::rc::Rc;
 
 use anyhow::Context;
 use clap::Parser;
-use completion::ShellCompleter;
 use deno_task_shell::parser::debug_parse;
 use deno_task_shell::{
     execute_sequential_list, AsyncCommandBehavior, ExecuteResult, ShellCommand, ShellPipeReader,
@@ -15,6 +14,7 @@ use rustyline::{CompletionType, Config, Editor};
 
 mod commands;
 mod completion;
+mod helper;
 
 fn commands() -> HashMap<String, Rc<dyn ShellCommand>> {
     HashMap::from([(
@@ -80,9 +80,12 @@ async fn interactive() -> anyhow::Result<()> {
 
     let mut rl = Editor::with_config(config)?;
 
-    let h = ShellCompleter {};
+    let helper = helper::ShellPromptHelper::default();
+    rl.set_helper(Some(helper));
 
-    rl.set_helper(Some(h));
+    // let h = ShellCompleter {};
+
+    // rl.set_helper(Some(h));
 
     let mut state = init_state();
 
@@ -102,6 +105,7 @@ async fn interactive() -> anyhow::Result<()> {
             if !state.last_command_cd() {
                 state.update_git_branch();
             }
+
             let mut git_branch: String = "".to_string();
             if state.git_repository() {
                 git_branch = match state.git_branch().strip_prefix("ref: refs/heads/") {
@@ -117,10 +121,15 @@ async fn interactive() -> anyhow::Result<()> {
                 git_branch = "(".to_owned() + &git_branch + ")";
             }
 
-            let prompt = cwd
-                .strip_prefix(home_str)
-                .map(|stripped| format!("~{}{git_branch}$ ", stripped.replace('\\', "/")))
-                .unwrap_or_else(|| format!("{}{git_branch}$ ", cwd));
+            let display_cwd = if let Some(stripped) = cwd.strip_prefix(home_str) {
+                format!("~{}", stripped.replace('\\', "/"))
+            } else {
+                cwd.to_string()
+            };
+
+            let prompt = format!("{}{git_branch}$ ", display_cwd);
+            let color_prompt = format!("\x1b[34m{}\x1b[31m{git_branch}\x1b[0m$ ", display_cwd);
+            rl.helper_mut().unwrap().colored_prompt = color_prompt;
             rl.readline(&prompt)
         };
 
