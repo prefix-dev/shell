@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
 
+use anyhow::Context;
 use futures::future;
 use futures::future::LocalBoxFuture;
 use futures::FutureExt;
@@ -729,12 +730,20 @@ pub enum EvaluateWordTextError {
   },
   #[error("glob: no matches found '{}'", pattern)]
   NoFilesMatched { pattern: String },
+  #[error("Failed to get home directory")]
+  FailedToGetHomeDirectory(anyhow::Error),
 }
 
 impl EvaluateWordTextError {
   pub fn into_exit_code(self, stderr: &mut ShellPipeWriter) -> ExecuteResult {
     let _ = stderr.write_line(&self.to_string());
     ExecuteResult::from_exit_code(1)
+  }
+}
+
+impl From<anyhow::Error> for EvaluateWordTextError {
+  fn from(err: anyhow::Error) -> Self {
+    Self::FailedToGetHomeDirectory(err)
   }
 }
 
@@ -897,7 +906,12 @@ fn evaluate_word_parts(
             continue;
           },
           WordPart::Tilde(tilde_prefix) => {
-            current_text.push(TextPart::Text(tilde_prefix));
+            if tilde_prefix.only_tilde() {
+              let home_str = dirs::home_dir().context("Failed to get home directory")?.display().to_string();
+              current_text.push(TextPart::Text(home_str));
+            } else {
+              todo!("tilde expansion with user name is not supported");
+            }
             continue;
           }
         };
