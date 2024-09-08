@@ -21,12 +21,14 @@ UNQUOTED_PENDING_WORD = ${
 
 TILDE_PREFIX = ${
     "~" ~ (!(OPERATOR | WHITESPACE | NEWLINE | "/") ~ (
-        QUOTED_CHAR 
+        (!("\"" | "'" | "$" | "\\" | "/") ~ ANY)
     ))*
 }
 
 ASSIGNMENT_TILDE_PREFIX = ${
-    "~" ~ (!(OPERATOR | WHITESPACE | NEWLINE | "/" | ":") ~ ANY)*
+    "~" ~ (!(OPERATOR | WHITESPACE | NEWLINE | "/" | ":") ~ 
+        (!("\"" | "'" | "$" | "\\" | "/") ~ ANY)
+    )*
 }
 
 FILE_NAME_PENDING_WORD = ${ (!(WHITESPACE | OPERATOR | NEWLINE) ~ (UNQUOTED_ESCAPE_CHAR | ("$" ~ VARIABLE) | UNQUOTED_CHAR | QUOTED_WORD))+ }
