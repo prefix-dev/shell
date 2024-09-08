@@ -11,6 +11,12 @@ use std::path::Path;
 
 pub struct ShellCompleter;
 
+impl Default for ShellCompleter {
+    fn default() -> Self {
+        ShellCompleter
+    }
+}
+
 impl Completer for ShellCompleter {
     type Candidate = Pair;
 
@@ -38,7 +44,7 @@ impl Completer for ShellCompleter {
 }
 
 fn extract_word(line: &str, pos: usize) -> (usize, &str) {
-    if line.ends_with(" ") {
+    if line.ends_with(' ') {
         return (pos, "");
     }
     let words: Vec<_> = line[..pos].split_whitespace().collect();
