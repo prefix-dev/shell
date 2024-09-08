@@ -7,16 +7,37 @@ COMMENT = _{ "#" ~ (!NEWLINE ~ ANY)* }
 // Basic tokens
 QUOTED_WORD = { DOUBLE_QUOTED | SINGLE_QUOTED }
 
-UNQUOTED_PENDING_WORD = ${ !OPERATOR ~
-    (!(WHITESPACE | NEWLINE) ~ (
+UNQUOTED_PENDING_WORD = ${ 
+    (TILDE_PREFIX ~ (!(OPERATOR | WHITESPACE | NEWLINE) ~ (
         EXIT_STATUS | 
         UNQUOTED_ESCAPE_CHAR | 
         SUB_COMMAND | 
         ("$" ~ "{" ~ VARIABLE ~ "}" | "$" ~ VARIABLE) | 
         UNQUOTED_CHAR | 
         QUOTED_WORD
-    )
-)+ }
+    ))*)
+    | 
+    (!(OPERATOR | WHITESPACE | NEWLINE) ~ (
+        EXIT_STATUS | 
+        UNQUOTED_ESCAPE_CHAR | 
+        SUB_COMMAND | 
+        ("$" ~ "{" ~ VARIABLE ~ "}" | "$" ~ VARIABLE) | 
+        UNQUOTED_CHAR | 
+        QUOTED_WORD
+    ))+
+}
+
+TILDE_PREFIX = ${
+    "~" ~ (!(OPERATOR | WHITESPACE | NEWLINE | "/") ~ (
+        (!("\"" | "'" | "$" | "\\" | "/") ~ ANY)
+    ))*
+}
+
+ASSIGNMENT_TILDE_PREFIX = ${
+    "~" ~ (!(OPERATOR | WHITESPACE | NEWLINE | "/" | ":") ~ 
+        (!("\"" | "'" | "$" | "\\" | "/") ~ ANY)
+    )*
+}
 
 FILE_NAME_PENDING_WORD = ${ (!(WHITESPACE | OPERATOR | NEWLINE) ~ (UNQUOTED_ESCAPE_CHAR | ("$" ~ VARIABLE) | UNQUOTED_CHAR | QUOTED_WORD))+ }
 
@@ -41,7 +62,12 @@ DOUBLE_QUOTED = @{ "\"" ~ QUOTED_PENDING_WORD ~ "\"" }
 SINGLE_QUOTED = @{ "'" ~ (!"'" ~ ANY)* ~ "'" }
 
 NAME = ${ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
-ASSIGNMENT_WORD = { NAME ~ "=" ~ UNQUOTED_PENDING_WORD? }
+ASSIGNMENT_WORD = { NAME ~ "=" ~ ASSIGNMENT_VALUE? }
+ASSIGNMENT_VALUE = ${ 
+    ASSIGNMENT_TILDE_PREFIX ~ 
+    ((":" ~ ASSIGNMENT_TILDE_PREFIX) | (!":" ~ UNQUOTED_PENDING_WORD))* |
+    UNQUOTED_PENDING_WORD
+}
 IO_NUMBER = @{ ASCII_DIGIT+ }
 
 // Special tokens
@@ -59,6 +85,7 @@ DLESSDASH = { "<<-" }
 CLOBBER = { ">|" }
 AMPERSAND = { "&" }
 EXIT_STATUS = ${ "$?" }
+TILDE = ${ "~" }
 
 
 // Operators

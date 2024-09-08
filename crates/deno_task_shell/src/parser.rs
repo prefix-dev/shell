@@ -1,6 +1,6 @@
 // Copyright 2018-2024 the Deno authors. MIT license.
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use pest::iterators::Pair;
 use pest::Parser;
 use pest_derive::Parser;
@@ -215,6 +215,23 @@ impl EnvVar {
 }
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
+#[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct TildePrefix {
+  pub user: Option<String>,
+}
+
+impl TildePrefix {
+  pub fn only_tilde(self) -> bool {
+    self.user.is_none()
+  }
+
+  pub fn new(user: Option<String>) -> Self {
+    TildePrefix { user }
+  }
+}
+
+#[cfg_attr(feature = "serialization", derive(serde::Serialize))]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Word(Vec<WordPart>);
 
@@ -261,6 +278,8 @@ pub enum WordPart {
   Command(SequentialList),
   /// Quoted string (ex. `"hello"` or `'test'`)
   Quoted(Vec<WordPart>),
+  /// Tilde prefix (ex. `~user/path` or `~/bin`)
+  Tilde(TildePrefix),
 }
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
@@ -730,6 +749,10 @@ fn parse_word(pair: Pair<Rule>) -> Result<Word> {
             let quoted = parse_quoted_word(part)?;
             parts.push(quoted);
           }
+          Rule::TILDE_PREFIX => {
+            let tilde_prefix = parse_tilde_prefix(part)?;
+            parts.push(tilde_prefix);
+          }
           _ => {
             return Err(anyhow::anyhow!(
               "Unexpected rule in UNQUOTED_PENDING_WORD: {:?}",
@@ -793,6 +816,17 @@ fn parse_word(pair: Pair<Rule>) -> Result<Word> {
   } else {
     Ok(Word::new(parts))
   }
+}
+
+fn parse_tilde_prefix(pair: Pair<Rule>) -> Result<WordPart> {
+  let tilde_prefix_str = pair.as_str();
+  let user = if tilde_prefix_str.len() > 1 {
+    Some(tilde_prefix_str[1..].to_string())
+  } else {
+    None
+  };
+  let tilde_prefix = TildePrefix::new(user);
+  Ok(WordPart::Tilde(tilde_prefix))
 }
 
 fn parse_quoted_word(pair: Pair<Rule>) -> Result<WordPart> {
@@ -863,7 +897,7 @@ fn parse_env_var(pair: Pair<Rule>) -> Result<EnvVar> {
 
   // Get the value of the environment variable
   let word_value = if let Some(value) = parts.next() {
-    parse_word(value)?
+    parse_assignment_value(value).context("Failed to parse assignment value")?
   } else {
     Word::new_empty()
   };
@@ -872,6 +906,32 @@ fn parse_env_var(pair: Pair<Rule>) -> Result<EnvVar> {
     name,
     value: word_value,
   })
+}
+
+fn parse_assignment_value(pair: Pair<Rule>) -> Result<Word> {
+  let mut parts = Vec::new();
+
+  for part in pair.into_inner() {
+    match part.as_rule() {
+      Rule::ASSIGNMENT_TILDE_PREFIX => {
+        let tilde_prefix =
+          parse_tilde_prefix(part).context("Failed to parse tilde prefix")?;
+        parts.push(tilde_prefix);
+      }
+      Rule::UNQUOTED_PENDING_WORD => {
+        let word_parts = parse_word(part)?;
+        parts.extend(word_parts.into_parts());
+      }
+      _ => {
+        return Err(anyhow::anyhow!(
+          "Unexpected rule in assignment value: {:?}",
+          part.as_rule()
+        ))
+      }
+    }
+  }
+
+  Ok(Word::new(parts))
 }
 
 fn parse_io_redirect(pair: Pair<Rule>) -> Result<Redirect> {
