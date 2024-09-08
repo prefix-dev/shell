@@ -278,7 +278,7 @@ pub enum WordPart {
   Command(SequentialList),
   /// Quoted string (ex. `"hello"` or `'test'`)
   Quoted(Vec<WordPart>),
-  /// Tilde prefix (ex. `~user/path`)
+  /// Tilde prefix (ex. `~user/path` or `~/bin`)
   Tilde(TildePrefix),
 }
 
