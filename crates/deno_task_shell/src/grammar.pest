@@ -8,16 +8,24 @@ COMMENT = _{ "#" ~ (!NEWLINE ~ ANY)* }
 QUOTED_WORD = { DOUBLE_QUOTED | SINGLE_QUOTED }
 
 UNQUOTED_PENDING_WORD = ${ 
+    (TILDE_PREFIX ~ (!(OPERATOR | WHITESPACE | NEWLINE) ~ (
+        EXIT_STATUS | 
+        UNQUOTED_ESCAPE_CHAR | 
+        SUB_COMMAND | 
+        ("$" ~ "{" ~ VARIABLE ~ "}" | "$" ~ VARIABLE) | 
+        UNQUOTED_CHAR | 
+        QUOTED_WORD
+    ))*)
+    | 
     (!(OPERATOR | WHITESPACE | NEWLINE) ~ (
         EXIT_STATUS | 
         UNQUOTED_ESCAPE_CHAR | 
         SUB_COMMAND | 
         ("$" ~ "{" ~ VARIABLE ~ "}" | "$" ~ VARIABLE) | 
-        TILDE_PREFIX |
         UNQUOTED_CHAR | 
         QUOTED_WORD
-    )
-)+ }
+    ))+
+}
 
 TILDE_PREFIX = ${
     "~" ~ (!(OPERATOR | WHITESPACE | NEWLINE | "/") ~ (
