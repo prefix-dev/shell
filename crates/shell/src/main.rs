@@ -59,7 +59,7 @@ async fn execute(text: &str, state: &mut ShellState) -> anyhow::Result<i32> {
 
 #[derive(Parser)]
 struct Options {
-    #[clap(short, long)]
+    /// The path to the file that should be executed
     file: Option<PathBuf>,
 
     #[clap(short, long)]
