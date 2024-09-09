@@ -1025,7 +1025,7 @@ fn parse_io_file(pair: Pair<Rule>) -> Result<(RedirectOp, IoFile)> {
 #[cfg(test)]
 mod test {
   use super::*;
-  use pretty_assertions::assert_eq;
+  
 
   #[test]
   fn test_main() {
