@@ -1025,7 +1025,6 @@ fn parse_io_file(pair: Pair<Rule>) -> Result<(RedirectOp, IoFile)> {
 #[cfg(test)]
 mod test {
   use super::*;
-  
 
   #[test]
   fn test_main() {
