@@ -36,6 +36,7 @@ pub struct ShellState {
   git_root: PathBuf, // Path to the root (`$git_root/.git/HEAD` exists)
   git_branch: String, // Contents of `$git_root/.git/HEAD`
   last_command_cd: bool, // Was last command a `cd` (thus git_branch is current)?
+  last_command_exit_code: i32, // Exit code of the last command
 }
 
 impl ShellState {
@@ -57,6 +58,7 @@ impl ShellState {
       git_root: PathBuf::new(),
       git_branch: String::new(),
       last_command_cd: false,
+      last_command_exit_code: 0,
     };
     // ensure the data is normalized
     for (name, value) in env_vars {
@@ -84,6 +86,14 @@ impl ShellState {
 
   pub fn last_command_cd(&self) -> bool {
     self.last_command_cd
+  }
+
+  pub fn set_last_command_exit_code(&mut self, exit_code: i32) {
+    self.last_command_exit_code = exit_code;
+  }
+
+  pub fn last_command_exit_code(&self) -> i32 {
+    self.last_command_exit_code
   }
 
   pub fn env_vars(&self) -> &HashMap<String, String> {

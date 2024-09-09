@@ -280,6 +280,8 @@ pub enum WordPart {
   Quoted(Vec<WordPart>),
   /// Tilde prefix (ex. `~user/path` or `~/bin`)
   Tilde(TildePrefix),
+  /// Exit status of the last command (ex. `$?`)
+  ExitStatus,
 }
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
@@ -704,7 +706,7 @@ fn parse_word(pair: Pair<Rule>) -> Result<Word> {
     Rule::UNQUOTED_PENDING_WORD => {
       for part in pair.into_inner() {
         match part.as_rule() {
-          Rule::EXIT_STATUS => parts.push(WordPart::Variable("?".to_string())),
+          Rule::EXIT_STATUS => parts.push(WordPart::ExitStatus),
           Rule::UNQUOTED_CHAR => {
             if let Some(WordPart::Text(ref mut text)) = parts.last_mut() {
               text.push(part.as_str().chars().next().unwrap());
