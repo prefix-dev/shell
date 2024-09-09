@@ -139,9 +139,10 @@ async fn interactive() -> anyhow::Result<()> {
                 rl.add_history_entry(line.as_str())?;
 
                 // Process the input (here we just echo it back)
-                _prev_exit_code = execute(&line, &mut state)
+                let prev_exit_code = execute(&line, &mut state)
                     .await
                     .context("Failed to execute")?;
+                state.set_last_command_exit_code(prev_exit_code);
 
                 // Check for exit command
                 if line.trim().eq_ignore_ascii_case("exit") {

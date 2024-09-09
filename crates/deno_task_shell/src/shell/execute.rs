@@ -917,6 +917,11 @@ fn evaluate_word_parts(
             }
             continue;
           }
+          WordPart::ExitStatus => {
+            let exit_code = state.last_command_exit_code();
+            current_text.push(TextPart::Text(exit_code.to_string()));
+            continue;
+          }
         };
 
         // This text needs to be turned into a vector of strings.
