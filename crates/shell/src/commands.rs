@@ -79,6 +79,7 @@ impl ShellCommand for SourceCommand {
             // TODO turn into execute result
             let content = fs::read_to_string(script_file).unwrap();
             let mut state = context.state.clone();
+
             async move {
                 execute::execute(&content, &mut state).await.unwrap();
                 ExecuteResult::from_exit_code(0)
