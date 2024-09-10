@@ -87,6 +87,14 @@ async fn commands() {
     .run()
     .await;
 
+  TestBuilder::new()
+    .command("deno eval 'console.log(1)'")
+    .env_var("PATH", "")
+    .assert_stderr("deno: command not found\n")
+    .assert_exit_code(127)
+    .run()
+    .await;
+
   TestBuilder::new().command("unset").run().await;
 }
 
