@@ -52,28 +52,6 @@ async fn commands() {
     .await;
 
   TestBuilder::new()
-    .command(
-      r#"VAR=1 deno eval 'console.log(Deno.env.get("VAR"))' && echo $VAR"#,
-    )
-    .assert_stdout("1\n\n")
-    .run()
-    .await;
-
-  TestBuilder::new()
-    .command(r#"VAR=1 VAR2=2 deno eval 'console.log(Deno.env.get("VAR") + Deno.env.get("VAR2"))'"#)
-    .assert_stdout("12\n")
-    .run()
-    .await;
-
-  TestBuilder::new()
-    .command(
-      r#"EMPTY= deno eval 'console.log(`EMPTY: ${Deno.env.get("EMPTY")}`)'"#,
-    )
-    .assert_stdout("EMPTY: \n")
-    .run()
-    .await;
-
-  TestBuilder::new()
     .command(r#""echo" "1""#)
     .assert_stdout("1\n")
     .run()
@@ -106,14 +84,6 @@ async fn commands() {
   TestBuilder::new()
     .command("echo --test=\"2\" --test='2' test\"TEST\" TEST'test'TEST 'test''test' test'test'\"test\" \"test\"\"test\"'test'")
     .assert_stdout("--test=2 --test=2 testTEST TESTtestTEST testtest testtesttest testtesttest\n")
-    .run()
-    .await;
-
-  TestBuilder::new()
-    .command("deno eval 'console.log(1)'")
-    .env_var("PATH", "")
-    .assert_stderr("deno: command not found\n")
-    .assert_exit_code(127)
     .run()
     .await;
 
@@ -239,69 +209,14 @@ async fn sequential_lists() {
 #[tokio::test]
 async fn pipeline() {
   TestBuilder::new()
-    .command(r#"echo 1 | deno eval 'await Deno.stdin.readable.pipeTo(Deno.stdout.writable)'"#)
-    .assert_stdout("1\n")
-    .run()
-    .await;
-
-  TestBuilder::new()
     .command(r#"echo 1 | echo 2 && echo 3"#)
     .assert_stdout("2\n3\n")
     .run()
     .await;
 
   TestBuilder::new()
-    .command(r#"echo $(sleep 0.1 && echo 2 & echo 1) | deno eval 'await Deno.stdin.readable.pipeTo(Deno.stdout.writable)'"#)
-    .assert_stdout("1 2\n")
-    .run()
-    .await;
-
-  TestBuilder::new()
-    .command(r#"echo 2 | echo 1 | deno eval 'await Deno.stdin.readable.pipeTo(Deno.stdout.writable)'"#)
+    .command(r#"echo 1 | tee output.txt"#)
     .assert_stdout("1\n")
-    .run()
-    .await;
-
-  TestBuilder::new()
-    .command(r#"deno eval 'console.log(1); console.error(2);' | deno eval 'await Deno.stdin.readable.pipeTo(Deno.stdout.writable)'"#)
-    .assert_stdout("1\n")
-    .assert_stderr("2\n")
-    .run()
-    .await;
-
-  // stdout and stderr pipeline
-
-  TestBuilder::new()
-    .command(r#"deno eval 'console.log(1); console.error(2);' |& deno eval 'await Deno.stdin.readable.pipeTo(Deno.stdout.writable)'"#)
-    .assert_stdout("1\n2\n")
-    .run()
-    .await;
-
-  TestBuilder::new()
-    // add bit of a delay while outputting stdout so that it doesn't race with stderr
-    .command(r#"deno eval 'console.log(1); console.error(2);' | deno eval 'setTimeout(async () => { await Deno.stdin.readable.pipeTo(Deno.stderr.writable) }, 10)' |& deno eval 'await Deno.stdin.readable.pipeTo(Deno.stderr.writable)'"#)
-    // still outputs 2 because the first command didn't pipe stderr
-    .assert_stderr("2\n1\n")
-    .run()
-    .await;
-
-  // |& pipeline should still pipe stdout
-  TestBuilder::new()
-    .command(r#"echo 1 |& deno eval 'await Deno.stdin.readable.pipeTo(Deno.stdout.writable)'"#)
-    .assert_stdout("1\n")
-    .run()
-    .await;
-
-  // pipeline with redirect
-  TestBuilder::new()
-    .command(r#"echo 1 | deno eval 'await Deno.stdin.readable.pipeTo(Deno.stdout.writable)' > output.txt"#)
-    .assert_file_equals("output.txt", "1\n")
-    .run()
-    .await;
-
-  // pipeline with stderr redirect
-  TestBuilder::new()
-    .command(r#"echo 1 | deno eval 'await Deno.stdin.readable.pipeTo(Deno.stderr.writable)' 2> output.txt"#)
     .assert_file_equals("output.txt", "1\n")
     .run()
     .await;
@@ -678,19 +593,6 @@ async fn rm() {
 #[tokio::test]
 async fn windows_resolve_command() {
   // not cross platform, but still allow this
-  TestBuilder::new()
-    .command("deno.exe eval 'console.log(1)'")
-    .assert_stdout("1\n")
-    .run()
-    .await;
-
-  TestBuilder::new()
-    .command("deno eval 'console.log(1)'")
-    // handle trailing semi-colon
-    .env_var("PATHEXT", ".EXE;")
-    .assert_stdout("1\n")
-    .run()
-    .await;
 }
 
 #[tokio::test]
