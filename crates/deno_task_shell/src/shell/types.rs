@@ -27,8 +27,12 @@ pub struct ShellState {
   /// Variables that should be evaluated within the shell and
   /// not passed down to any sub commands.
   shell_vars: HashMap<String, String>,
+  /// The current working directory of the shell
   cwd: PathBuf,
+  /// The commands that are available in the shell
   commands: Rc<HashMap<String, Rc<dyn ShellCommand>>>,
+  /// A map of aliases for commands (e.g. `ll=ls -al`)
+  alias: HashMap<String, Vec<String>>,
   /// Token to cancel execution.
   token: CancellationToken,
   /// Git repository handling.
@@ -51,6 +55,7 @@ impl ShellState {
     let mut result = Self {
       env_vars: Default::default(),
       shell_vars: Default::default(),
+      alias: Default::default(),
       cwd: PathBuf::new(),
       commands: Rc::new(commands),
       token: CancellationToken::default(),
@@ -70,6 +75,10 @@ impl ShellState {
 
   pub fn cwd(&self) -> &PathBuf {
     &self.cwd
+  }
+
+  pub fn alias_map(&self) -> &HashMap<String, Vec<String>> {
+    &self.alias
   }
 
   pub fn git_repository(&self) -> bool {
@@ -131,7 +140,7 @@ impl ShellState {
     }
   }
 
-  // TODO: set_cwd() is being called twice
+  /// Set the current working directory of this shell
   pub fn set_cwd(&mut self, cwd: &Path) {
     self.cwd = cwd.to_path_buf();
     // $PWD holds the current working directory, so we keep cwd and $PWD in sync
@@ -204,6 +213,15 @@ impl ShellState {
         self.set_cwd(new_dir);
         self.last_command_cd = true;
       }
+      EnvChange::AliasCommand(alias, cmd) => {
+        self.alias.insert(
+          alias.clone(),
+          cmd.split_whitespace().map(ToString::to_string).collect(),
+        );
+      }
+      EnvChange::UnAliasCommand(alias) => {
+        self.alias.remove(alias);
+      }
     }
   }
 
@@ -264,12 +282,17 @@ impl ShellState {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum EnvChange {
-  // `export ENV_VAR=VALUE`
+  /// `export ENV_VAR=VALUE`
   SetEnvVar(String, String),
-  // `ENV_VAR=VALUE`
+  /// `ENV_VAR=VALUE`
   SetShellVar(String, String),
-  // `unset ENV_VAR`
+  /// Create an alias for a command (e.g. ll=ls -al)
+  AliasCommand(String, String),
+  /// Remove an alias
+  UnAliasCommand(String),
+  /// `unset ENV_VAR`
   UnsetVar(String),
+  /// Set the current working directory to the new Path
   Cd(PathBuf),
 }
 
