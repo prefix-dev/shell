@@ -236,6 +236,76 @@ async fn sequential_lists() {
     .run()
     .await;
 }
+#[tokio::test]
+async fn pipeline() {
+  TestBuilder::new()
+    .command(r#"echo 1 | deno eval 'await Deno.stdin.readable.pipeTo(Deno.stdout.writable)'"#)
+    .assert_stdout("1\n")
+    .run()
+    .await;
+
+  TestBuilder::new()
+    .command(r#"echo 1 | echo 2 && echo 3"#)
+    .assert_stdout("2\n3\n")
+    .run()
+    .await;
+
+  TestBuilder::new()
+    .command(r#"echo $(sleep 0.1 && echo 2 & echo 1) | deno eval 'await Deno.stdin.readable.pipeTo(Deno.stdout.writable)'"#)
+    .assert_stdout("1 2\n")
+    .run()
+    .await;
+
+  TestBuilder::new()
+    .command(r#"echo 2 | echo 1 | deno eval 'await Deno.stdin.readable.pipeTo(Deno.stdout.writable)'"#)
+    .assert_stdout("1\n")
+    .run()
+    .await;
+
+  TestBuilder::new()
+    .command(r#"deno eval 'console.log(1); console.error(2);' | deno eval 'await Deno.stdin.readable.pipeTo(Deno.stdout.writable)'"#)
+    .assert_stdout("1\n")
+    .assert_stderr("2\n")
+    .run()
+    .await;
+
+  // stdout and stderr pipeline
+
+  TestBuilder::new()
+    .command(r#"deno eval 'console.log(1); console.error(2);' |& deno eval 'await Deno.stdin.readable.pipeTo(Deno.stdout.writable)'"#)
+    .assert_stdout("1\n2\n")
+    .run()
+    .await;
+
+  TestBuilder::new()
+    // add bit of a delay while outputting stdout so that it doesn't race with stderr
+    .command(r#"deno eval 'console.log(1); console.error(2);' | deno eval 'setTimeout(async () => { await Deno.stdin.readable.pipeTo(Deno.stderr.writable) }, 10)' |& deno eval 'await Deno.stdin.readable.pipeTo(Deno.stderr.writable)'"#)
+    // still outputs 2 because the first command didn't pipe stderr
+    .assert_stderr("2\n1\n")
+    .run()
+    .await;
+
+  // |& pipeline should still pipe stdout
+  TestBuilder::new()
+    .command(r#"echo 1 |& deno eval 'await Deno.stdin.readable.pipeTo(Deno.stdout.writable)'"#)
+    .assert_stdout("1\n")
+    .run()
+    .await;
+
+  // pipeline with redirect
+  TestBuilder::new()
+    .command(r#"echo 1 | deno eval 'await Deno.stdin.readable.pipeTo(Deno.stdout.writable)' > output.txt"#)
+    .assert_file_equals("output.txt", "1\n")
+    .run()
+    .await;
+
+  // pipeline with stderr redirect
+  TestBuilder::new()
+    .command(r#"echo 1 | deno eval 'await Deno.stdin.readable.pipeTo(Deno.stderr.writable)' 2> output.txt"#)
+    .assert_file_equals("output.txt", "1\n")
+    .run()
+    .await;
+}
 
 #[tokio::test]
 async fn redirects_input() {

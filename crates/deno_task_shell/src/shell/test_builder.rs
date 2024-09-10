@@ -149,19 +149,6 @@ impl TestBuilder {
     self
   }
 
-  pub fn assert_file_equals(
-    &mut self,
-    path: &str,
-    file_text: &str,
-  ) -> &mut Self {
-    self.ensure_temp_dir();
-    self.assertions.push(TestAssertion::FileTextEquals(
-      path.to_string(),
-      file_text.to_string(),
-    ));
-    self
-  }
-
   pub fn file(&mut self, path: &str, text: &str) -> &mut Self {
     let temp_dir = self.get_temp_dir();
     fs::write(temp_dir.cwd.join(path), text).unwrap();
@@ -196,6 +183,19 @@ impl TestBuilder {
     self
       .assertions
       .push(TestAssertion::FileNotExists(path.to_string()));
+    self
+  }
+
+  pub fn assert_file_equals(
+    &mut self,
+    path: &str,
+    file_text: &str,
+  ) -> &mut Self {
+    self.ensure_temp_dir();
+    self.assertions.push(TestAssertion::FileTextEquals(
+      path.to_string(),
+      file_text.to_string(),
+    ));
     self
   }
 
