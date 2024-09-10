@@ -1,14 +1,18 @@
-use std::ffi::OsString;
+use std::{ffi::OsString, fs};
 
 use deno_task_shell::{EnvChange, ExecuteResult, ShellCommand, ShellCommandContext};
-use futures::future::LocalBoxFuture;
+use futures::{future::LocalBoxFuture, FutureExt};
 
 use uu_ls::uumain as uu_ls;
+
+use crate::execute;
 pub struct LsCommand;
 
 pub struct AliasCommand;
 
 pub struct UnAliasCommand;
+
+pub struct SourceCommand;
 
 impl ShellCommand for AliasCommand {
     fn execute(&self, context: ShellCommandContext) -> LocalBoxFuture<'static, ExecuteResult> {
@@ -60,4 +64,27 @@ fn execute_ls(context: ShellCommandContext) -> ExecuteResult {
 
     let exit_code = uu_ls(args.into_iter());
     ExecuteResult::from_exit_code(exit_code)
+}
+
+impl ShellCommand for SourceCommand {
+    fn execute(&self, context: ShellCommandContext) -> LocalBoxFuture<'static, ExecuteResult> {
+        if context.args.len() != 1 {
+            return Box::pin(futures::future::ready(ExecuteResult::from_exit_code(1)));
+        }
+
+        let script = context.args[0].clone();
+        // read the script
+        let script_file = context.state.cwd().join(script);
+        if script_file.exists() {
+            // TODO turn into execute result
+            let content = fs::read_to_string(script_file).unwrap();
+            let mut state = context.state.clone();
+            async move {
+                execute::execute(&content, &mut state).await.unwrap();
+                ExecuteResult::from_exit_code(0)
+            }.boxed_local()
+        }
+
+        Box::pin(futures::future::ready(ExecuteResult::from_exit_code(0)))
+    }
 }
