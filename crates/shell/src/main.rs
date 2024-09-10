@@ -17,10 +17,20 @@ mod completion;
 mod helper;
 
 fn commands() -> HashMap<String, Rc<dyn ShellCommand>> {
-    HashMap::from([(
-        "ls".to_string(),
-        Rc::new(commands::LsCommand) as Rc<dyn ShellCommand>,
-    )])
+    HashMap::from([
+        (
+            "ls".to_string(),
+            Rc::new(commands::LsCommand) as Rc<dyn ShellCommand>,
+        ),
+        (
+            "alias".to_string(),
+            Rc::new(commands::AliasCommand) as Rc<dyn ShellCommand>,
+        ),
+        (
+            "unalias".to_string(),
+            Rc::new(commands::AliasCommand) as Rc<dyn ShellCommand>,
+        ),
+    ])
 }
 
 async fn execute(text: &str, state: &mut ShellState) -> anyhow::Result<i32> {
@@ -48,8 +58,8 @@ async fn execute(text: &str, state: &mut ShellState) -> anyhow::Result<i32> {
 
     match result {
         ExecuteResult::Continue(exit_code, changes, _) => {
-            state.apply_changes(&changes);
             // set CWD to the last command's CWD
+            state.apply_changes(&changes);
             std::env::set_current_dir(state.cwd()).context("Failed to set CWD")?;
             Ok(exit_code)
         }

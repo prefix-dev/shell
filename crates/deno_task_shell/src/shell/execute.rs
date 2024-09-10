@@ -643,8 +643,19 @@ fn execute_command_args(
   let command_name = if args.is_empty() {
     String::new()
   } else {
+    // check if the command name is in the alias hashmap
+    if let Some(value) = state.alias_map().get(&args[0]) {
+      args.remove(0);
+      args = value
+        .iter()
+        .chain(args.iter())
+        .cloned()
+        .collect::<Vec<String>>();
+    }
+
     args.remove(0)
   };
+
   if state.token().is_cancelled() {
     Box::pin(future::ready(ExecuteResult::for_cancellation()))
   } else if let Some(stripped_name) = command_name.strip_prefix('!') {
