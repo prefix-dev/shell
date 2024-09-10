@@ -17,7 +17,7 @@ impl ShellCommand for AliasCommand {
         }
 
         // parse the args
-        let env_change = if let Some((alias, cmd)) = context.args[0].split_once("=") {
+        let env_change = if let Some((alias, cmd)) = context.args[0].split_once('=') {
             vec![EnvChange::AliasCommand(alias.into(), cmd.into())]
         } else {
             return Box::pin(futures::future::ready(ExecuteResult::from_exit_code(1)));
@@ -34,7 +34,11 @@ impl ShellCommand for UnAliasCommand {
             return Box::pin(futures::future::ready(ExecuteResult::from_exit_code(1)));
         }
 
-        let result = ExecuteResult::Continue(0, vec![EnvChange::UnAliasCommand(context.args[0].clone())], Vec::default());
+        let result = ExecuteResult::Continue(
+            0,
+            vec![EnvChange::UnAliasCommand(context.args[0].clone())],
+            Vec::default(),
+        );
         Box::pin(futures::future::ready(result))
     }
 }

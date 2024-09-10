@@ -208,9 +208,8 @@ impl ShellState {
           alias.clone(),
           cmd.split_whitespace().map(ToString::to_string).collect(),
         );
-      },
+      }
       EnvChange::UnAliasCommand(alias) => {
-        println!("unalias {}", alias);
         self.alias.remove(alias);
       }
     }
