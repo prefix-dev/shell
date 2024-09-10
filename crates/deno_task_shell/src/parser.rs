@@ -1412,7 +1412,7 @@ mod test {
       }
     );
   }
-  
+
   #[cfg(feature = "serialization")]
   #[test]
   fn serializes_command_to_json() {
