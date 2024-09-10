@@ -1,5 +1,5 @@
 // Copyright 2018-2024 the Deno authors. MIT license.
-
+use anyhow::Context;
 use futures::future::LocalBoxFuture;
 use pretty_assertions::assert_eq;
 use std::collections::HashMap;
@@ -39,6 +39,7 @@ impl ShellCommand for FnShellCommand {
 enum TestAssertion {
   FileExists(String),
   FileNotExists(String),
+  FileTextEquals(String, String),
 }
 
 struct TempDir {
@@ -132,6 +133,11 @@ impl TestBuilder {
     self
   }
 
+  pub fn env_var(&mut self, name: &str, value: &str) -> &mut Self {
+    self.env_vars.insert(name.to_string(), value.to_string());
+    self
+  }
+
   pub fn custom_command(
     &mut self,
     name: &str,
@@ -140,6 +146,19 @@ impl TestBuilder {
     self
       .custom_commands
       .insert(name.to_string(), Rc::new(FnShellCommand(execute)));
+    self
+  }
+
+  pub fn assert_file_equals(
+    &mut self,
+    path: &str,
+    file_text: &str,
+  ) -> &mut Self {
+    self.ensure_temp_dir();
+    self.assertions.push(TestAssertion::FileTextEquals(
+      path.to_string(),
+      file_text.to_string(),
+    ));
     self
   }
 
@@ -241,6 +260,16 @@ impl TestBuilder {
             "\n\nFailed for: {}\nExpected '{}' to not exist.",
             self.command,
             path,
+          )
+        }
+        TestAssertion::FileTextEquals(path, text) => {
+          let actual_text = std::fs::read_to_string(cwd.join(path))
+            .with_context(|| format!("Error reading {path}"))
+            .unwrap();
+          assert_eq!(
+            &actual_text, text,
+            "\n\nFailed for: {}\nPath: {}",
+            self.command, path,
           )
         }
       }

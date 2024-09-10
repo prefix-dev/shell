@@ -8,6 +8,119 @@ use super::types::ExecuteResult;
 const FOLDER_SEPARATOR: char = if cfg!(windows) { '\\' } else { '/' };
 
 #[tokio::test]
+async fn commands() {
+  TestBuilder::new()
+    .command("echo 1")
+    .assert_stdout("1\n")
+    .run()
+    .await;
+
+  TestBuilder::new()
+    .command("echo 1 2   3")
+    .assert_stdout("1 2 3\n")
+    .run()
+    .await;
+
+  TestBuilder::new()
+    .command(r#"echo "1 2   3""#)
+    .assert_stdout("1 2   3\n")
+    .run()
+    .await;
+
+  TestBuilder::new()
+    .command(r"echo 1 2\ \ \ 3")
+    .assert_stdout("1 2   3\n")
+    .run()
+    .await;
+
+  TestBuilder::new()
+    .command(r#"echo "1 2\ \ \ 3""#)
+    .assert_stdout("1 2\\ \\ \\ 3\n")
+    .run()
+    .await;
+
+  TestBuilder::new()
+    .command(r#"echo test$(echo "1    2")"#)
+    .assert_stdout("test1 2\n")
+    .run()
+    .await;
+
+  TestBuilder::new()
+    .command(r#"TEST="1   2" ; echo $TEST"#)
+    .assert_stdout("1 2\n")
+    .run()
+    .await;
+
+  TestBuilder::new()
+    .command(
+      r#"VAR=1 deno eval 'console.log(Deno.env.get("VAR"))' && echo $VAR"#,
+    )
+    .assert_stdout("1\n\n")
+    .run()
+    .await;
+
+  TestBuilder::new()
+    .command(r#"VAR=1 VAR2=2 deno eval 'console.log(Deno.env.get("VAR") + Deno.env.get("VAR2"))'"#)
+    .assert_stdout("12\n")
+    .run()
+    .await;
+
+  TestBuilder::new()
+    .command(
+      r#"EMPTY= deno eval 'console.log(`EMPTY: ${Deno.env.get("EMPTY")}`)'"#,
+    )
+    .assert_stdout("EMPTY: \n")
+    .run()
+    .await;
+
+  TestBuilder::new()
+    .command(r#""echo" "1""#)
+    .assert_stdout("1\n")
+    .run()
+    .await;
+
+  TestBuilder::new()
+    .command(r#""echo" "*""#)
+    .assert_stdout("*\n")
+    .run()
+    .await;
+
+  TestBuilder::new()
+    .command("echo test-dashes")
+    .assert_stdout("test-dashes\n")
+    .run()
+    .await;
+
+  TestBuilder::new()
+    .command("echo 'a/b'/c")
+    .assert_stdout("a/b/c\n")
+    .run()
+    .await;
+
+  TestBuilder::new()
+    .command("echo 'a/b'ctest\"te  st\"'asdf'")
+    .assert_stdout("a/bctestte  stasdf\n")
+    .run()
+    .await;
+
+  TestBuilder::new()
+    .command("echo --test=\"2\" --test='2' test\"TEST\" TEST'test'TEST 'test''test' test'test'\"test\" \"test\"\"test\"'test'")
+    .assert_stdout("--test=2 --test=2 testTEST TESTtestTEST testtest testtesttest testtesttest\n")
+    .run()
+    .await;
+
+  TestBuilder::new()
+    .command("deno eval 'console.log(1)'")
+    .env_var("PATH", "")
+    .assert_stderr("deno: command not found\n")
+    .assert_exit_code(127)
+    .run()
+    .await;
+
+  TestBuilder::new().command("unset").run().await;
+}
+
+#[tokio::test]
 async fn boolean_logic() {
   TestBuilder::new()
     .command("echo 1 && echo 2 || echo 3")
