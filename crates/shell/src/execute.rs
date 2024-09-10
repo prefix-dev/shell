@@ -4,28 +4,33 @@ use deno_task_shell::{
     ShellState,
 };
 
-pub async fn execute(text: &str, state: &mut ShellState) -> anyhow::Result<i32> {
+pub async fn execute_inner(text: &str, state: ShellState) -> anyhow::Result<ExecuteResult> {
     let list = deno_task_shell::parser::parse(text);
 
-    let mut stderr = ShellPipeWriter::stderr();
+    let stderr = ShellPipeWriter::stderr();
     let stdout = ShellPipeWriter::stdout();
     let stdin = ShellPipeReader::stdin();
 
     if let Err(e) = list {
-        let _ = stderr.write_line(&format!("Syntax error: {}", e));
-        return Ok(1);
+        anyhow::bail!("Syntax error: {}", e);
     }
 
     // spawn a sequential list and pipe its output to the environment
     let result = execute_sequential_list(
         list.unwrap(),
-        state.clone(),
+        state,
         stdin,
         stdout,
         stderr,
         AsyncCommandBehavior::Wait,
     )
     .await;
+
+    Ok(result)
+}
+
+pub async fn execute(text: &str, state: &mut ShellState) -> anyhow::Result<i32> {
+    let result = execute_inner(text, state.clone()).await?;
 
     match result {
         ExecuteResult::Continue(exit_code, changes, _) => {

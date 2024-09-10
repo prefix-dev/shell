@@ -78,14 +78,10 @@ impl ShellCommand for SourceCommand {
         if script_file.exists() {
             // TODO turn into execute result
             let content = fs::read_to_string(script_file).unwrap();
-            let mut state = context.state.clone();
-
-            async move {
-                execute::execute(&content, &mut state).await.unwrap();
-                ExecuteResult::from_exit_code(0)
-            }.boxed_local()
+            let state = context.state.clone();
+            async move { execute::execute_inner(&content, state).await.unwrap() }.boxed_local()
+        } else {
+            Box::pin(futures::future::ready(ExecuteResult::from_exit_code(1)))
         }
-
-        Box::pin(futures::future::ready(ExecuteResult::from_exit_code(0)))
     }
 }
