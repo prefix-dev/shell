@@ -73,15 +73,25 @@ impl ShellCommand for SourceCommand {
         }
 
         let script = context.args[0].clone();
-        // read the script
         let script_file = context.state.cwd().join(script);
-        if script_file.exists() {
-            // TODO turn into execute result
-            let content = fs::read_to_string(script_file).unwrap();
-            let state = context.state.clone();
-            async move { execute::execute_inner(&content, state).await.unwrap() }.boxed_local()
-        } else {
-            Box::pin(futures::future::ready(ExecuteResult::from_exit_code(1)))
+        match fs::read_to_string(&script_file) {
+            Ok(content) => {
+                let state = context.state.clone();
+                async move {
+                    execute::execute_inner(&content, state)
+                        .await
+                        .unwrap_or_else(|e| {
+                            eprintln!("Could not source script: {:?}", script_file);
+                            eprintln!("Error: {}", e);
+                            ExecuteResult::from_exit_code(1)
+                        })
+                }
+                .boxed_local()
+            }
+            Err(e) => {
+                eprintln!("Could not read file: {:?} ({})", script_file, e);
+                Box::pin(futures::future::ready(ExecuteResult::from_exit_code(1)))
+            }
         }
     }
 }
