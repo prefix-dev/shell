@@ -23,7 +23,7 @@ macOS:
 
 Windows:
 
-![Windows](https://github.com/user-attachments/assets/f6f40994-f28d-483e-9a79-adcefeb9ae8e)
+![Windows](https://github.com/user-attachments/assets/6982534c-066e-4b26-a1ec-b11cea7a3ffb)
 
 ## How to run this
 
