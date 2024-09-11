@@ -796,6 +796,10 @@ fn parse_word(pair: Pair<Rule>) -> Result<Word> {
             let quoted = parse_quoted_word(part)?;
             parts.push(quoted);
           }
+          Rule::TILDE_PREFIX => {
+            let tilde_prefix = parse_tilde_prefix(part)?;
+            parts.push(tilde_prefix);
+          }
           _ => {
             return Err(anyhow::anyhow!(
               "Unexpected rule in FILE_NAME_PENDING_WORD: {:?}",

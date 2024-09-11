@@ -1,0 +1,1 @@
+echo $PATH > ~/output.txt
