@@ -67,7 +67,7 @@ async fn interactive(state: Option<ShellState>) -> anyhow::Result<()> {
     let helper = helper::ShellPromptHelper::default();
     rl.set_helper(Some(helper));
 
-    let mut state = state.unwrap_or_else(|| init_state());
+    let mut state = state.unwrap_or_else(init_state);
 
     let home = dirs::home_dir().context("Couldn't get home directory")?;
 
