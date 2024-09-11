@@ -13,7 +13,7 @@ use crate::ExecuteResult;
 use crate::FutureExecuteResult;
 use crate::ShellCommand;
 use crate::ShellCommandContext;
-use anyhow::Result;
+use miette::{miette, Result};
 use futures::FutureExt;
 use thiserror::Error;
 
@@ -87,15 +87,21 @@ enum ResolveCommandError {
 enum FailedShebangError {
   #[error(transparent)]
   CommandPath(#[from] ResolveCommandPathError),
-  #[error(transparent)]
-  Any(#[from] anyhow::Error),
+  #[error("{0}")]
+  MietteError(String),
+}
+
+impl From<miette::Error> for FailedShebangError {
+  fn from(err: miette::Error) -> Self {
+    FailedShebangError::MietteError(err.to_string())
+  }
 }
 
 impl FailedShebangError {
   pub fn exit_code(&self) -> i32 {
     match self {
       FailedShebangError::CommandPath(err) => err.exit_code(),
-      FailedShebangError::Any(_) => 1,
+      FailedShebangError::MietteError(_) => 1,
     }
   }
 }
@@ -119,12 +125,12 @@ async fn resolve_command<'a>(
   // won't have a script with a shebang in it on Windows
   if command_name.name.contains('/') {
     if let Some(shebang) = resolve_shebang(&command_path).map_err(|err| {
-      ResolveCommandError::FailedShebang(FailedShebangError::Any(err.into()))
+      ResolveCommandError::FailedShebang(FailedShebangError::MietteError(err.to_string()))
     })? {
       let (shebang_command_name, mut args) = if shebang.string_split {
         let mut args = parse_shebang_args(&shebang.command, context)
           .await
-          .map_err(FailedShebangError::Any)?;
+          .map_err(|e| FailedShebangError::MietteError(e.to_string()))?;
         args.push(command_path.to_string_lossy().to_string());
         (args.remove(0), args)
       } else {
@@ -155,7 +161,7 @@ async fn parse_shebang_args(
   context: &ShellCommandContext,
 ) -> Result<Vec<String>> {
   fn err_unsupported(text: &str) -> Result<Vec<String>> {
-    anyhow::bail!("unsupported shebang. Please report this as a bug (https://github.com/denoland/deno).\n\nShebang: {}", text)
+    miette::bail!("unsupported shebang. Please report this as a bug (https://github.com/denoland/deno).\n\nShebang: {}", text)
   }
 
   let mut args = crate::parser::parse(text)?;
@@ -190,15 +196,14 @@ async fn parse_shebang_args(
     return err_unsupported(text);
   }
 
-  Ok(
-    super::execute::evaluate_args(
+  super::execute::evaluate_args(
       cmd.args,
       &context.state,
       context.stdin.clone(),
       context.stderr.clone(),
     )
-    .await?,
-  )
+    .await
+    .map_err(|e| miette!(e.to_string()))
 }
 
 /// Errors for executable commands.
@@ -226,7 +231,8 @@ pub fn resolve_command_path(
   state: &ShellState,
 ) -> Result<PathBuf, ResolveCommandPathError> {
   resolve_command_path_inner(command_name, base_dir, state, || {
-    Ok(std::env::current_exe()?)
+    std::env::current_exe()
+      .map_err(|e| miette!(e.to_string()))
   })
 }
 
