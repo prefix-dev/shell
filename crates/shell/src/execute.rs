@@ -7,12 +7,13 @@ use deno_task_shell::{
 pub async fn execute_inner(text: &str, state: ShellState) -> anyhow::Result<ExecuteResult> {
     let list = deno_task_shell::parser::parse(text);
 
-    let stderr = ShellPipeWriter::stderr();
+    let mut stderr = ShellPipeWriter::stderr();
     let stdout = ShellPipeWriter::stdout();
     let stdin = ShellPipeReader::stdin();
 
     if let Err(e) = list {
-        anyhow::bail!("Syntax error: {}", e);
+        stderr.write_all(format!("Syntax error: {:?}", e).as_bytes())?;
+        return Ok(ExecuteResult::Exit(1, vec![]));
     }
 
     // spawn a sequential list and pipe its output to the environment

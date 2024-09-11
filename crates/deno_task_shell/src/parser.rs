@@ -1,23 +1,26 @@
 // Copyright 2018-2024 the Deno authors. MIT license.
 
-use anyhow::{anyhow, Context, Result};
+use miette::{miette, Context, Result};
 use pest::iterators::Pair;
 use pest::Parser;
 use pest_derive::Parser;
+use thiserror::Error;
 
 // Shell grammar rules this is loosely based on:
 // https://pubs.opengroup.org/onlinepubs/009604499/utilities/xcu_chap02.html#tag_02_10_02
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
 #[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[error("Invalid sequential list")]
 pub struct SequentialList {
   pub items: Vec<SequentialListItem>,
 }
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
 #[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[error("Invalid sequential list item")]
 pub struct SequentialListItem {
   pub is_async: bool,
   pub sequence: Sequence,
@@ -28,21 +31,21 @@ pub struct SequentialListItem {
   feature = "serialization",
   serde(rename_all = "camelCase", tag = "kind")
 )]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum Sequence {
-  /// `MY_VAR=5`
+  #[error("Invalid shell variable")]
   ShellVar(EnvVar),
-  /// `cmd_name <args...>`, `cmd1 | cmd2`
+  #[error("Invalid pipeline")]
   Pipeline(Pipeline),
-  /// `cmd1 && cmd2 || cmd3`
+  #[error("Invalid boolean list")]
   BooleanList(Box<BooleanList>),
 }
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
 #[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[error("Invalid pipeline")]
 pub struct Pipeline {
-  /// `! pipeline`
   pub negated: bool,
   pub inner: PipelineInner,
 }
@@ -58,11 +61,11 @@ impl From<Pipeline> for Sequence {
   feature = "serialization",
   serde(rename_all = "camelCase", tag = "kind")
 )]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum PipelineInner {
-  /// Ex. `cmd_name <args...>`
+  #[error("Invalid command")]
   Command(Command),
-  /// `cmd1 | cmd2`
+  #[error("Invalid pipe sequence")]
   PipeSequence(Box<PipeSequence>),
 }
 
@@ -74,11 +77,11 @@ impl From<PipeSequence> for PipelineInner {
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
 #[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Error)]
 pub enum BooleanListOperator {
-  // &&
+  #[error("AND operator")]
   And,
-  // ||
+  #[error("OR operator")]
   Or,
 }
 
@@ -98,7 +101,8 @@ impl BooleanListOperator {
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
 #[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[error("Invalid boolean list")]
 pub struct BooleanList {
   pub current: Sequence,
   pub op: BooleanListOperator,
@@ -107,17 +111,18 @@ pub struct BooleanList {
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
 #[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Error)]
 pub enum PipeSequenceOperator {
-  // |
+  #[error("Stdout pipe operator")]
   Stdout,
-  // |&
+  #[error("Stdout and stderr pipe operator")]
   StdoutStderr,
 }
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
 #[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[error("Invalid pipe sequence")]
 pub struct PipeSequence {
   pub current: Command,
   pub op: PipeSequenceOperator,
@@ -135,7 +140,8 @@ impl From<PipeSequence> for Sequence {
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
 #[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[error("Invalid command")]
 pub struct Command {
   pub inner: CommandInner,
   pub redirect: Option<Redirect>,
@@ -146,11 +152,11 @@ pub struct Command {
   feature = "serialization",
   serde(rename_all = "camelCase", tag = "kind")
 )]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum CommandInner {
-  /// `cmd_name <args...>`
+  #[error("Invalid simple command")]
   Simple(SimpleCommand),
-  /// `(list)`
+  #[error("Invalid subshell")]
   Subshell(Box<SequentialList>),
 }
 
@@ -166,7 +172,8 @@ impl From<Command> for Sequence {
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
 #[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[error("Invalid simple command")]
 pub struct SimpleCommand {
   pub env_vars: Vec<EnvVar>,
   pub args: Vec<Word>,
@@ -202,7 +209,8 @@ impl From<SimpleCommand> for Sequence {
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
 #[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Error)]
+#[error("Invalid environment variable")]
 pub struct EnvVar {
   pub name: String,
   pub value: Word,
@@ -216,7 +224,8 @@ impl EnvVar {
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
 #[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Error)]
+#[error("Invalid tilde prefix")]
 pub struct TildePrefix {
   pub user: Option<String>,
 }
@@ -232,7 +241,8 @@ impl TildePrefix {
 }
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Error)]
+#[error("Invalid word")]
 pub struct Word(Vec<WordPart>);
 
 impl Word {
@@ -268,19 +278,19 @@ impl Word {
   feature = "serialization",
   serde(rename_all = "camelCase", tag = "kind", content = "value")
 )]
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Error)]
 pub enum WordPart {
-  /// Text in the string (ex. `some text`)
+  #[error("Invalid text")]
   Text(String),
-  /// Variable substitution (ex. `$MY_VAR`)
+  #[error("Invalid variable")]
   Variable(String),
-  /// Command substitution (ex. `$(command)`)
+  #[error("Invalid command")]
   Command(SequentialList),
-  /// Quoted string (ex. `"hello"` or `'test'`)
+  #[error("Invalid quoted string")]
   Quoted(Vec<WordPart>),
-  /// Tilde prefix (ex. `~user/path` or `~/bin`)
+  #[error("Invalid tilde prefix")]
   Tilde(TildePrefix),
-  /// Exit status of the last command (ex. `$?`)
+  #[error("Invalid exit status")]
   ExitStatus,
 }
 
@@ -289,15 +299,18 @@ pub enum WordPart {
   feature = "serialization",
   serde(rename_all = "camelCase", tag = "kind", content = "fd")
 )]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum RedirectFd {
+  #[error("Invalid file descriptor")]
   Fd(u32),
+  #[error("Invalid stdout and stderr redirect")]
   StdoutStderr,
 }
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
 #[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[error("Invalid redirect")]
 pub struct Redirect {
   pub maybe_fd: Option<RedirectFd>,
   pub op: RedirectOp,
@@ -309,11 +322,11 @@ pub struct Redirect {
   feature = "serialization",
   serde(rename_all = "camelCase", tag = "kind", content = "value")
 )]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum IoFile {
-  /// Filename to redirect to/from (ex. `file.txt`` in `cmd < file.txt`)
+  #[error("Invalid word")]
   Word(Word),
-  /// File descriptor to redirect to/from (ex. `2` in `cmd >&2`)
+  #[error("Invalid file descriptor")]
   Fd(u32),
 }
 
@@ -322,27 +335,29 @@ pub enum IoFile {
   feature = "serialization",
   serde(rename_all = "camelCase", tag = "kind", content = "value")
 )]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum RedirectOp {
+  #[error("Invalid input redirect")]
   Input(RedirectOpInput),
+  #[error("Invalid output redirect")]
   Output(RedirectOpOutput),
 }
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
 #[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum RedirectOpInput {
-  /// <
+  #[error("Invalid input redirect")]
   Redirect,
 }
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
 #[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum RedirectOpOutput {
-  /// >
+  #[error("Invalid overwrite redirect")]
   Overwrite,
-  /// >>
+  #[error("Invalid append redirect")]
   Append,
 }
 
@@ -356,7 +371,9 @@ pub fn debug_parse(input: &str) {
 }
 
 pub fn parse(input: &str) -> Result<SequentialList> {
-  let mut pairs = ShellParser::parse(Rule::FILE, input)?;
+  let mut pairs = ShellParser::parse(Rule::FILE, input).map_err(|e| {
+    miette::Error::new(e.into_miette()).context("Failed to parse input")
+  })?;
 
   parse_file(pairs.next().unwrap())
 }
@@ -377,7 +394,7 @@ fn parse_complete_command(pair: Pair<Rule>) -> Result<SequentialList> {
         break;
       }
       _ => {
-        return Err(anyhow::anyhow!(
+        return Err(miette!(
           "Unexpected rule in complete_command: {:?}",
           command.as_rule()
         ));
@@ -406,10 +423,7 @@ fn parse_list(
         }
       }
       _ => {
-        return Err(anyhow::anyhow!(
-          "Unexpected rule in list: {:?}",
-          item.as_rule()
-        ));
+        return Err(miette!("Unexpected rule in list: {:?}", item.as_rule()));
       }
     }
   }
@@ -434,7 +448,10 @@ fn parse_compound_list(
         }
       }
       _ => {
-        anyhow::bail!("Unexpected rule in compound_list: {:?}", item.as_rule());
+        return Err(miette!(
+          "Unexpected rule in compound_list: {:?}",
+          item.as_rule()
+        ));
       }
     }
   }
@@ -460,10 +477,7 @@ fn parse_term(
         }
       }
       _ => {
-        return Err(anyhow::anyhow!(
-          "Unexpected rule in term: {:?}",
-          item.as_rule()
-        ));
+        return Err(miette!("Unexpected rule in term: {:?}", item.as_rule()));
       }
     }
   }
@@ -483,9 +497,9 @@ fn parse_and_or(pair: Pair<Rule>) -> Result<Sequence> {
   match items.next() {
     Some(next_item) => {
       if next_item.as_rule() == Rule::ASSIGNMENT_WORD {
-        anyhow::bail!(
+        return Err(miette!(
           "Multiple assignment words before && or || is not supported yet"
-        );
+        ));
       } else {
         let op = match next_item.as_str() {
           "&&" => BooleanListOperator::And,
@@ -511,12 +525,12 @@ fn parse_shell_var(pair: Pair<Rule>) -> Result<Sequence> {
   let mut inner = pair.into_inner();
   let name = inner
     .next()
-    .ok_or_else(|| anyhow::anyhow!("Expected variable name"))?
+    .ok_or_else(|| miette!("Expected variable name"))?
     .as_str()
     .to_string();
   let value = inner
     .next()
-    .ok_or_else(|| anyhow::anyhow!("Expected variable value"))?;
+    .ok_or_else(|| miette!("Expected variable value"))?;
   let value = parse_assignment_value(value)?;
   Ok(Sequence::ShellVar(EnvVar { name, value }))
 }
@@ -528,21 +542,21 @@ fn parse_pipeline(pair: Pair<Rule>) -> Result<Sequence> {
   // Check if the first element is Bang (negation)
   let first = inner
     .next()
-    .ok_or_else(|| anyhow::anyhow!("Expected pipeline content"))?;
+    .ok_or_else(|| miette!("Expected pipeline content"))?;
   let (negated, pipe_sequence) = if first.as_rule() == Rule::Bang {
     // If it's Bang, check for whitespace
     if pipeline_str.len() > 1
       && !pipeline_str[1..2].chars().next().unwrap().is_whitespace()
     {
-      anyhow::bail!(
+      return Err(miette!(
         "Perhaps you meant to add a space after the exclamation point to negate the command?\n  ! {}", 
         pipeline_str
-      );
+      ));
     }
     // Get the actual pipe sequence after whitespace
-    let pipe_sequence = inner.next().ok_or_else(|| {
-      anyhow::anyhow!("Expected pipe sequence after negation")
-    })?;
+    let pipe_sequence = inner
+      .next()
+      .ok_or_else(|| miette!("Expected pipe sequence after negation"))?;
     (true, pipe_sequence)
   } else {
     // If it's not Bang, this element itself is the pipe_sequence
@@ -561,9 +575,9 @@ fn parse_pipe_sequence(pair: Pair<Rule>) -> Result<PipelineInner> {
   let mut inner = pair.into_inner();
 
   // Parse the first command
-  let first_command = inner.next().ok_or_else(|| {
-    anyhow::anyhow!("Expected at least one command in pipe sequence")
-  })?;
+  let first_command = inner
+    .next()
+    .ok_or_else(|| miette!("Expected at least one command in pipe sequence"))?;
   let current = parse_command(first_command)?;
 
   // Check if there's a pipe operator
@@ -573,17 +587,17 @@ fn parse_pipe_sequence(pair: Pair<Rule>) -> Result<PipelineInner> {
         Rule::Stdout => PipeSequenceOperator::Stdout,
         Rule::StdoutStderr => PipeSequenceOperator::StdoutStderr,
         _ => {
-          return Err(anyhow::anyhow!(
+          return Err(miette!(
             "Expected pipe operator, found {:?}",
             pipe_op.as_rule()
-          ))
+          ));
         }
       };
 
       // Parse the rest of the pipe sequence
-      let next_sequence = inner.next().ok_or_else(|| {
-        anyhow::anyhow!("Expected command after pipe operator")
-      })?;
+      let next_sequence = inner
+        .next()
+        .ok_or_else(|| miette!("Expected command after pipe operator"))?;
       let next = parse_pipe_sequence(next_sequence)?;
 
       Ok(PipelineInner::PipeSequence(Box::new(PipeSequence {
@@ -602,12 +616,9 @@ fn parse_command(pair: Pair<Rule>) -> Result<Command> {
     Rule::simple_command => parse_simple_command(inner),
     Rule::compound_command => parse_compound_command(inner),
     Rule::function_definition => {
-      todo!("function definitions are not supported yet")
+      Err(miette!("Function definitions are not supported yet"))
     }
-    _ => Err(anyhow::anyhow!(
-      "Unexpected rule in command: {:?}",
-      inner.as_rule()
-    )),
+    _ => Err(miette!("Unexpected rule in command: {:?}", inner.as_rule())),
   }
 }
 
@@ -622,12 +633,12 @@ fn parse_simple_command(pair: Pair<Rule>) -> Result<Command> {
         for prefix in item.into_inner() {
           match prefix.as_rule() {
             Rule::ASSIGNMENT_WORD => env_vars.push(parse_env_var(prefix)?),
-            Rule::io_redirect => todo!("io_redirect as prefix"),
+            Rule::io_redirect => return Err(miette!("io_redirect as prefix")),
             _ => {
-              return Err(anyhow::anyhow!(
+              return Err(miette!(
                 "Unexpected rule in cmd_prefix: {:?}",
                 prefix.as_rule()
-              ))
+              ));
             }
           }
         }
@@ -646,19 +657,19 @@ fn parse_simple_command(pair: Pair<Rule>) -> Result<Command> {
               args.push(Word::new(vec![parse_quoted_word(suffix)?]))
             }
             _ => {
-              return Err(anyhow::anyhow!(
+              return Err(miette!(
                 "Unexpected rule in cmd_suffix: {:?}",
                 suffix.as_rule()
-              ))
+              ));
             }
           }
         }
       }
       _ => {
-        return Err(anyhow::anyhow!(
+        return Err(miette!(
           "Unexpected rule in simple_command: {:?}",
           item.as_rule()
-        ))
+        ));
       }
     }
   }
@@ -672,14 +683,22 @@ fn parse_simple_command(pair: Pair<Rule>) -> Result<Command> {
 fn parse_compound_command(pair: Pair<Rule>) -> Result<Command> {
   let inner = pair.into_inner().next().unwrap();
   match inner.as_rule() {
-    Rule::brace_group => todo!("brace_group"),
+    Rule::brace_group => {
+      Err(miette!("Unsupported compound command brace_group"))
+    }
     Rule::subshell => parse_subshell(inner),
-    Rule::for_clause => todo!("for_clause"),
-    Rule::case_clause => todo!("case_clause"),
-    Rule::if_clause => todo!("if_clause"),
-    Rule::while_clause => todo!("while_clause"),
-    Rule::until_clause => todo!("until_clause"),
-    _ => Err(anyhow::anyhow!(
+    Rule::for_clause => Err(miette!("Unsupported compound command for_clause")),
+    Rule::case_clause => {
+      Err(miette!("Unsupported compound command case_clause"))
+    }
+    Rule::if_clause => Err(miette!("Unsupported compound command if_clause")),
+    Rule::while_clause => {
+      Err(miette!("Unsupported compound command while_clause"))
+    }
+    Rule::until_clause => {
+      Err(miette!("Unsupported compound command until_clause"))
+    }
+    _ => Err(miette!(
       "Unexpected rule in compound_command: {:?}",
       inner.as_rule()
     )),
@@ -695,7 +714,7 @@ fn parse_subshell(pair: Pair<Rule>) -> Result<Command> {
       redirect: None,
     })
   } else {
-    Err(anyhow::anyhow!("Unexpected end of input in subshell"))
+    Err(miette!("Unexpected end of input in subshell"))
   }
 }
 
@@ -756,10 +775,10 @@ fn parse_word(pair: Pair<Rule>) -> Result<Word> {
             parts.push(tilde_prefix);
           }
           _ => {
-            return Err(anyhow::anyhow!(
+            return Err(miette!(
               "Unexpected rule in UNQUOTED_PENDING_WORD: {:?}",
               part.as_rule()
-            ))
+            ));
           }
         }
       }
@@ -801,19 +820,16 @@ fn parse_word(pair: Pair<Rule>) -> Result<Word> {
             parts.push(tilde_prefix);
           }
           _ => {
-            return Err(anyhow::anyhow!(
+            return Err(miette!(
               "Unexpected rule in FILE_NAME_PENDING_WORD: {:?}",
               part.as_rule()
-            ))
+            ));
           }
         }
       }
     }
     _ => {
-      return Err(anyhow::anyhow!(
-        "Unexpected rule in word: {:?}",
-        pair.as_rule()
-      ))
+      return Err(miette!("Unexpected rule in word: {:?}", pair.as_rule()));
     }
   }
 
@@ -868,10 +884,10 @@ fn parse_quoted_word(pair: Pair<Rule>) -> Result<WordPart> {
             }
           }
           _ => {
-            return Err(anyhow::anyhow!(
+            return Err(miette!(
               "Unexpected rule in DOUBLE_QUOTED: {:?}",
               part.as_rule()
-            ))
+            ));
           }
         }
       }
@@ -884,7 +900,7 @@ fn parse_quoted_word(pair: Pair<Rule>) -> Result<WordPart> {
         trimmed_str.to_string(),
       )]))
     }
-    _ => Err(anyhow::anyhow!(
+    _ => Err(miette!(
       "Unexpected rule in QUOTED_WORD: {:?}",
       inner.as_rule()
     )),
@@ -897,7 +913,7 @@ fn parse_env_var(pair: Pair<Rule>) -> Result<EnvVar> {
   // Get the name of the environment variable
   let name = parts
     .next()
-    .ok_or_else(|| anyhow!("Expected variable name"))?
+    .ok_or_else(|| miette!("Expected variable name"))?
     .as_str()
     .to_string();
 
@@ -929,10 +945,10 @@ fn parse_assignment_value(pair: Pair<Rule>) -> Result<Word> {
         parts.extend(word_parts.into_parts());
       }
       _ => {
-        return Err(anyhow::anyhow!(
+        return Err(miette!(
           "Unexpected rule in assignment value: {:?}",
           part.as_rule()
-        ))
+        ));
       }
     }
   }
@@ -948,17 +964,17 @@ fn parse_io_redirect(pair: Pair<Rule>) -> Result<Redirect> {
     Some(p) if p.as_rule() == Rule::IO_NUMBER => (
       Some(RedirectFd::Fd(p.as_str().parse::<u32>().unwrap())),
       inner.next().ok_or_else(|| {
-        anyhow!("Expected redirection operator after IO number")
+        miette!("Expected redirection operator after IO number")
       })?,
     ),
     Some(p) if p.as_rule() == Rule::AMPERSAND => (
       Some(RedirectFd::StdoutStderr),
       inner
         .next()
-        .ok_or_else(|| anyhow!("Expected redirection operator after &"))?,
+        .ok_or_else(|| miette!("Expected redirection operator after &"))?,
     ),
     Some(p) => (None, p),
-    None => return Err(anyhow!("Unexpected end of input in io_redirect")),
+    None => return Err(miette!("Unexpected end of input in io_redirect")),
   };
 
   let (op, io_file) = parse_io_file(op_and_file)?;
@@ -974,10 +990,10 @@ fn parse_io_file(pair: Pair<Rule>) -> Result<(RedirectOp, IoFile)> {
   let mut inner = pair.into_inner();
   let op = inner
     .next()
-    .ok_or_else(|| anyhow!("Expected redirection operator"))?;
+    .ok_or_else(|| miette!("Expected redirection operator"))?;
   let filename = inner
     .next()
-    .ok_or_else(|| anyhow!("Expected filename after redirection operator"))?;
+    .ok_or_else(|| miette!("Expected filename after redirection operator"))?;
 
   let redirect_op = match op.as_rule() {
     Rule::LESS => RedirectOp::Input(RedirectOpInput::Redirect),
@@ -996,7 +1012,7 @@ fn parse_io_file(pair: Pair<Rule>) -> Result<(RedirectOp, IoFile)> {
           IoFile::Fd(fd),
         ));
       } else {
-        return Err(anyhow!(
+        return Err(miette!(
           "Expected a number after {} operator",
           if op.as_rule() == Rule::LESSAND {
             "<&"
@@ -1007,7 +1023,7 @@ fn parse_io_file(pair: Pair<Rule>) -> Result<(RedirectOp, IoFile)> {
       }
     }
     _ => {
-      return Err(anyhow!(
+      return Err(miette!(
         "Unexpected redirection operator: {:?}",
         op.as_rule()
       ))
@@ -1017,7 +1033,7 @@ fn parse_io_file(pair: Pair<Rule>) -> Result<(RedirectOp, IoFile)> {
   let io_file = if filename.as_rule() == Rule::FILE_NAME_PENDING_WORD {
     IoFile::Word(parse_word(filename)?)
   } else {
-    return Err(anyhow!(
+    return Err(miette!(
       "Unexpected filename type: {:?}",
       filename.as_rule()
     ));
@@ -1054,7 +1070,7 @@ mod test {
   fn test_sequential_list() {
     let parse_and_create = |input: &str| -> Result<SequentialList> {
       let pairs = ShellParser::parse(Rule::complete_command, input)
-        .map_err(|e| anyhow::Error::msg(e.to_string()))?
+        .map_err(|e| miette!(e.to_string()))?
         .next()
         .unwrap();
       //   println!("pairs: {:?}", pairs);
@@ -1343,9 +1359,9 @@ mod test {
 
   #[test]
   fn test_env_var() {
-    let parse_and_create = |input: &str| -> Result<EnvVar, anyhow::Error> {
+    let parse_and_create = |input: &str| -> Result<EnvVar, miette::Error> {
       let pairs = ShellParser::parse(Rule::ASSIGNMENT_WORD, input)
-        .map_err(|e| anyhow::anyhow!(e.to_string()))?
+        .map_err(|e| miette!(e.to_string()))?
         .next()
         .unwrap();
       parse_env_var(pairs)
