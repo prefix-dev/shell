@@ -1,14 +1,18 @@
-use std::ffi::OsString;
+use std::{ffi::OsString, fs};
 
 use deno_task_shell::{EnvChange, ExecuteResult, ShellCommand, ShellCommandContext};
-use futures::future::LocalBoxFuture;
+use futures::{future::LocalBoxFuture, FutureExt};
 
 use uu_ls::uumain as uu_ls;
+
+use crate::execute;
 pub struct LsCommand;
 
 pub struct AliasCommand;
 
 pub struct UnAliasCommand;
+
+pub struct SourceCommand;
 
 impl ShellCommand for AliasCommand {
     fn execute(&self, context: ShellCommandContext) -> LocalBoxFuture<'static, ExecuteResult> {
@@ -60,4 +64,34 @@ fn execute_ls(context: ShellCommandContext) -> ExecuteResult {
 
     let exit_code = uu_ls(args.into_iter());
     ExecuteResult::from_exit_code(exit_code)
+}
+
+impl ShellCommand for SourceCommand {
+    fn execute(&self, context: ShellCommandContext) -> LocalBoxFuture<'static, ExecuteResult> {
+        if context.args.len() != 1 {
+            return Box::pin(futures::future::ready(ExecuteResult::from_exit_code(1)));
+        }
+
+        let script = context.args[0].clone();
+        let script_file = context.state.cwd().join(script);
+        match fs::read_to_string(&script_file) {
+            Ok(content) => {
+                let state = context.state.clone();
+                async move {
+                    execute::execute_inner(&content, state)
+                        .await
+                        .unwrap_or_else(|e| {
+                            eprintln!("Could not source script: {:?}", script_file);
+                            eprintln!("Error: {}", e);
+                            ExecuteResult::from_exit_code(1)
+                        })
+                }
+                .boxed_local()
+            }
+            Err(e) => {
+                eprintln!("Could not read file: {:?} ({})", script_file, e);
+                Box::pin(futures::future::ready(ExecuteResult::from_exit_code(1)))
+            }
+        }
+    }
 }
