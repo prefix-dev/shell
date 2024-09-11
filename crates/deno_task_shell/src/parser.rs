@@ -517,7 +517,7 @@ fn parse_shell_var(pair: Pair<Rule>) -> Result<Sequence> {
   let value = inner
     .next()
     .ok_or_else(|| anyhow::anyhow!("Expected variable value"))?;
-  let value = parse_word(value)?;
+  let value = parse_assignment_value(value)?;
   Ok(Sequence::ShellVar(EnvVar { name, value }))
 }
 
@@ -1045,6 +1045,372 @@ mod test {
     );
 
     assert!(parse("echo \"foo\" > out.txt").is_ok());
+  }
+  #[test]
+  fn test_sequential_list() {
+    let parse_and_create = |input: &str| -> Result<SequentialList> {
+      let pairs = ShellParser::parse(Rule::complete_command, input)
+        .map_err(|e| anyhow::Error::msg(e.to_string()))?
+        .next()
+        .unwrap();
+      //   println!("pairs: {:?}", pairs);
+      parse_complete_command(pairs)
+    };
+
+    // Test case 1
+    let input = concat!(
+      "Name=Value OtherVar=Other command arg1 || command2 arg12 arg13 ; ",
+      "command3 && command4 & command5 ; export ENV6=5 ; ",
+      "ENV7=other && command8 || command9 ; ",
+      "cmd10 && (cmd11 || cmd12)"
+    );
+    let result = parse_and_create(input).unwrap();
+    let expected = SequentialList {
+      items: vec![
+        SequentialListItem {
+          is_async: false,
+          sequence: Sequence::BooleanList(Box::new(BooleanList {
+            current: SimpleCommand {
+              env_vars: vec![
+                EnvVar::new("Name".to_string(), Word::new_word("Value")),
+                EnvVar::new("OtherVar".to_string(), Word::new_word("Other")),
+              ],
+              args: vec![Word::new_word("command"), Word::new_word("arg1")],
+            }
+            .into(),
+            op: BooleanListOperator::Or,
+            next: SimpleCommand {
+              env_vars: vec![],
+              args: vec![
+                Word::new_word("command2"),
+                Word::new_word("arg12"),
+                Word::new_word("arg13"),
+              ],
+            }
+            .into(),
+          })),
+        },
+        SequentialListItem {
+          is_async: true,
+          sequence: Sequence::BooleanList(Box::new(BooleanList {
+            current: SimpleCommand {
+              env_vars: vec![],
+              args: vec![Word::new_word("command3")],
+            }
+            .into(),
+            op: BooleanListOperator::And,
+            next: SimpleCommand {
+              env_vars: vec![],
+              args: vec![Word::new_word("command4")],
+            }
+            .into(),
+          })),
+        },
+        SequentialListItem {
+          is_async: false,
+          sequence: SimpleCommand {
+            env_vars: vec![],
+            args: vec![Word::new_word("command5")],
+          }
+          .into(),
+        },
+        SequentialListItem {
+          is_async: false,
+          sequence: SimpleCommand {
+            env_vars: vec![],
+            args: vec![Word::new_word("export"), Word::new_word("ENV6=5")],
+          }
+          .into(),
+        },
+        SequentialListItem {
+          is_async: false,
+          sequence: Sequence::BooleanList(Box::new(BooleanList {
+            current: Sequence::ShellVar(EnvVar::new(
+              "ENV7".to_string(),
+              Word::new_word("other"),
+            )),
+            op: BooleanListOperator::And,
+            next: Sequence::BooleanList(Box::new(BooleanList {
+              current: SimpleCommand {
+                env_vars: vec![],
+                args: vec![Word::new_word("command8")],
+              }
+              .into(),
+              op: BooleanListOperator::Or,
+              next: SimpleCommand {
+                env_vars: vec![],
+                args: vec![Word::new_word("command9")],
+              }
+              .into(),
+            })),
+          })),
+        },
+        SequentialListItem {
+          is_async: false,
+          sequence: Sequence::BooleanList(Box::new(BooleanList {
+            current: SimpleCommand {
+              env_vars: vec![],
+              args: vec![Word::new_word("cmd10")],
+            }
+            .into(),
+            op: BooleanListOperator::And,
+            next: Command {
+              inner: CommandInner::Subshell(Box::new(SequentialList {
+                items: vec![SequentialListItem {
+                  is_async: false,
+                  sequence: Sequence::BooleanList(Box::new(BooleanList {
+                    current: SimpleCommand {
+                      env_vars: vec![],
+                      args: vec![Word::new_word("cmd11")],
+                    }
+                    .into(),
+                    op: BooleanListOperator::Or,
+                    next: SimpleCommand {
+                      env_vars: vec![],
+                      args: vec![Word::new_word("cmd12")],
+                    }
+                    .into(),
+                  })),
+                }],
+              })),
+              redirect: None,
+            }
+            .into(),
+          })),
+        },
+      ],
+    };
+    assert_eq!(result, expected);
+
+    // Test case 2
+    let input = "command1 ; command2 ; A='b' command3";
+    let result = parse_and_create(input).unwrap();
+    let expected = SequentialList {
+      items: vec![
+        SequentialListItem {
+          is_async: false,
+          sequence: SimpleCommand {
+            env_vars: vec![],
+            args: vec![Word::new_word("command1")],
+          }
+          .into(),
+        },
+        SequentialListItem {
+          is_async: false,
+          sequence: SimpleCommand {
+            env_vars: vec![],
+            args: vec![Word::new_word("command2")],
+          }
+          .into(),
+        },
+        SequentialListItem {
+          is_async: false,
+          sequence: SimpleCommand {
+            env_vars: vec![EnvVar::new("A".to_string(), Word::new_string("b"))],
+            args: vec![Word::new_word("command3")],
+          }
+          .into(),
+        },
+      ],
+    };
+    assert_eq!(result, expected);
+
+    // Test case 3
+    let input = "test &&";
+    assert!(parse_and_create(input).is_err());
+
+    // Test case 4
+    let input = "command &";
+    let result = parse_and_create(input).unwrap();
+    let expected = SequentialList {
+      items: vec![SequentialListItem {
+        is_async: true,
+        sequence: SimpleCommand {
+          env_vars: vec![],
+          args: vec![Word::new_word("command")],
+        }
+        .into(),
+      }],
+    };
+    assert_eq!(result, expected);
+
+    // Test case 5
+    let input = "test | other";
+    let result = parse_and_create(input).unwrap();
+    let expected = SequentialList {
+      items: vec![SequentialListItem {
+        is_async: false,
+        sequence: PipeSequence {
+          current: SimpleCommand {
+            env_vars: vec![],
+            args: vec![Word::new_word("test")],
+          }
+          .into(),
+          op: PipeSequenceOperator::Stdout,
+          next: SimpleCommand {
+            env_vars: vec![],
+            args: vec![Word::new_word("other")],
+          }
+          .into(),
+        }
+        .into(),
+      }],
+    };
+    assert_eq!(result, expected);
+
+    // Test case 6
+    let input = "test |& other";
+    let result = parse_and_create(input).unwrap();
+    let expected = SequentialList {
+      items: vec![SequentialListItem {
+        is_async: false,
+        sequence: PipeSequence {
+          current: SimpleCommand {
+            env_vars: vec![],
+            args: vec![Word::new_word("test")],
+          }
+          .into(),
+          op: PipeSequenceOperator::StdoutStderr,
+          next: SimpleCommand {
+            env_vars: vec![],
+            args: vec![Word::new_word("other")],
+          }
+          .into(),
+        }
+        .into(),
+      }],
+    };
+    assert_eq!(result, expected);
+
+    // Test case 8
+    let input = "echo $MY_ENV;";
+    let result = parse_and_create(input).unwrap();
+    let expected = SequentialList {
+      items: vec![SequentialListItem {
+        is_async: false,
+        sequence: SimpleCommand {
+          env_vars: vec![],
+          args: vec![
+            Word::new_word("echo"),
+            Word(vec![WordPart::Variable("MY_ENV".to_string())]),
+          ],
+        }
+        .into(),
+      }],
+    };
+    assert_eq!(result, expected);
+
+    // Test case 9
+    let input = "! cmd1 | cmd2 && cmd3";
+    let result = parse_and_create(input).unwrap();
+    let expected = SequentialList {
+      items: vec![SequentialListItem {
+        is_async: false,
+        sequence: Sequence::BooleanList(Box::new(BooleanList {
+          current: Pipeline {
+            negated: true,
+            inner: PipeSequence {
+              current: SimpleCommand {
+                args: vec![Word::new_word("cmd1")],
+                env_vars: vec![],
+              }
+              .into(),
+              op: PipeSequenceOperator::Stdout,
+              next: SimpleCommand {
+                args: vec![Word::new_word("cmd2")],
+                env_vars: vec![],
+              }
+              .into(),
+            }
+            .into(),
+          }
+          .into(),
+          op: BooleanListOperator::And,
+          next: SimpleCommand {
+            args: vec![Word::new_word("cmd3")],
+            env_vars: vec![],
+          }
+          .into(),
+        })),
+      }],
+    };
+    assert_eq!(result, expected);
+  }
+
+  #[test]
+  fn test_env_var() {
+    let parse_and_create = |input: &str| -> Result<EnvVar, anyhow::Error> {
+      let pairs = ShellParser::parse(Rule::ASSIGNMENT_WORD, input)
+        .map_err(|e| anyhow::anyhow!(e.to_string()))?
+        .next()
+        .unwrap();
+      parse_env_var(pairs)
+    };
+
+    assert_eq!(
+      parse_and_create("Name=Value").unwrap(),
+      EnvVar {
+        name: "Name".to_string(),
+        value: Word::new_word("Value"),
+      }
+    );
+
+    assert_eq!(
+      parse_and_create("Name='quoted value'").unwrap(),
+      EnvVar {
+        name: "Name".to_string(),
+        value: Word::new_string("quoted value"),
+      }
+    );
+
+    assert_eq!(
+      parse_and_create("Name=\"double quoted value\"").unwrap(),
+      EnvVar {
+        name: "Name".to_string(),
+        value: Word::new_string("double quoted value"),
+      }
+    );
+
+    assert_eq!(
+      parse_and_create("Name=").unwrap(),
+      EnvVar {
+        name: "Name".to_string(),
+        value: Word(vec![]),
+      }
+    );
+
+    assert_eq!(
+      parse_and_create("Name=$(test)").unwrap(),
+      EnvVar {
+        name: "Name".to_string(),
+        value: Word(vec![WordPart::Command(SequentialList {
+          items: vec![SequentialListItem {
+            is_async: false,
+            sequence: SimpleCommand {
+              env_vars: vec![],
+              args: vec![Word::new_word("test")],
+            }
+            .into(),
+          }],
+        })]),
+      }
+    );
+
+    assert_eq!(
+      parse_and_create("Name=$(OTHER=5)").unwrap(),
+      EnvVar {
+        name: "Name".to_string(),
+        value: Word(vec![WordPart::Command(SequentialList {
+          items: vec![SequentialListItem {
+            is_async: false,
+            sequence: Sequence::ShellVar(EnvVar {
+              name: "OTHER".to_string(),
+              value: Word::new_word("5"),
+            }),
+          }],
+        })]),
+      }
+    );
   }
 
   #[cfg(feature = "serialization")]
