@@ -371,8 +371,9 @@ pub fn debug_parse(input: &str) {
 }
 
 pub fn parse(input: &str) -> Result<SequentialList> {
-  let mut pairs = ShellParser::parse(Rule::FILE, input)
-    .map_err(|e| miette::Error::new(e.into_miette()).context("Failed to parse input"))?;
+  let mut pairs = ShellParser::parse(Rule::FILE, input).map_err(|e| {
+    miette::Error::new(e.into_miette()).context("Failed to parse input")
+  })?;
 
   parse_file(pairs.next().unwrap())
 }
@@ -393,7 +394,10 @@ fn parse_complete_command(pair: Pair<Rule>) -> Result<SequentialList> {
         break;
       }
       _ => {
-        return Err(miette!("Unexpected rule in complete_command: {:?}", command.as_rule()));
+        return Err(miette!(
+          "Unexpected rule in complete_command: {:?}",
+          command.as_rule()
+        ));
       }
     }
   }
@@ -444,7 +448,10 @@ fn parse_compound_list(
         }
       }
       _ => {
-        return Err(miette!("Unexpected rule in compound_list: {:?}", item.as_rule()));
+        return Err(miette!(
+          "Unexpected rule in compound_list: {:?}",
+          item.as_rule()
+        ));
       }
     }
   }
@@ -490,7 +497,9 @@ fn parse_and_or(pair: Pair<Rule>) -> Result<Sequence> {
   match items.next() {
     Some(next_item) => {
       if next_item.as_rule() == Rule::ASSIGNMENT_WORD {
-        return Err(miette!("Multiple assignment words before && or || is not supported yet"));
+        return Err(miette!(
+          "Multiple assignment words before && or || is not supported yet"
+        ));
       } else {
         let op = match next_item.as_str() {
           "&&" => BooleanListOperator::And,
@@ -545,9 +554,9 @@ fn parse_pipeline(pair: Pair<Rule>) -> Result<Sequence> {
       ));
     }
     // Get the actual pipe sequence after whitespace
-    let pipe_sequence = inner.next().ok_or_else(|| {
-      miette!("Expected pipe sequence after negation")
-    })?;
+    let pipe_sequence = inner
+      .next()
+      .ok_or_else(|| miette!("Expected pipe sequence after negation"))?;
     (true, pipe_sequence)
   } else {
     // If it's not Bang, this element itself is the pipe_sequence
@@ -566,9 +575,9 @@ fn parse_pipe_sequence(pair: Pair<Rule>) -> Result<PipelineInner> {
   let mut inner = pair.into_inner();
 
   // Parse the first command
-  let first_command = inner.next().ok_or_else(|| {
-    miette!("Expected at least one command in pipe sequence")
-  })?;
+  let first_command = inner
+    .next()
+    .ok_or_else(|| miette!("Expected at least one command in pipe sequence"))?;
   let current = parse_command(first_command)?;
 
   // Check if there's a pipe operator
@@ -586,9 +595,9 @@ fn parse_pipe_sequence(pair: Pair<Rule>) -> Result<PipelineInner> {
       };
 
       // Parse the rest of the pipe sequence
-      let next_sequence = inner.next().ok_or_else(|| {
-        miette!("Expected command after pipe operator")
-      })?;
+      let next_sequence = inner
+        .next()
+        .ok_or_else(|| miette!("Expected command after pipe operator"))?;
       let next = parse_pipe_sequence(next_sequence)?;
 
       Ok(PipelineInner::PipeSequence(Box::new(PipeSequence {
@@ -609,10 +618,7 @@ fn parse_command(pair: Pair<Rule>) -> Result<Command> {
     Rule::function_definition => {
       Err(miette!("Function definitions are not supported yet"))
     }
-    _ => Err(miette!(
-      "Unexpected rule in command: {:?}",
-      inner.as_rule()
-    )),
+    _ => Err(miette!("Unexpected rule in command: {:?}", inner.as_rule())),
   }
 }
 
@@ -677,13 +683,21 @@ fn parse_simple_command(pair: Pair<Rule>) -> Result<Command> {
 fn parse_compound_command(pair: Pair<Rule>) -> Result<Command> {
   let inner = pair.into_inner().next().unwrap();
   match inner.as_rule() {
-    Rule::brace_group => Err(miette!("Unsupported compound command brace_group")),
+    Rule::brace_group => {
+      Err(miette!("Unsupported compound command brace_group"))
+    }
     Rule::subshell => parse_subshell(inner),
     Rule::for_clause => Err(miette!("Unsupported compound command for_clause")),
-    Rule::case_clause => Err(miette!("Unsupported compound command case_clause")),
+    Rule::case_clause => {
+      Err(miette!("Unsupported compound command case_clause"))
+    }
     Rule::if_clause => Err(miette!("Unsupported compound command if_clause")),
-    Rule::while_clause => Err(miette!("Unsupported compound command while_clause")),
-    Rule::until_clause => Err(miette!("Unsupported compound command until_clause")),
+    Rule::while_clause => {
+      Err(miette!("Unsupported compound command while_clause"))
+    }
+    Rule::until_clause => {
+      Err(miette!("Unsupported compound command until_clause"))
+    }
     _ => Err(miette!(
       "Unexpected rule in compound_command: {:?}",
       inner.as_rule()
@@ -815,10 +829,7 @@ fn parse_word(pair: Pair<Rule>) -> Result<Word> {
       }
     }
     _ => {
-      return Err(miette!(
-        "Unexpected rule in word: {:?}",
-        pair.as_rule()
-      ));
+      return Err(miette!("Unexpected rule in word: {:?}", pair.as_rule()));
     }
   }
 

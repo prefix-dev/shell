@@ -13,8 +13,8 @@ use crate::ExecuteResult;
 use crate::FutureExecuteResult;
 use crate::ShellCommand;
 use crate::ShellCommandContext;
-use miette::{miette, Result};
 use futures::FutureExt;
+use miette::{miette, Result};
 use thiserror::Error;
 
 #[derive(Debug, Clone)]
@@ -125,7 +125,9 @@ async fn resolve_command<'a>(
   // won't have a script with a shebang in it on Windows
   if command_name.name.contains('/') {
     if let Some(shebang) = resolve_shebang(&command_path).map_err(|err| {
-      ResolveCommandError::FailedShebang(FailedShebangError::MietteError(err.to_string()))
+      ResolveCommandError::FailedShebang(FailedShebangError::MietteError(
+        err.to_string(),
+      ))
     })? {
       let (shebang_command_name, mut args) = if shebang.string_split {
         let mut args = parse_shebang_args(&shebang.command, context)
@@ -197,13 +199,13 @@ async fn parse_shebang_args(
   }
 
   super::execute::evaluate_args(
-      cmd.args,
-      &context.state,
-      context.stdin.clone(),
-      context.stderr.clone(),
-    )
-    .await
-    .map_err(|e| miette!(e.to_string()))
+    cmd.args,
+    &context.state,
+    context.stdin.clone(),
+    context.stderr.clone(),
+  )
+  .await
+  .map_err(|e| miette!(e.to_string()))
 }
 
 /// Errors for executable commands.
@@ -231,8 +233,7 @@ pub fn resolve_command_path(
   state: &ShellState,
 ) -> Result<PathBuf, ResolveCommandPathError> {
   resolve_command_path_inner(command_name, base_dir, state, || {
-    std::env::current_exe()
-      .map_err(|e| miette!(e.to_string()))
+    std::env::current_exe().map_err(|e| miette!(e.to_string()))
   })
 }
 
