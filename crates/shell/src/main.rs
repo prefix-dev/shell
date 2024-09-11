@@ -42,6 +42,10 @@ struct Options {
     /// The path to the file that should be executed
     file: Option<PathBuf>,
 
+    /// Continue in interactive mode after the file has been executed
+    #[clap(long)]
+    no_exit: bool,
+
     #[clap(short, long)]
     debug: bool,
 }
@@ -52,7 +56,7 @@ fn init_state() -> ShellState {
     ShellState::new(env_vars, &cwd, commands())
 }
 
-async fn interactive() -> anyhow::Result<()> {
+async fn interactive(state: Option<ShellState>) -> anyhow::Result<()> {
     let config = Config::builder()
         .history_ignore_space(true)
         .completion_type(CompletionType::Circular)
@@ -63,7 +67,7 @@ async fn interactive() -> anyhow::Result<()> {
     let helper = helper::ShellPromptHelper::default();
     rl.set_helper(Some(helper));
 
-    let mut state = init_state();
+    let mut state = state.unwrap_or_else(|| init_state());
 
     let home = dirs::home_dir().context("Couldn't get home directory")?;
 
@@ -156,8 +160,11 @@ async fn main() -> anyhow::Result<()> {
             return Ok(());
         }
         execute(&script_text, &mut state).await?;
+        if options.no_exit {
+            interactive(Some(state)).await?;
+        }
     } else {
-        interactive().await?;
+        interactive(None).await?;
     }
 
     Ok(())
