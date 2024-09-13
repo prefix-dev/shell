@@ -127,10 +127,11 @@ async fn interactive() -> anyhow::Result<()> {
                 }
             }
             Err(ReadlineError::Interrupted) => {
+                // We start a new prompt on Ctrl-C, like Bash does
                 println!("CTRL-C");
-                break;
             }
             Err(ReadlineError::Eof) => {
+                // We exit the shell on Ctrl-D, like Bash does
                 println!("CTRL-D");
                 break;
             }
