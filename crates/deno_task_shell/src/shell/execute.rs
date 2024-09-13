@@ -32,6 +32,7 @@ use crate::shell::types::ShellState;
 
 use crate::parser::Command;
 use crate::parser::CommandInner;
+use crate::parser::IfClause;
 use crate::parser::PipeSequence;
 use crate::parser::PipeSequenceOperator;
 use crate::parser::Pipeline;
@@ -44,7 +45,6 @@ use crate::parser::SequentialList;
 use crate::parser::SimpleCommand;
 use crate::parser::Word;
 use crate::parser::WordPart;
-use crate::parser::IfClause;
 // use crate::parser::ElsePart;
 // use crate::parser::ElifClause;
 
@@ -626,7 +626,13 @@ async fn execute_if_clause(
   let mut current_else = if_clause.else_part;
 
   loop {
-    let condition_result = evaluate_condition(current_condition, &state, stdin.clone(), stderr.clone()).await;
+    let condition_result = evaluate_condition(
+      current_condition,
+      &state,
+      stdin.clone(),
+      stderr.clone(),
+    )
+    .await;
     match condition_result {
       Ok(true) => {
         return execute_sequential_list(
@@ -636,30 +642,30 @@ async fn execute_if_clause(
           stdout,
           stderr,
           AsyncCommandBehavior::Yield,
-        ).await;
+        )
+        .await;
       }
-      Ok(false) => {
-        match current_else {
-          Some(ElsePart::Elif(elif_clause)) => {
-            current_condition = elif_clause.condition;
-            current_body = elif_clause.then_body;
-            current_else = elif_clause.else_part;
-          }
-          Some(ElsePart::Else(else_body)) => {
-            return execute_sequential_list(
-              else_body,
-              state,
-              stdin,
-              stdout,
-              stderr,
-              AsyncCommandBehavior::Yield,
-            ).await;
-          }
-          None => {
-            return ExecuteResult::Continue(0, Vec::new(), Vec::new());
-          }
+      Ok(false) => match current_else {
+        Some(ElsePart::Elif(elif_clause)) => {
+          current_condition = elif_clause.condition;
+          current_body = elif_clause.then_body;
+          current_else = elif_clause.else_part;
         }
-      }
+        Some(ElsePart::Else(else_body)) => {
+          return execute_sequential_list(
+            else_body,
+            state,
+            stdin,
+            stdout,
+            stderr,
+            AsyncCommandBehavior::Yield,
+          )
+          .await;
+        }
+        None => {
+          return ExecuteResult::Continue(0, Vec::new(), Vec::new());
+        }
+      },
       Err(err) => {
         return err.into_exit_code(&mut stderr);
       }
@@ -675,9 +681,11 @@ async fn evaluate_condition(
 ) -> Result<bool, EvaluateWordTextError> {
   match condition.condition_inner {
     ConditionInner::Binary { left, op, right } => {
-      let left = evaluate_word(left, state, stdin.clone(), stderr.clone()).await?;
-      let right = evaluate_word(right, state, stdin.clone(), stderr.clone()).await?;
-      
+      let left =
+        evaluate_word(left, state, stdin.clone(), stderr.clone()).await?;
+      let right =
+        evaluate_word(right, state, stdin.clone(), stderr.clone()).await?;
+
       // transform the string comparison to a numeric comparison if possible
       if let Ok(left) = left.parse::<i64>() {
         if let Ok(right) = right.parse::<i64>() {
@@ -702,9 +710,10 @@ async fn evaluate_condition(
       }
     }
     ConditionInner::Unary { op, right } => {
-      let _right = evaluate_word(right, state, stdin.clone(), stderr.clone()).await?;
+      let _right =
+        evaluate_word(right, state, stdin.clone(), stderr.clone()).await?;
       match op {
-        Some(UnaryOp::FileExists)  => todo!(),
+        Some(UnaryOp::FileExists) => todo!(),
         Some(UnaryOp::BlockSpecial) => todo!(),
         Some(UnaryOp::CharSpecial) => todo!(),
         Some(UnaryOp::Directory) => todo!(),

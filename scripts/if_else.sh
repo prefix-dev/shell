@@ -1,4 +1,4 @@
-FOO=1
+FOO=2
 if [[ $FOO -eq 1 ]] then
     echo "FOO is 1"
 elif [[ $FOO -eq 2 ]] then  
