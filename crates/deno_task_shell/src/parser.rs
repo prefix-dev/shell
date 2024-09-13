@@ -158,6 +158,8 @@ pub enum CommandInner {
   Simple(SimpleCommand),
   #[error("Invalid subshell")]
   Subshell(Box<SequentialList>),
+  #[error("Invalid if command")]
+  If(IfClause),
 }
 
 impl From<Command> for Sequence {
@@ -205,6 +207,93 @@ impl From<SimpleCommand> for Sequence {
     let command: Command = c.into();
     command.into()
   }
+}
+
+
+#[cfg_attr(feature = "serialization", derive(serde::Serialize))]
+#[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
+#[derive(Debug, PartialEq, Eq, Clone, Error)]
+#[error("Invalid if clause")]
+pub struct IfClause {
+    pub condition: Condition,
+    pub then_body: SequentialList,
+    pub else_part: Option<ElsePart>,
+}
+
+#[cfg_attr(feature = "serialization", derive(serde::Serialize))]
+#[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
+#[derive(Debug, PartialEq, Eq, Clone, Error)]
+#[error("Invalid else part")]
+pub enum ElsePart {
+    Elif(Box<IfClause>),
+    Else(SequentialList),
+}
+
+#[cfg_attr(feature = "serialization", derive(serde::Serialize))]
+#[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
+#[derive(Debug, PartialEq, Eq, Clone, Error)]
+#[error("Invalid condition")]
+pub struct Condition {
+  pub condition_inner: ConditionInner,
+}
+
+#[cfg_attr(feature = "serialization", derive(serde::Serialize))]
+#[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
+#[derive(Debug, PartialEq, Eq, Clone, Error)]
+#[error("Invalid condition inner")]
+pub enum ConditionInner {
+  Binary {
+    left: Word,
+    op: BinaryOp,
+    right: Word,
+  },
+  Unary {
+    op: Option<UnaryOp>,
+    right: Word,
+  },
+}
+
+#[cfg_attr(feature = "serialization", derive(serde::Serialize))]
+#[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
+#[derive(Debug, PartialEq, Eq, Clone, Error)]
+#[error("Invalid binary operator")]
+pub enum BinaryOp {
+  Equal,
+  NotEqual,
+  LessThan,
+  LessThanOrEqual,
+  GreaterThan,
+  GreaterThanOrEqual,
+}
+
+#[cfg_attr(feature = "serialization", derive(serde::Serialize))]
+#[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
+#[derive(Debug, PartialEq, Eq, Clone, Error)]
+#[error("Invalid unary operator")]
+pub enum UnaryOp {
+  FileExists,
+  BlockSpecial,
+  CharSpecial,
+  Directory,
+  RegularFile,
+  SetGroupId,
+  SymbolicLink,
+  StickyBit,
+  NamedPipe,
+  Readable,
+  SizeNonZero,
+  TerminalFd,
+  SetUserId,
+  Writable,
+  Executable,
+  OwnedByEffectiveGroupId,
+  ModifiedSinceLastRead,
+  OwnedByEffectiveUserId,
+  Socket,
+  NonEmptyString,
+  EmptyString,
+  VariableSet,
+  VariableNameReference
 }
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
@@ -691,7 +780,13 @@ fn parse_compound_command(pair: Pair<Rule>) -> Result<Command> {
     Rule::case_clause => {
       Err(miette!("Unsupported compound command case_clause"))
     }
-    Rule::if_clause => Err(miette!("Unsupported compound command if_clause")),
+    Rule::if_clause => {
+      let if_clause = parse_if_clause(inner)?;
+      Ok(Command {
+        inner: CommandInner::If(if_clause),
+        redirect: None,
+      })
+    }
     Rule::while_clause => {
       Err(miette!("Unsupported compound command while_clause"))
     }
@@ -716,6 +811,169 @@ fn parse_subshell(pair: Pair<Rule>) -> Result<Command> {
   } else {
     Err(miette!("Unexpected end of input in subshell"))
   }
+}
+
+fn parse_if_clause(pair: Pair<Rule>) -> Result<IfClause> {
+    let mut inner = pair.into_inner();
+    let condition = inner.next().ok_or_else(|| miette!("Expected condition after If"))?;
+    let condition = parse_conditional_expression(condition)?;
+    
+    let then_body_pair = inner.next().ok_or_else(|| miette!("Expected then body after If"))?;
+    let then_body = parse_complete_command(then_body_pair)?;
+    
+    let else_part = match inner.next() {
+        Some(else_pair) => Some(parse_else_part(else_pair)?),
+        None => None,
+    };
+    
+    Ok(IfClause {
+        condition,
+        then_body,
+        else_part,
+    })
+}
+
+fn parse_else_part(pair: Pair<Rule>) -> Result<ElsePart> {
+  let mut inner = pair.into_inner();
+
+  let keyword = inner.next().ok_or_else(|| miette!("Expected ELSE or ELIF keyword"))?;
+
+  match keyword.as_rule() {
+    Rule::Elif => {
+      let condition = inner.next().ok_or_else(|| miette!("Expected condition after Elif"))?;
+      let condition = parse_conditional_expression(condition)?;
+      
+      let then_body_pair = inner.next().ok_or_else(|| miette!("Expected then body after Elif"))?;
+      let then_body = parse_complete_command(then_body_pair)?;
+      
+      let else_part = match inner.next() {
+        Some(else_pair) => Some(parse_else_part(else_pair)?),
+        None => None,
+      };
+      
+      Ok(ElsePart::Elif(Box::new(IfClause {
+        condition,
+        then_body,
+        else_part,
+    })))
+    },
+    Rule::Else => {
+      let body_pair = inner.next().ok_or_else(|| miette!("Expected body after Else"))?;
+      let body = parse_complete_command(body_pair)?;
+      Ok(ElsePart::Else(body))
+    },
+    _ => Err(miette!("Unexpected rule in else_part: {:?}", keyword.as_rule())),
+  }
+}
+
+fn parse_conditional_expression(pair: Pair<Rule>) -> Result<Condition> {
+    let inner = pair.into_inner().next().ok_or_else(|| miette!("Expected conditional expression content"))?;
+    
+    match inner.as_rule() {
+        Rule::unary_conditional_expression => parse_unary_conditional_expression(inner),
+        Rule::binary_conditional_expression => parse_binary_conditional_expression(inner),
+        _ => Err(miette!("Unexpected rule in conditional expression: {:?}", inner.as_rule())),
+    }
+}
+
+fn parse_unary_conditional_expression(pair: Pair<Rule>) -> Result<Condition> {
+  let mut inner = pair.into_inner();
+  let operator = inner.next().ok_or_else(|| miette!("Expected operator"))?;
+  let operand = inner.next().ok_or_else(|| miette!("Expected operand"))?;
+
+  let op = match operator.as_rule() {
+      Rule::string_conditional_op => {
+          match operator.as_str() {
+            "-n" => UnaryOp::NonEmptyString,
+            "-z" => UnaryOp::EmptyString,
+            _ => return Err(miette!("Unexpected string conditional operator: {}", operator.as_str())),
+        }
+    }
+    Rule::file_conditional_op => {
+        match operator.as_str() {
+            "-a" => UnaryOp::FileExists,
+            "-b" => UnaryOp::BlockSpecial,
+            "-c" => UnaryOp::CharSpecial,
+            "-d" => UnaryOp::Directory,
+            "-f" => UnaryOp::RegularFile,
+            "-g" => UnaryOp::SetGroupId,
+            "-h" => UnaryOp::SymbolicLink,
+            "-k" => UnaryOp::StickyBit,
+            "-p" => UnaryOp::NamedPipe,
+            "-r" => UnaryOp::Readable,
+            "-s" => UnaryOp::SizeNonZero,
+            "-u" => UnaryOp::SetUserId,
+            "-w" => UnaryOp::Writable,
+            "-x" => UnaryOp::Executable,
+            "-G" => UnaryOp::OwnedByEffectiveGroupId,
+            "-L" => UnaryOp::SymbolicLink,
+            "-N" => UnaryOp::ModifiedSinceLastRead,
+            "-O" => UnaryOp::OwnedByEffectiveUserId,
+            "-S" => UnaryOp::Socket,
+            _ => return Err(miette!("Unexpected file conditional operator: {}", operator.as_str())),
+        }
+    }
+    Rule::variable_conditional_op => {
+        match operator.as_str() {
+            "-v" => UnaryOp::VariableSet,
+            "-R" => UnaryOp::VariableNameReference,
+            _ => return Err(miette!("Unexpected variable conditional operator: {}", operator.as_str())),
+        }
+    }
+    _ => return Err(miette!("Unexpected unary conditional operator rule: {:?}", operator.as_rule())),
+  };
+
+  let right = parse_word(operand)?;
+
+  Ok(Condition {
+    condition_inner: ConditionInner::Unary {
+      op: Some(op),
+      right,
+    },
+  })
+}
+
+fn parse_binary_conditional_expression(pair: Pair<Rule>) -> Result<Condition> {
+    let mut inner = pair.into_inner();
+    let left = inner.next().ok_or_else(|| miette!("Expected left operand"))?;
+    let operator = inner.next().ok_or_else(|| miette!("Expected operator"))?;
+    let right = inner.next().ok_or_else(|| miette!("Expected right operand"))?;
+
+    let left_word = parse_word(left)?;
+    let right_word = parse_word(right)?;
+
+    let op = match operator.as_rule() {
+        Rule::binary_string_conditional_op => {
+            match operator.as_str() {
+                "==" => BinaryOp::Equal,
+                "=" => BinaryOp::Equal,
+                "!=" => BinaryOp::NotEqual,
+                "<" => BinaryOp::LessThan,
+                ">" => BinaryOp::GreaterThan,
+                _ => return Err(miette!("Unexpected string conditional operator: {}", operator.as_str())),
+            }
+        },
+        Rule::binary_arithmetic_conditional_op => {
+            match operator.as_str() {
+                "-eq" => BinaryOp::Equal,
+                "-ne" => BinaryOp::NotEqual,
+                "-lt" => BinaryOp::LessThan,
+                "-le" => BinaryOp::LessThanOrEqual,
+                "-gt" => BinaryOp::GreaterThan,
+                "-ge" => BinaryOp::GreaterThanOrEqual,
+                _ => return Err(miette!("Unexpected arithmetic conditional operator: {}", operator.as_str())),
+            }
+        },
+        _ => return Err(miette!("Unexpected operator rule: {:?}", operator.as_rule())),
+    };
+
+    Ok(Condition {
+        condition_inner: ConditionInner::Binary {
+            left: left_word,
+            op,
+            right: right_word,
+        },
+    })
 }
 
 fn parse_word(pair: Pair<Rule>) -> Result<Word> {
