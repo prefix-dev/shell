@@ -1,5 +1,3 @@
-use std::os::macos::raw::stat;
-
 use deno_task_shell::{ExecuteResult, ShellCommand, ShellCommandContext};
 use futures::future::LocalBoxFuture;
 
@@ -13,11 +11,14 @@ impl ShellCommand for WhichCommand {
         let arg = &context.args[0];
 
         if let Some(alias) = context.state.alias_map().get(arg) {
-            context.stdout.write_line(&format!("alias: \"{}\"", alias.join(" "))).unwrap();
+            context
+                .stdout
+                .write_line(&format!("alias: \"{}\"", alias.join(" ")))
+                .unwrap();
             return Box::pin(futures::future::ready(ExecuteResult::from_exit_code(0)));
         }
 
-        if let Some(function) = context.state.resolve_custom_command(&arg) {
+        if context.state.resolve_custom_command(arg).is_some() {
             context.stdout.write_line("<builtin function>").unwrap();
             return Box::pin(futures::future::ready(ExecuteResult::from_exit_code(0)));
         }
@@ -25,6 +26,7 @@ impl ShellCommand for WhichCommand {
         if let Ok(p) = which::which(arg) {
             context.stdout.write_line(&p.to_string_lossy()).unwrap();
         }
-        return Box::pin(futures::future::ready(ExecuteResult::from_exit_code(0)));
+
+        Box::pin(futures::future::ready(ExecuteResult::from_exit_code(0)))
     }
 }

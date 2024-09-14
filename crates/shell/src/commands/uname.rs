@@ -28,7 +28,8 @@ impl ShellCommand for UnameCommand {
     fn execute(&self, mut context: ShellCommandContext) -> LocalBoxFuture<'static, ExecuteResult> {
         let matches = uu_uname::uu_app()
             .no_binary_name(true)
-            .try_get_matches_from(context.args).unwrap();
+            .try_get_matches_from(context.args)
+            .unwrap();
 
         let options = uu_uname::Options {
             all: matches.get_flag(options::ALL),
@@ -43,8 +44,11 @@ impl ShellCommand for UnameCommand {
         };
 
         let uname = UNameOutput::new(&options).unwrap();
-        context.stdout.write_line(&format!("{}", display(&uname).trim_end()));
+        context
+            .stdout
+            .write_line(display(&uname).trim_end())
+            .unwrap();
 
-        return Box::pin(futures::future::ready(ExecuteResult::from_exit_code(0)));
+        Box::pin(futures::future::ready(ExecuteResult::from_exit_code(0)))
     }
 }
