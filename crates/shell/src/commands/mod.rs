@@ -6,6 +6,13 @@ use futures::{future::LocalBoxFuture, FutureExt};
 use uu_ls::uumain as uu_ls;
 
 use crate::execute;
+
+pub mod uname;
+pub mod which;
+
+pub use uname::UnameCommand;
+pub use which::WhichCommand;
+
 pub struct LsCommand;
 
 pub struct AliasCommand;

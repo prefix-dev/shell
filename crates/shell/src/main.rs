@@ -34,6 +34,14 @@ fn commands() -> HashMap<String, Rc<dyn ShellCommand>> {
             "source".to_string(),
             Rc::new(commands::SourceCommand) as Rc<dyn ShellCommand>,
         ),
+        (
+            "which".to_string(),
+            Rc::new(commands::WhichCommand) as Rc<dyn ShellCommand>,
+        ),
+        (
+            "uname".to_string(),
+            Rc::new(commands::UnameCommand) as Rc<dyn ShellCommand>,
+        ),
     ])
 }
 
