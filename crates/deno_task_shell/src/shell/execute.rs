@@ -12,6 +12,7 @@ use thiserror::Error;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
+use crate::parser::ArithmeticExpr;
 use crate::parser::IoFile;
 use crate::parser::RedirectOpInput;
 use crate::parser::RedirectOpOutput;
@@ -743,6 +744,8 @@ pub enum EvaluateWordTextError {
   NoFilesMatched { pattern: String },
   #[error("Failed to get home directory")]
   FailedToGetHomeDirectory(anyhow::Error),
+  #[error("Arithmetic error: {0}")]
+  ArithmeticError(String),
 }
 
 impl EvaluateWordTextError {
@@ -902,6 +905,11 @@ fn evaluate_word_parts(
             )
             .await,
           ),
+          WordPart::Arithmetic(expr) => {
+            let text = evaluate_arithmetic_expression(expr, &state).map_err(|e| EvaluateWordTextError::ArithmeticError(e.to_string()))?;
+            current_text.push(TextPart::Text(text.to_string()));
+            continue;
+          }
           WordPart::Quoted(parts) => {
             let text = evaluate_word_parts_inner(
               parts,
@@ -984,6 +992,42 @@ fn evaluate_word_parts(
   }
 
   evaluate_word_parts_inner(parts, false, state, stdin, stderr)
+}
+
+fn evaluate_arithmetic_expression(expr: ArithmeticExpr, state: &ShellState) -> Result<i64, String> {
+    match expr {
+        ArithmeticExpr::Number(n) => Ok(n),
+        ArithmeticExpr::Variable(var) => {
+            state.get_var(&var)
+                .and_then(|v| v.parse::<i64>().ok())
+                .ok_or_else(|| format!("Variable '{}' not found or not a valid integer", var))
+        },
+        ArithmeticExpr::Add(left, right) => {
+            let l = evaluate_arithmetic_expression(*left, state)?;
+            let r = evaluate_arithmetic_expression(*right, state)?;
+            Ok(l + r)
+        },
+        ArithmeticExpr::Subtract(left, right) => {
+            let l = evaluate_arithmetic_expression(*left, state)?;
+            let r = evaluate_arithmetic_expression(*right, state)?;
+            Ok(l - r)
+        },
+        ArithmeticExpr::Multiply(left, right) => {
+            let l = evaluate_arithmetic_expression(*left, state)?;
+            let r = evaluate_arithmetic_expression(*right, state)?;
+            Ok(l * r)
+        },
+        ArithmeticExpr::Divide(left, right) => {
+            let l = evaluate_arithmetic_expression(*left, state)?;
+            let r = evaluate_arithmetic_expression(*right, state)?;
+            if r == 0 {
+                Err("Division by zero".to_string())
+            } else {
+                Ok(l / r)
+            }
+        },
+    }
+
 }
 
 async fn evaluate_command_substitution(

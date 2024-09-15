@@ -111,7 +111,7 @@ pub struct BooleanList {
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
 #[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Error)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum PipeSequenceOperator {
   #[error("Stdout pipe operator")]
   Stdout,
@@ -286,6 +286,8 @@ pub enum WordPart {
   Variable(String),
   #[error("Invalid command")]
   Command(SequentialList),
+  #[error("Invalid arithmetic expression")]
+  Arithmetic(ArithmeticExpr),
   #[error("Invalid quoted string")]
   Quoted(Vec<WordPart>),
   #[error("Invalid tilde prefix")]
@@ -686,7 +688,7 @@ fn parse_compound_command(pair: Pair<Rule>) -> Result<Command> {
     Rule::brace_group => {
       Err(miette!("Unsupported compound command brace_group"))
     }
-    Rule::subshell => parse_subshell(inner),
+    // Rule::subshell => parse_subshell(inner),
     Rule::for_clause => Err(miette!("Unsupported compound command for_clause")),
     Rule::case_clause => {
       Err(miette!("Unsupported compound command case_clause"))
@@ -773,6 +775,11 @@ fn parse_word(pair: Pair<Rule>) -> Result<Word> {
           Rule::TILDE_PREFIX => {
             let tilde_prefix = parse_tilde_prefix(part)?;
             parts.push(tilde_prefix);
+          }
+          Rule::ARITHMETIC_EXPRESSION => {
+            let expr = part.into_inner().next().unwrap();
+            let result = parse_arithmetic_expression(expr).unwrap();
+            parts.push(WordPart::Arithmetic(result));
           }
           _ => {
             return Err(miette!(
@@ -862,6 +869,7 @@ fn parse_quoted_word(pair: Pair<Rule>) -> Result<WordPart> {
         match part.as_rule() {
           Rule::EXIT_STATUS => parts.push(WordPart::Text("$?".to_string())),
           Rule::QUOTED_ESCAPE_CHAR => {
+            println!("QUOTED_ESCAPE_CHAR: {:?}", part.as_str());
             if let Some(WordPart::Text(ref mut s)) = parts.last_mut() {
               s.push_str(part.as_str());
             } else {
@@ -1040,6 +1048,68 @@ fn parse_io_file(pair: Pair<Rule>) -> Result<(RedirectOp, IoFile)> {
   };
 
   Ok((redirect_op, io_file))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ArithmeticExpr {
+    Number(i64),
+    Variable(String),
+    Add(Box<ArithmeticExpr>, Box<ArithmeticExpr>),
+    Subtract(Box<ArithmeticExpr>, Box<ArithmeticExpr>),
+    Multiply(Box<ArithmeticExpr>, Box<ArithmeticExpr>),
+    Divide(Box<ArithmeticExpr>, Box<ArithmeticExpr>),
+}
+
+fn parse_arithmetic_expression(expr: Pair<Rule>) -> Result<ArithmeticExpr, String> {
+    println!("parse_arithmetic_expression: {:?}", expr.as_rule());
+    match expr.as_rule() {
+        Rule::arithmetic_expr => parse_add_sub(expr.into_inner()),
+        // Rule::arithmetic_term => parse_mul_div(expr.into_inner()),
+        // Rule::arithmetic_factor => parse_factor(expr.into_inner()),
+        _ => Err(format!("Unexpected rule: {:?}", expr.as_rule())),
+    }
+}
+
+fn parse_add_sub(mut pairs: pest::iterators::Pairs<Rule>) -> Result<ArithmeticExpr, String> {
+    let mut expr = parse_mul_div(pairs.next().unwrap())?;
+    while let Some(op) = pairs.next() {
+        let rhs = parse_mul_div(pairs.next().unwrap())?;
+        expr = match op.as_str() {
+            "+" => ArithmeticExpr::Add(Box::new(expr), Box::new(rhs)),
+            "-" => ArithmeticExpr::Subtract(Box::new(expr), Box::new(rhs)),
+            _ => return Err(format!("Invalid operator: {}", op.as_str())),
+        };
+    }
+    Ok(expr)
+}
+
+fn parse_mul_div(pair: Pair<Rule>) -> Result<ArithmeticExpr, String> {
+    match pair.as_rule() {
+        Rule::arithmetic_term => {
+            let mut pairs = pair.into_inner();
+            let mut expr = parse_factor(pairs.next().unwrap())?;
+            while let Some(op) = pairs.next() {
+                let rhs = parse_factor(pairs.next().unwrap())?;
+                expr = match op.as_str() {
+                    "*" => ArithmeticExpr::Multiply(Box::new(expr), Box::new(rhs)),
+                    "/" => ArithmeticExpr::Divide(Box::new(expr), Box::new(rhs)),
+                    _ => return Err(format!("Invalid operator: {}", op.as_str())),
+                };
+            }
+            Ok(expr)
+        }
+        _ => Err(format!("Unexpected rule: {:?}", pair.as_rule())),
+    }
+}
+
+fn parse_factor(pair: Pair<Rule>) -> Result<ArithmeticExpr, String> {
+    println!("parse_factor: {:?}", pair.as_rule());
+    match pair.as_rule() {
+        Rule::number => pair.as_str().parse::<i64>().map(ArithmeticExpr::Number).map_err(|e| e.to_string()),
+        Rule::arithmetic_expr => parse_add_sub(pair.into_inner()),
+        Rule::arithmetic_factor => parse_factor(pair.into_inner()),
+        _ => Err(format!("Unexpected rule: {:?}", pair.as_rule())),
+    }
 }
 
 #[cfg(test)]

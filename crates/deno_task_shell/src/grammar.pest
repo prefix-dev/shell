@@ -11,6 +11,7 @@ UNQUOTED_PENDING_WORD = ${
     (TILDE_PREFIX ~ (!(OPERATOR | WHITESPACE | NEWLINE) ~ (
         EXIT_STATUS | 
         UNQUOTED_ESCAPE_CHAR | 
+        ARITHMETIC_EXPRESSION |
         SUB_COMMAND | 
         ("$" ~ "{" ~ VARIABLE ~ "}" | "$" ~ VARIABLE) | 
         UNQUOTED_CHAR | 
@@ -20,6 +21,7 @@ UNQUOTED_PENDING_WORD = ${
     (!(OPERATOR | WHITESPACE | NEWLINE) ~ (
         EXIT_STATUS | 
         UNQUOTED_ESCAPE_CHAR | 
+        ARITHMETIC_EXPRESSION |
         SUB_COMMAND | 
         ("$" ~ "{" ~ VARIABLE ~ "}" | "$" ~ VARIABLE) | 
         UNQUOTED_CHAR | 
@@ -149,7 +151,7 @@ command = !{
 compound_command = {
     double_square_bracket |
     brace_group |
-    subshell |
+    // subshell |
     for_clause |
     case_clause |
     if_clause |
@@ -157,7 +159,16 @@ compound_command = {
     until_clause
 }
 
-subshell = !{ "(" ~ compound_list ~ ")" }
+ARITHMETIC_EXPRESSION = { "$(" ~ "(" ~ arithmetic_expr ~  ")" ~ ")" }
+
+arithmetic_expr = { arithmetic_term ~ (add_op ~ arithmetic_term)* }
+arithmetic_term = { arithmetic_factor ~ (mul_op ~ arithmetic_factor)* }
+arithmetic_factor = { number | "(" ~ arithmetic_expr ~ ")" }
+number = @{ ASCII_DIGIT+ }
+add_op = { "+" | "-" }
+mul_op = { "*" | "/" }
+
+// subshell = !{ "(" ~ compound_list ~ ")" }
 compound_list = !{ (newline_list? ~ term ~ separator?)+ }
 term = !{ and_or ~ (separator ~ and_or)* }
 
