@@ -771,6 +771,23 @@ async fn paren_escapes() {
         .await;
 }
 
+#[tokio::test]
+async fn uname() {
+    TestBuilder::new()
+        .command("uname")
+        .assert_exit_code(0)
+        .check_stderr(false)
+        .check_stdout(false)
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("uname -a")
+        .assert_exit_code(0)
+        .run()
+        .await;
+}
+
 #[cfg(test)]
 fn no_such_file_error_text() -> &'static str {
     if cfg!(windows) {
