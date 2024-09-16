@@ -1,11 +1,9 @@
-use std::collections::HashMap;
 use std::path::PathBuf;
-use std::rc::Rc;
 
 use anyhow::Context;
 use clap::Parser;
 use deno_task_shell::parser::debug_parse;
-use deno_task_shell::{ShellCommand, ShellState};
+use deno_task_shell::ShellState;
 use rustyline::error::ReadlineError;
 use rustyline::{CompletionType, Config, Editor};
 
@@ -15,36 +13,6 @@ mod execute;
 mod helper;
 
 pub use execute::execute;
-
-fn commands() -> HashMap<String, Rc<dyn ShellCommand>> {
-    HashMap::from([
-        (
-            "ls".to_string(),
-            Rc::new(commands::LsCommand) as Rc<dyn ShellCommand>,
-        ),
-        (
-            "alias".to_string(),
-            Rc::new(commands::AliasCommand) as Rc<dyn ShellCommand>,
-        ),
-        (
-            "unalias".to_string(),
-            Rc::new(commands::AliasCommand) as Rc<dyn ShellCommand>,
-        ),
-        (
-            "source".to_string(),
-            Rc::new(commands::SourceCommand) as Rc<dyn ShellCommand>,
-        ),
-        (
-            "which".to_string(),
-            Rc::new(commands::WhichCommand) as Rc<dyn ShellCommand>,
-        ),
-        (
-            "uname".to_string(),
-            Rc::new(commands::UnameCommand) as Rc<dyn ShellCommand>,
-        ),
-    ])
-}
-
 #[derive(Parser)]
 struct Options {
     /// The path to the file that should be executed
@@ -57,7 +25,7 @@ struct Options {
 fn init_state() -> ShellState {
     let env_vars = std::env::vars().collect();
     let cwd = std::env::current_dir().unwrap();
-    ShellState::new(env_vars, &cwd, commands())
+    ShellState::new(env_vars, &cwd, commands::get_commands())
 }
 
 async fn interactive() -> anyhow::Result<()> {
