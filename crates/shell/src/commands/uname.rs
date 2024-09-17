@@ -26,29 +26,42 @@ fn display(uname: &UNameOutput) -> String {
 
 impl ShellCommand for UnameCommand {
     fn execute(&self, mut context: ShellCommandContext) -> LocalBoxFuture<'static, ExecuteResult> {
-        let matches = uu_uname::uu_app()
-            .no_binary_name(true)
-            .try_get_matches_from(context.args)
-            .unwrap();
-
-        let options = uu_uname::Options {
-            all: matches.get_flag(options::ALL),
-            kernel_name: matches.get_flag(options::KERNEL_NAME),
-            nodename: matches.get_flag(options::NODENAME),
-            kernel_release: matches.get_flag(options::KERNEL_RELEASE),
-            kernel_version: matches.get_flag(options::KERNEL_VERSION),
-            machine: matches.get_flag(options::MACHINE),
-            processor: matches.get_flag(options::PROCESSOR),
-            hardware_platform: matches.get_flag(options::HARDWARE_PLATFORM),
-            os: matches.get_flag(options::OS),
-        };
-
-        let uname = UNameOutput::new(&options).unwrap();
-        context
-            .stdout
-            .write_line(display(&uname).trim_end())
-            .unwrap();
-
-        Box::pin(futures::future::ready(ExecuteResult::from_exit_code(0)))
+        Box::pin(async move {
+            match execute_uname(&mut context) {
+                Ok(_) => ExecuteResult::from_exit_code(0),
+                Err(e) => {
+                    context.stderr.write_line(&e).ok();
+                    ExecuteResult::from_exit_code(1)
+                }
+            }
+        })
     }
+}
+
+fn execute_uname(context: &mut ShellCommandContext) -> Result<(), String> {
+    let matches = uu_uname::uu_app()
+        .override_usage("uname [OPTION]...")
+        .no_binary_name(true)
+        .try_get_matches_from(&context.args)
+        .map_err(|e| e.to_string())?;
+
+    let options = uu_uname::Options {
+        all: matches.get_flag(options::ALL),
+        kernel_name: matches.get_flag(options::KERNEL_NAME),
+        nodename: matches.get_flag(options::NODENAME),
+        kernel_release: matches.get_flag(options::KERNEL_RELEASE),
+        kernel_version: matches.get_flag(options::KERNEL_VERSION),
+        machine: matches.get_flag(options::MACHINE),
+        processor: matches.get_flag(options::PROCESSOR),
+        hardware_platform: matches.get_flag(options::HARDWARE_PLATFORM),
+        os: matches.get_flag(options::OS),
+    };
+
+    let uname = UNameOutput::new(&options).unwrap();
+    context
+        .stdout
+        .write_line(display(&uname).trim_end())
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
 }
