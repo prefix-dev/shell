@@ -1,4 +1,4 @@
-use std::{ffi::OsString, fs};
+use std::{collections::HashMap, ffi::OsString, fs, rc::Rc};
 
 use deno_task_shell::{EnvChange, ExecuteResult, ShellCommand, ShellCommandContext};
 use futures::{future::LocalBoxFuture, FutureExt};
@@ -6,6 +6,13 @@ use futures::{future::LocalBoxFuture, FutureExt};
 use uu_ls::uumain as uu_ls;
 
 use crate::execute;
+
+pub mod uname;
+pub mod which;
+
+pub use uname::UnameCommand;
+pub use which::WhichCommand;
+
 pub struct LsCommand;
 
 pub struct AliasCommand;
@@ -13,6 +20,32 @@ pub struct AliasCommand;
 pub struct UnAliasCommand;
 
 pub struct SourceCommand;
+
+pub fn get_commands() -> HashMap<String, Rc<dyn ShellCommand>> {
+    HashMap::from([
+        ("ls".to_string(), Rc::new(LsCommand) as Rc<dyn ShellCommand>),
+        (
+            "alias".to_string(),
+            Rc::new(AliasCommand) as Rc<dyn ShellCommand>,
+        ),
+        (
+            "unalias".to_string(),
+            Rc::new(UnAliasCommand) as Rc<dyn ShellCommand>,
+        ),
+        (
+            "source".to_string(),
+            Rc::new(SourceCommand) as Rc<dyn ShellCommand>,
+        ),
+        (
+            "which".to_string(),
+            Rc::new(WhichCommand) as Rc<dyn ShellCommand>,
+        ),
+        (
+            "uname".to_string(),
+            Rc::new(UnameCommand) as Rc<dyn ShellCommand>,
+        ),
+    ])
+}
 
 impl ShellCommand for AliasCommand {
     fn execute(&self, context: ShellCommandContext) -> LocalBoxFuture<'static, ExecuteResult> {
