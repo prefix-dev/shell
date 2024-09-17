@@ -70,8 +70,13 @@ pub struct TestBuilder {
     assert_stderr: bool,
 }
 
+impl Default for TestBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TestBuilder {
-    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         let env_vars = std::env::vars()
             .map(|(key, value)| {
