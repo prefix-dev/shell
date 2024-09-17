@@ -193,6 +193,7 @@ async fn parse_shebang_args(
   let cmd = match cmd.inner {
     crate::parser::CommandInner::Simple(cmd) => cmd,
     crate::parser::CommandInner::Subshell(_) => return err_unsupported(text),
+    crate::parser::CommandInner::If(_) => return err_unsupported(text),
   };
   if !cmd.env_vars.is_empty() {
     return err_unsupported(text);

@@ -109,11 +109,11 @@ OPERATOR = _{
 }
 
 // Reserved words
-If = { "if" }
-Then = { "then" }
+If = _{ "if" }
+Then = _{ "then" }
 Else = { "else" }
 Elif = { "elif" }
-Fi = { "fi" }
+Fi = _{ "fi" }
 Do = { "do" }
 Done = { "done" }
 Case = { "case" }
@@ -149,7 +149,6 @@ command = !{
 }
 
 compound_command = {
-    double_square_bracket |
     brace_group |
     // subshell |
     for_clause |
@@ -177,8 +176,6 @@ for_clause = {
     (In ~ (brace_group | wordlist)? ~ sequential_sep)? ~
     do_group
 }
-
-double_square_bracket = !{ "[[" ~ compound_list ~ "]]" }
 
 case_clause = !{
     Case ~ UNQUOTED_PENDING_WORD ~ linebreak ~
@@ -208,14 +205,55 @@ pattern = !{
 }
 
 if_clause = !{
-    If ~ compound_list ~
-    linebreak ~ Then ~ linebreak ~ compound_list ~ linebreak ~
+    If ~ conditional_expression ~
+    linebreak ~ Then ~ linebreak ~ complete_command ~ linebreak ~
     else_part? ~ linebreak ~ Fi
 }
 
 else_part = !{
-    Elif ~ compound_list ~ Then ~ linebreak ~ else_part |
-    Else ~ linebreak ~ compound_list
+    Elif ~ conditional_expression ~ Then ~ complete_command ~ linebreak ~ else_part? |
+    Else ~ linebreak ~ complete_command
+}
+
+conditional_expression = !{
+    ("[[" ~ (unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD) ~ "]]") |
+    ("[" ~ (unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD) ~ "]") | 
+    ("test" ~ (unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD))
+}
+
+unary_conditional_expression = !{
+    file_conditional_op ~ FILE_NAME_PENDING_WORD |
+    variable_conditional_op ~ VARIABLE | 
+    string_conditional_op ~ UNQUOTED_PENDING_WORD
+}
+
+file_conditional_op = !{
+    "-a" | "-b" | "-c" | "-d" | "-e" | "-f" | "-g" | "-h" | "-k" | 
+    "-p" | "-r" | "-s" | "-u" | "-w" | "-x" | "-G" | "-L" | 
+    "-N" | "-O" | "-S"
+}
+
+variable_conditional_op = !{
+    "-v" | "-R"
+}
+
+string_conditional_op = !{
+    "-n" | "-z"
+}
+
+binary_conditional_expression = !{
+    UNQUOTED_PENDING_WORD ~ (
+        binary_string_conditional_op |
+        binary_arithmetic_conditional_op
+    ) ~ UNQUOTED_PENDING_WORD
+}
+
+binary_string_conditional_op = !{
+    "==" | "=" | "!=" | "<" | ">"
+}
+
+binary_arithmetic_conditional_op = !{
+    "-eq" | "-ne" | "-lt" | "-le" | "-gt" | "-ge"
 }
 
 while_clause = !{ While ~ compound_list ~ do_group }

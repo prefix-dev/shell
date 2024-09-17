@@ -13,9 +13,14 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 use crate::parser::ArithmeticExpr;
+use crate::parser::BinaryOp;
+use crate::parser::Condition;
+use crate::parser::ConditionInner;
+use crate::parser::ElsePart;
 use crate::parser::IoFile;
 use crate::parser::RedirectOpInput;
 use crate::parser::RedirectOpOutput;
+use crate::parser::UnaryOp;
 use crate::shell::commands::ShellCommand;
 use crate::shell::commands::ShellCommandContext;
 use crate::shell::types::pipe;
@@ -28,6 +33,7 @@ use crate::shell::types::ShellState;
 
 use crate::parser::Command;
 use crate::parser::CommandInner;
+use crate::parser::IfClause;
 use crate::parser::PipeSequence;
 use crate::parser::PipeSequenceOperator;
 use crate::parser::Pipeline;
@@ -40,6 +46,8 @@ use crate::parser::SequentialList;
 use crate::parser::SimpleCommand;
 use crate::parser::Word;
 use crate::parser::WordPart;
+// use crate::parser::ElsePart;
+// use crate::parser::ElifClause;
 
 use super::command::execute_unresolved_command_name;
 use super::command::UnresolvedCommandName;
@@ -518,6 +526,9 @@ async fn execute_command(
     CommandInner::Subshell(list) => {
       execute_subshell(list, state, stdin, stdout, stderr).await
     }
+    CommandInner::If(if_clause) => {
+      execute_if_clause(if_clause, state, stdin, stdout, stderr).await
+    }
   }
 }
 
@@ -600,6 +611,134 @@ async fn execute_subshell(
     ExecuteResult::Continue(code, _env_changes, handles) => {
       // env changes are not propagated
       ExecuteResult::Continue(code, Vec::new(), handles)
+    }
+  }
+}
+
+async fn execute_if_clause(
+  if_clause: IfClause,
+  state: ShellState,
+  stdin: ShellPipeReader,
+  stdout: ShellPipeWriter,
+  mut stderr: ShellPipeWriter,
+) -> ExecuteResult {
+  let mut current_condition = if_clause.condition;
+  let mut current_body = if_clause.then_body;
+  let mut current_else = if_clause.else_part;
+
+  loop {
+    let condition_result = evaluate_condition(
+      current_condition,
+      &state,
+      stdin.clone(),
+      stderr.clone(),
+    )
+    .await;
+    match condition_result {
+      Ok(true) => {
+        return execute_sequential_list(
+          current_body,
+          state,
+          stdin,
+          stdout,
+          stderr,
+          AsyncCommandBehavior::Yield,
+        )
+        .await;
+      }
+      Ok(false) => match current_else {
+        Some(ElsePart::Elif(elif_clause)) => {
+          current_condition = elif_clause.condition;
+          current_body = elif_clause.then_body;
+          current_else = elif_clause.else_part;
+        }
+        Some(ElsePart::Else(else_body)) => {
+          return execute_sequential_list(
+            else_body,
+            state,
+            stdin,
+            stdout,
+            stderr,
+            AsyncCommandBehavior::Yield,
+          )
+          .await;
+        }
+        None => {
+          return ExecuteResult::Continue(0, Vec::new(), Vec::new());
+        }
+      },
+      Err(err) => {
+        return err.into_exit_code(&mut stderr);
+      }
+    }
+  }
+}
+
+async fn evaluate_condition(
+  condition: Condition,
+  state: &ShellState,
+  stdin: ShellPipeReader,
+  stderr: ShellPipeWriter,
+) -> Result<bool, EvaluateWordTextError> {
+  match condition.condition_inner {
+    ConditionInner::Binary { left, op, right } => {
+      let left =
+        evaluate_word(left, state, stdin.clone(), stderr.clone()).await?;
+      let right =
+        evaluate_word(right, state, stdin.clone(), stderr.clone()).await?;
+
+      // transform the string comparison to a numeric comparison if possible
+      if let Ok(left) = left.parse::<i64>() {
+        if let Ok(right) = right.parse::<i64>() {
+          return Ok(match op {
+            BinaryOp::Equal => left == right,
+            BinaryOp::NotEqual => left != right,
+            BinaryOp::LessThan => left < right,
+            BinaryOp::LessThanOrEqual => left <= right,
+            BinaryOp::GreaterThan => left > right,
+            BinaryOp::GreaterThanOrEqual => left >= right,
+          });
+        }
+      }
+
+      match op {
+        BinaryOp::Equal => Ok(left == right),
+        BinaryOp::NotEqual => Ok(left != right),
+        BinaryOp::LessThan => Ok(left < right),
+        BinaryOp::LessThanOrEqual => Ok(left <= right),
+        BinaryOp::GreaterThan => Ok(left > right),
+        BinaryOp::GreaterThanOrEqual => Ok(left >= right),
+      }
+    }
+    ConditionInner::Unary { op, right } => {
+      let _right =
+        evaluate_word(right, state, stdin.clone(), stderr.clone()).await?;
+      match op {
+        Some(UnaryOp::FileExists) => todo!(),
+        Some(UnaryOp::BlockSpecial) => todo!(),
+        Some(UnaryOp::CharSpecial) => todo!(),
+        Some(UnaryOp::Directory) => todo!(),
+        Some(UnaryOp::RegularFile) => todo!(),
+        Some(UnaryOp::SetGroupId) => todo!(),
+        Some(UnaryOp::SymbolicLink) => todo!(),
+        Some(UnaryOp::StickyBit) => todo!(),
+        Some(UnaryOp::NamedPipe) => todo!(),
+        Some(UnaryOp::Readable) => todo!(),
+        Some(UnaryOp::SizeNonZero) => todo!(),
+        Some(UnaryOp::TerminalFd) => todo!(),
+        Some(UnaryOp::SetUserId) => todo!(),
+        Some(UnaryOp::Writable) => todo!(),
+        Some(UnaryOp::Executable) => todo!(),
+        Some(UnaryOp::OwnedByEffectiveGroupId) => todo!(),
+        Some(UnaryOp::ModifiedSinceLastRead) => todo!(),
+        Some(UnaryOp::OwnedByEffectiveUserId) => todo!(),
+        Some(UnaryOp::Socket) => todo!(),
+        Some(UnaryOp::NonEmptyString) => todo!(),
+        Some(UnaryOp::EmptyString) => todo!(),
+        Some(UnaryOp::VariableSet) => todo!(),
+        Some(UnaryOp::VariableNameReference) => todo!(),
+        None => todo!(),
+      }
     }
   }
 }
