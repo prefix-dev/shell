@@ -797,6 +797,20 @@ async fn which() {
         .assert_stdout("<builtin function>\n")
         .run()
         .await;
+
+    TestBuilder::new()
+        .command("which bla foo")
+        .assert_exit_code(1)
+        .assert_stderr("Expected one argument\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("alias ll=\"ls -al\" && which ll")
+        .assert_exit_code(0)
+        .assert_stdout("alias: \"ls -al\"\n")
+        .run()
+        .await;
 }
 
 #[cfg(test)]
