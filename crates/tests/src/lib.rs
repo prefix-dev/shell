@@ -784,6 +784,18 @@ async fn uname() {
     TestBuilder::new()
         .command("uname -a")
         .assert_exit_code(0)
+        .check_stdout(false)
+        .run()
+        .await;
+}
+
+
+#[tokio::test]
+async fn which() {
+    TestBuilder::new()
+        .command("which ls")
+        .assert_exit_code(0)
+        .assert_stdout("<builtin function>\n")
         .run()
         .await;
 }
