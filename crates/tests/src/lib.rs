@@ -789,7 +789,6 @@ async fn uname() {
         .await;
 }
 
-
 #[tokio::test]
 async fn which() {
     TestBuilder::new()
