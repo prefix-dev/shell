@@ -1300,7 +1300,7 @@ fn parse_arithmetic_sequence(pair: Pair<Rule>) -> Result<Vec<ArithmeticPart>> {
 fn parse_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
   ARITHMETIC_PARSER
     .map_primary(|primary| match primary.as_rule() {
-      Rule::parantheses_expr => {
+      Rule::parentheses_expr => {
         let inner = primary.into_inner().next().unwrap();
         let parts = parse_arithmetic_sequence(inner)?;
         Ok(ArithmeticPart::ParenthesesExpr(Box::new(Arithmetic {
