@@ -7,6 +7,8 @@ use deno_task_shell::{
 pub async fn execute_inner(text: &str, state: ShellState) -> anyhow::Result<ExecuteResult> {
     let list = deno_task_shell::parser::parse(text);
 
+    println!("list: {:?}", list);
+
     let mut stderr = ShellPipeWriter::stderr();
     let stdout = ShellPipeWriter::stdout();
     let stdin = ShellPipeReader::stdin();

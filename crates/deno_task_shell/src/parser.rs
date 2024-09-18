@@ -1356,12 +1356,10 @@ fn parse_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
           return Err(miette!("Unexpected infix operator: {:?}", op.as_rule()))
         }
       };
-      let lhs = lhs.unwrap();
-      let rhs = rhs.unwrap();
       Ok(ArithmeticPart::BinaryArithmeticExpr {
-        left: Box::new(lhs),
+        left: Box::new(lhs?),
         operator,
-        right: Box::new(rhs),
+        right: Box::new(rhs?),
       })
     })
     .parse(pair.into_inner())

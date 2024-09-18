@@ -73,7 +73,7 @@ QUOTED_ESCAPE_CHAR = ${ "\\" ~ "$" | "$" ~ !"(" ~ !"{" ~ !VARIABLE | "\\" ~ ("`"
 UNQUOTED_CHAR = ${ ("\\" ~ " ") | !("]]" | "[[" | "(" | ")" | "<" | ">" | "|" | "&" | ";" | "\"" | "'" | "$") ~ ANY }
 QUOTED_CHAR = ${ !"\"" ~ ANY }
 
-VARIABLE = ${ (ASCII_ALPHANUMERIC | "_")+ }
+VARIABLE = ${ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 SUB_COMMAND = { "$(" ~ complete_command ~ ")"}
 
 DOUBLE_QUOTED = @{ "\"" ~ QUOTED_PENDING_WORD ~ "\"" }
@@ -183,7 +183,7 @@ binary_arithmetic_expr = !{
     )*
 }
 
-binary_arithmetic_op = !{
+binary_arithmetic_op = _{
     add | subtract | multiply | divide | modulo | power | left_shift | right_shift |
     bitwise_and | bitwise_xor | bitwise_or | logical_and | logical_or
 }
@@ -207,7 +207,7 @@ unary_arithmetic_expr = !{
     (parentheses_expr | VARIABLE | NUMBER) ~ post_arithmetic_op
 }
 
-unary_arithmetic_op = !{
+unary_arithmetic_op = _{
     unary_plus | unary_minus | logical_not | bitwise_not
 }
 
