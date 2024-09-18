@@ -12,7 +12,7 @@ UNQUOTED_PENDING_WORD = ${
         EXIT_STATUS | 
         UNQUOTED_ESCAPE_CHAR | 
         SUB_COMMAND | 
-        ("$" ~ "{" ~ VARIABLE ~ "}" | "$" ~ VARIABLE) | 
+        VARIABLE_EXPANSION | 
         UNQUOTED_CHAR | 
         QUOTED_WORD
     ))*)
@@ -21,11 +21,32 @@ UNQUOTED_PENDING_WORD = ${
         EXIT_STATUS | 
         UNQUOTED_ESCAPE_CHAR | 
         SUB_COMMAND | 
-        ("$" ~ "{" ~ VARIABLE ~ "}" | "$" ~ VARIABLE) | 
+        VARIABLE_EXPANSION | 
         UNQUOTED_CHAR | 
         QUOTED_WORD
     ))+
 }
+
+VARIABLE_EXPANSION = ${
+    "$" ~ (
+        "{" ~ VARIABLE ~ VARIABLE_MODIFIER? ~ "}" |
+        VARIABLE
+    )
+}
+
+VARIABLE_MODIFIER = ${
+    VAR_DEFAULT_VALUE |
+    VAR_ASSIGN_DEFAULT |
+    VAR_ALTERNATE_VALUE |
+    VAR_SUBSTRING
+}
+
+VAR_DEFAULT_VALUE = { ":-" ~ UNQUOTED_PENDING_WORD? }
+VAR_ASSIGN_DEFAULT = { ":=" ~ UNQUOTED_PENDING_WORD }
+VAR_ALTERNATE_VALUE = { ":+" ~ UNQUOTED_PENDING_WORD }
+VAR_SUBSTRING = { ":" ~ NUMBER ~ (":" ~ NUMBER)? }
+
+NUMBER = @{ "-"? ~ ASCII_DIGIT+ }
 
 TILDE_PREFIX = ${
     "~" ~ (!(OPERATOR | WHITESPACE | NEWLINE | "/") ~ (
@@ -59,7 +80,7 @@ QUOTED_PENDING_WORD = ${ (
     EXIT_STATUS | 
     QUOTED_ESCAPE_CHAR | 
     SUB_COMMAND | 
-    ("$" ~ "{" ~ VARIABLE ~ "}" | "$" ~ VARIABLE) |
+    VARIABLE_EXPANSION |
     QUOTED_CHAR
 )* }
 
@@ -69,7 +90,8 @@ QUOTED_ESCAPE_CHAR = ${ "\\" ~ "$" | "$" ~ !"(" ~ !"{" ~ !VARIABLE | "\\" ~ ("`"
 UNQUOTED_CHAR = ${ ("\\" ~ " ") | !("]]" | "[[" | "(" | ")" | "<" | ">" | "|" | "&" | ";" | "\"" | "'" | "$") ~ ANY }
 QUOTED_CHAR = ${ !"\"" ~ ANY }
 
-VARIABLE = ${ (ASCII_ALPHANUMERIC | "_")+ }
+VARIABLE = ${  (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+
 SUB_COMMAND = { "$(" ~ complete_command ~ ")"}
 
 DOUBLE_QUOTED = @{ "\"" ~ QUOTED_PENDING_WORD ~ "\"" }

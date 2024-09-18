@@ -20,6 +20,7 @@ use crate::parser::IoFile;
 use crate::parser::RedirectOpInput;
 use crate::parser::RedirectOpOutput;
 use crate::parser::UnaryOp;
+use crate::parser::VariableModifier;
 use crate::shell::commands::ShellCommand;
 use crate::shell::commands::ShellCommandContext;
 use crate::shell::types::pipe;
@@ -897,6 +898,30 @@ impl From<anyhow::Error> for EvaluateWordTextError {
   }
 }
 
+impl VariableModifier {
+  pub fn apply(&self, variable: Option<&String>) -> Option<String> {
+    match self {
+      VariableModifier::DefaultValue(default_value) => match variable {
+        Some(v) => Some(v.to_string()),
+        None => Some(default_value.clone()),
+      },
+      VariableModifier::Substring { begin, length } => {
+        let variable = variable.unwrap();
+        let chars: Vec<char> = variable.chars().collect();
+        let start = usize::try_from(*begin).unwrap();
+        let end = match length {
+          Some(len) => {
+            (start + usize::try_from(*len).unwrap()).min(chars.len())
+          }
+          None => chars.len(),
+        };
+        Some(chars[start..end].iter().collect())
+      }
+      _ => unreachable!("Should not reach"),
+    }
+  }
+}
+
 fn evaluate_word_parts(
   parts: Vec<WordPart>,
   state: &ShellState,
@@ -1028,8 +1053,13 @@ fn evaluate_word_parts(
             current_text.push(TextPart::Text(text));
             None
           }
-          WordPart::Variable(name) => {
-            state.get_var(&name).map(|v| v.to_string())
+          WordPart::Variable(name, modifier) => {
+            let value = state.get_var(&name).map(|v| v.to_string());
+            if let Some(modifier) = modifier {
+              modifier.apply(value.as_ref())
+            } else {
+              value
+            }
           }
           WordPart::Command(list) => Some(
             evaluate_command_substitution(

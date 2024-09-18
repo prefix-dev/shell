@@ -111,22 +111,22 @@ pub struct BooleanList {
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
 #[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Error)]
-pub enum PipeSequenceOperator {
-  #[error("Stdout pipe operator")]
-  Stdout,
-  #[error("Stdout and stderr pipe operator")]
-  StdoutStderr,
-}
-
-#[cfg_attr(feature = "serialization", derive(serde::Serialize))]
-#[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 #[error("Invalid pipe sequence")]
 pub struct PipeSequence {
   pub current: Command,
   pub op: PipeSequenceOperator,
   pub next: PipelineInner,
+}
+
+#[cfg_attr(feature = "serialization", derive(serde::Serialize))]
+#[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Error)]
+pub enum PipeSequenceOperator {
+  #[error("Stdout pipe operator")]
+  Stdout,
+  #[error("Stdout and stderr pipe operator")]
+  StdoutStderr,
 }
 
 impl From<PipeSequence> for Sequence {
@@ -367,11 +367,29 @@ impl Word {
   serde(rename_all = "camelCase", tag = "kind", content = "value")
 )]
 #[derive(Debug, PartialEq, Eq, Clone, Error)]
+#[error("Invalid variable modifier")]
+pub enum VariableModifier {
+  #[error("Invalid substring")]
+  Substring {
+    begin: i64,
+    length: Option<i64>,
+  },
+  DefaultValue(String),
+  AssignDefault(String),
+  AlternateValue(String),
+}
+
+#[cfg_attr(feature = "serialization", derive(serde::Serialize))]
+#[cfg_attr(
+  feature = "serialization",
+  serde(rename_all = "camelCase", tag = "kind", content = "value")
+)]
+#[derive(Debug, PartialEq, Eq, Clone, Error)]
 pub enum WordPart {
   #[error("Invalid text")]
   Text(String),
   #[error("Invalid variable")]
-  Variable(String),
+  Variable(String, Option<VariableModifier>),
   #[error("Invalid command")]
   Command(SequentialList),
   #[error("Invalid quoted string")]
@@ -1075,7 +1093,11 @@ fn parse_word(pair: Pair<Rule>) -> Result<Word> {
             parts.push(WordPart::Command(command));
           }
           Rule::VARIABLE => {
-            parts.push(WordPart::Variable(part.as_str().to_string()))
+            parts.push(WordPart::Variable(part.as_str().to_string(), None))
+          }
+          Rule::VARIABLE_EXPANSION => {
+            let variable_expansion = parse_variable_expansion(part)?;
+            parts.push(variable_expansion);
           }
           Rule::QUOTED_WORD => {
             let quoted = parse_quoted_word(part)?;
@@ -1113,7 +1135,7 @@ fn parse_word(pair: Pair<Rule>) -> Result<Word> {
             }
           }
           Rule::VARIABLE => {
-            parts.push(WordPart::Variable(part.as_str().to_string()))
+            parts.push(WordPart::Variable(part.as_str().to_string(), None))
           }
           Rule::UNQUOTED_CHAR => {
             if let Some(WordPart::Text(ref mut text)) = parts.last_mut() {
@@ -1151,6 +1173,50 @@ fn parse_word(pair: Pair<Rule>) -> Result<Word> {
   }
 }
 
+fn parse_variable_expansion(part: Pair<Rule>) -> Result<WordPart> {
+  println!("{:?}", part);
+  let mut inner = part.into_inner();
+  let variable = inner
+    .next()
+    .ok_or_else(|| miette!("Expected variable name"))?;
+  let variable_name = variable.as_str().to_string();
+
+  let modifier = inner.next().unwrap().into_inner().next();
+
+  let parsed_modifier = if let Some(modifier) = modifier {
+    match modifier.as_rule() {
+      Rule::VAR_SUBSTRING => {
+        let mut numbers = modifier.into_inner();
+        let begin = numbers
+          .next()
+          .and_then(|n| n.as_str().parse::<i64>().ok())
+          .unwrap_or(0);
+        let length =
+          numbers.next().and_then(|n| n.as_str().parse::<i64>().ok());
+        Some(VariableModifier::Substring { begin, length })
+      }
+      Rule::VAR_DEFAULT_VALUE => {
+        let value =
+          modifier.into_inner().next().map(|v| v.as_str().to_string());
+        Some(VariableModifier::DefaultValue(value.unwrap_or_default()))
+      }
+      Rule::VAR_ASSIGN_DEFAULT => {
+        let value = modifier.into_inner().next().unwrap().as_str().to_string();
+        Some(VariableModifier::AssignDefault(value))
+      }
+      Rule::VAR_ALTERNATE_VALUE => {
+        let value = modifier.into_inner().next().unwrap().as_str().to_string();
+        Some(VariableModifier::AlternateValue(value))
+      }
+      _ => unreachable!("Should not reach"),
+    }
+  } else {
+    None
+  };
+  println!("PARSED MOD: {:?}", parsed_modifier);
+  Ok(WordPart::Variable(variable_name, parsed_modifier))
+}
+
 fn parse_tilde_prefix(pair: Pair<Rule>) -> Result<WordPart> {
   let tilde_prefix_str = pair.as_str();
   let user = if tilde_prefix_str.len() > 1 {
@@ -1185,7 +1251,7 @@ fn parse_quoted_word(pair: Pair<Rule>) -> Result<WordPart> {
             parts.push(WordPart::Command(command));
           }
           Rule::VARIABLE => {
-            parts.push(WordPart::Variable(part.as_str()[1..].to_string()))
+            parts.push(WordPart::Variable(part.as_str()[1..].to_string(), None))
           }
           Rule::QUOTED_CHAR => {
             if let Some(WordPart::Text(ref mut s)) = parts.last_mut() {
