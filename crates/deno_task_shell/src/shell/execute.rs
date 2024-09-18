@@ -1066,7 +1066,8 @@ fn evaluate_word_parts(
               todo!("tilde expansion with user name is not supported");
             }
             continue;
-          }
+          },
+          WordPart::Arithmetic(_) => todo!(),
           WordPart::ExitStatus => {
             let exit_code = state.last_command_exit_code();
             current_text.push(TextPart::Text(exit_code.to_string()));

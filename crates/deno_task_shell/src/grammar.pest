@@ -3,6 +3,8 @@
 // Whitespace and comments
 WHITESPACE = _{ " " | "\t" | ("\\" ~ WHITESPACE* ~ NEWLINE) }
 COMMENT = _{ "#" ~ (!NEWLINE ~ ANY)* }
+NUMBER = @{ INT ~ ("." ~ ASCII_DIGIT*)? ~ (^"e" ~ INT)? }
+INT = { ("+" | "-")? ~ ASCII_DIGIT+ }
 
 // Basic tokens
 QUOTED_WORD = { DOUBLE_QUOTED | SINGLE_QUOTED }
@@ -11,6 +13,7 @@ UNQUOTED_PENDING_WORD = ${
     (TILDE_PREFIX ~ (!(OPERATOR | WHITESPACE | NEWLINE) ~ (
         EXIT_STATUS | 
         UNQUOTED_ESCAPE_CHAR | 
+        "$" ~ ARITHMETIC_EXPRESSION |
         SUB_COMMAND | 
         ("$" ~ "{" ~ VARIABLE ~ "}" | "$" ~ VARIABLE) | 
         UNQUOTED_CHAR | 
@@ -20,6 +23,7 @@ UNQUOTED_PENDING_WORD = ${
     (!(OPERATOR | WHITESPACE | NEWLINE) ~ (
         EXIT_STATUS | 
         UNQUOTED_ESCAPE_CHAR | 
+        "$" ~ ARITHMETIC_EXPRESSION |
         SUB_COMMAND | 
         ("$" ~ "{" ~ VARIABLE ~ "}" | "$" ~ VARIABLE) | 
         UNQUOTED_CHAR | 
@@ -149,6 +153,7 @@ command = !{
 compound_command = {
     brace_group |
     subshell |
+    ARITHMETIC_EXPRESSION |
     for_clause |
     case_clause |
     if_clause |
@@ -156,7 +161,86 @@ compound_command = {
     until_clause
 }
 
-subshell = !{ "(" ~ compound_list ~ ")" }
+ARITHMETIC_EXPRESSION = !{ "((" ~ arithmetic_sequence ~ "))" }
+arithmetic_sequence = !{ arithmetic_expr ~ ("," ~ arithmetic_expr)* }
+arithmetic_expr = _{ parantheses_expr | variable_assignment | triple_conditional_expr | binary_arithmetic_expr | binary_conditional_expression | unary_arithmetic_expr | VARIABLE | NUMBER }
+parantheses_expr = !{ "(" ~ arithmetic_sequence ~ ")" }
+
+variable_assignment = !{
+    VARIABLE ~ assignment_operator ~ arithmetic_expr
+}
+
+triple_conditional_expr = !{
+    (parantheses_expr | variable_assignment | binary_arithmetic_expr | binary_conditional_expression | unary_arithmetic_expr | VARIABLE | NUMBER) ~
+    "?" ~ (parantheses_expr | variable_assignment | binary_arithmetic_expr | binary_conditional_expression | unary_arithmetic_expr | VARIABLE | NUMBER) ~
+    ":" ~ (parantheses_expr | variable_assignment | binary_arithmetic_expr | binary_conditional_expression | unary_arithmetic_expr | VARIABLE | NUMBER)
+}
+
+binary_arithmetic_expr = !{
+    (parantheses_expr | binary_conditional_expression | unary_arithmetic_expr | variable_assignment | VARIABLE | NUMBER) ~
+    (binary_arithmetic_op ~
+        (parantheses_expr | variable_assignment | binary_conditional_expression | unary_arithmetic_expr | VARIABLE | NUMBER)
+    )*
+}
+
+binary_arithmetic_op = !{
+    add | subtract | multiply | divide | modulo | power | left_shift | right_shift |
+    bitwise_and | bitwise_xor | bitwise_or | logical_and | logical_or
+}
+
+add = { "+" }
+subtract = { "-" }
+multiply = { "*" }
+divide = { "/" }
+modulo = { "%" }
+power = { "**" }
+left_shift = { "<<" }
+right_shift = { ">>" }
+bitwise_and = { "&" }
+bitwise_xor = { "^" }
+bitwise_or = { "|" }
+logical_and = { "&&" }
+logical_or = { "||" }
+
+unary_arithmetic_expr = !{
+    (unary_arithmetic_op | post_arithmetic_op) ~ (parantheses_expr | VARIABLE | NUMBER) |
+    (parantheses_expr | VARIABLE | NUMBER) ~ post_arithmetic_op
+}
+
+unary_arithmetic_op = !{
+    unary_plus | unary_minus | logical_not | bitwise_not
+}
+
+unary_plus = { "+" }
+unary_minus = { "-" }
+logical_not = { "!" }
+bitwise_not = { "~" }
+
+post_arithmetic_op = !{
+    increment | decrement
+}
+
+increment = { "++" }
+decrement = { "--" }
+
+assignment_operator = !{
+    assign | multiply_assign | divide_assign | modulo_assign | add_assign | subtract_assign |
+    left_shift_assign | right_shift_assign | bitwise_and_assign | bitwise_xor_assign | bitwise_or_assign
+}
+
+assign = { "=" }
+multiply_assign = { "*=" }
+divide_assign = { "/=" }
+modulo_assign = { "%=" }
+add_assign = { "+=" }
+subtract_assign = { "-=" }
+left_shift_assign = { "<<=" }
+right_shift_assign = { ">>=" }
+bitwise_and_assign = { "&=" }
+bitwise_xor_assign = { "^=" }
+bitwise_or_assign = { "|=" }
+
+subshell = !{ "(" ~ "(" ~ compound_list ~ ")" ~ ")" }
 compound_list = !{ (newline_list? ~ term ~ separator?)+ }
 term = !{ and_or ~ (separator ~ and_or)* }
 
@@ -232,16 +316,16 @@ string_conditional_op = !{
 
 binary_conditional_expression = !{
     UNQUOTED_PENDING_WORD ~ (
-        binary_string_conditional_op |
-        binary_arithmetic_conditional_op
+        binary_bash_conditional_op |
+        binary_posix_conditional_op
     ) ~ UNQUOTED_PENDING_WORD
 }
 
-binary_string_conditional_op = !{
+binary_bash_conditional_op = !{
     "==" | "=" | "!=" | "<" | ">"
 }
 
-binary_arithmetic_conditional_op = !{
+binary_posix_conditional_op = !{
     "-eq" | "-ne" | "-lt" | "-le" | "-gt" | "-ge"
 }
 
