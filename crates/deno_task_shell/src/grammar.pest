@@ -152,8 +152,8 @@ command = !{
 
 compound_command = {
     brace_group |
-    subshell |
     ARITHMETIC_EXPRESSION |
+    subshell |
     for_clause |
     case_clause |
     if_clause |
@@ -240,7 +240,7 @@ bitwise_and_assign = { "&=" }
 bitwise_xor_assign = { "^=" }
 bitwise_or_assign = { "|=" }
 
-subshell = !{ "(" ~ "(" ~ compound_list ~ ")" ~ ")" }
+subshell = !{ "(" ~  compound_list ~ ")" }
 compound_list = !{ (newline_list? ~ term ~ separator?)+ }
 term = !{ and_or ~ (separator ~ and_or)* }
 
