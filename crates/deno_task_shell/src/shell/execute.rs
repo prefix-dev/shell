@@ -528,6 +528,9 @@ async fn execute_command(
     CommandInner::If(if_clause) => {
       execute_if_clause(if_clause, state, stdin, stdout, stderr).await
     }
+    CommandInner::ArithmeticExpression(_) => {
+      todo!()
+    }
   }
 }
 
@@ -1066,7 +1069,7 @@ fn evaluate_word_parts(
               todo!("tilde expansion with user name is not supported");
             }
             continue;
-          },
+          }
           WordPart::Arithmetic(_) => todo!(),
           WordPart::ExitStatus => {
             let exit_code = state.last_command_exit_code();

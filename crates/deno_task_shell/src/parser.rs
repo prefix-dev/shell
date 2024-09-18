@@ -1,11 +1,11 @@
 // Copyright 2018-2024 the Deno authors. MIT license.
 
+use lazy_static::lazy_static;
 use miette::{miette, Context, Result};
 use pest::iterators::Pair;
+use pest::pratt_parser::{Assoc, Op, PrattParser};
 use pest::Parser;
 use pest_derive::Parser;
-use lazy_static::lazy_static;
-use pest::pratt_parser::{Assoc, Op, PrattParser};
 use thiserror::Error;
 
 // Shell grammar rules this is loosely based on:
@@ -403,7 +403,10 @@ pub enum ArithmeticPart {
   #[error("Invalid parentheses expression")]
   ParenthesesExpr(Box<Arithmetic>),
   #[error("Invalid variable assignment")]
-  VariableAssignment { name: String, value: Box<ArithmeticPart> },
+  VariableAssignment {
+    name: String,
+    value: Box<ArithmeticPart>,
+  },
   #[error("Invalid triple conditional expression")]
   TripleConditionalExpr {
     condition: Box<ArithmeticPart>,
@@ -461,8 +464,8 @@ pub enum BinaryArithmeticOp {
 #[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UnaryArithmeticOp {
-  Plus,     // +
-  Minus,    // -
+  Plus,       // +
+  Minus,      // -
   LogicalNot, // !
   BitwiseNot, // ~
 }
@@ -543,21 +546,25 @@ pub enum RedirectOpOutput {
 }
 
 lazy_static! {
-    static ref ARITHMETIC_PARSER: PrattParser<Rule> = {
-        use Rule::*;
-        use Assoc::*;
+  static ref ARITHMETIC_PARSER: PrattParser<Rule> = {
+    use Assoc::*;
+    use Rule::*;
 
-        PrattParser::new()
-            .op(Op::infix(logical_or, Left))
-            .op(Op::infix(logical_and, Left))
-            .op(Op::infix(bitwise_or, Left))
-            .op(Op::infix(bitwise_xor, Left))
-            .op(Op::infix(bitwise_and, Left))
-            .op(Op::infix(left_shift, Left) | Op::infix(right_shift, Left))
-            .op(Op::infix(add, Left) | Op::infix(subtract, Left))
-            .op(Op::infix(multiply, Left) | Op::infix(divide, Left) | Op::infix(modulo, Left))
-            .op(Op::infix(power, Right))
-    };
+    PrattParser::new()
+      .op(Op::infix(logical_or, Left))
+      .op(Op::infix(logical_and, Left))
+      .op(Op::infix(bitwise_or, Left))
+      .op(Op::infix(bitwise_xor, Left))
+      .op(Op::infix(bitwise_and, Left))
+      .op(Op::infix(left_shift, Left) | Op::infix(right_shift, Left))
+      .op(Op::infix(add, Left) | Op::infix(subtract, Left))
+      .op(
+        Op::infix(multiply, Left)
+          | Op::infix(divide, Left)
+          | Op::infix(modulo, Left),
+      )
+      .op(Op::infix(power, Right))
+  };
 }
 
 #[derive(Parser)]
@@ -1278,127 +1285,143 @@ fn parse_word(pair: Pair<Rule>) -> Result<Word> {
 }
 
 fn parse_arithmetic_expression(pair: Pair<Rule>) -> Result<Arithmetic> {
-    assert!(pair.as_rule() == Rule::ARITHMETIC_EXPRESSION);
-    let inner = pair.into_inner().next().unwrap();
-    let parts = parse_arithmetic_sequence(inner)?;
-    Ok(Arithmetic { parts })
+  assert!(pair.as_rule() == Rule::ARITHMETIC_EXPRESSION);
+  let inner = pair.into_inner().next().unwrap();
+  let parts = parse_arithmetic_sequence(inner)?;
+  Ok(Arithmetic { parts })
 }
 
 fn parse_arithmetic_sequence(pair: Pair<Rule>) -> Result<Vec<ArithmeticPart>> {
-    assert!(pair.as_rule() == Rule::arithmetic_sequence);
-    let expr = pair.into_inner().next().unwrap();
-    Ok(vec![parse_arithmetic_expr(expr)?])
+  assert!(pair.as_rule() == Rule::arithmetic_sequence);
+  let expr = pair.into_inner().next().unwrap();
+  Ok(vec![parse_arithmetic_expr(expr)?])
 }
 
 fn parse_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
-    ARITHMETIC_PARSER
-        .map_primary(|primary| match primary.as_rule() {
-            Rule::parantheses_expr => {
-                let inner = primary.into_inner().next().unwrap();
-                let parts = parse_arithmetic_sequence(inner)?;
-                Ok(ArithmeticPart::ParenthesesExpr(Box::new(Arithmetic { parts })))
-            }
-            Rule::variable_assignment => {
-                let mut inner = primary.into_inner();
-                let name = inner.next().unwrap().as_str().to_string();
-                let value = parse_arithmetic_expr(inner.next().unwrap())?;
-                Ok(ArithmeticPart::VariableAssignment {
-                    name,
-                    value: Box::new(value),
-                })
-            }
-            Rule::triple_conditional_expr => {
-                let mut inner = primary.into_inner();
-                let condition = parse_arithmetic_expr(inner.next().unwrap())?;
-                let true_expr = parse_arithmetic_expr(inner.next().unwrap())?;
-                let false_expr = parse_arithmetic_expr(inner.next().unwrap())?;
-                Ok(ArithmeticPart::TripleConditionalExpr {
-                    condition: Box::new(condition),
-                    true_expr: Box::new(true_expr),
-                    false_expr: Box::new(false_expr),
-                })
-            }
-            Rule::unary_arithmetic_expr => parse_unary_arithmetic_expr(primary),
-            Rule::VARIABLE => Ok(ArithmeticPart::Variable(primary.as_str().to_string())),
-            Rule::NUMBER => Ok(ArithmeticPart::Number(primary.as_str().to_string())),
-            _ => Err(miette!("Unexpected rule in arithmetic expression: {:?}", primary.as_rule())),
+  ARITHMETIC_PARSER
+    .map_primary(|primary| match primary.as_rule() {
+      Rule::parantheses_expr => {
+        let inner = primary.into_inner().next().unwrap();
+        let parts = parse_arithmetic_sequence(inner)?;
+        Ok(ArithmeticPart::ParenthesesExpr(Box::new(Arithmetic {
+          parts,
+        })))
+      }
+      Rule::variable_assignment => {
+        let mut inner = primary.into_inner();
+        let name = inner.next().unwrap().as_str().to_string();
+        let value = parse_arithmetic_expr(inner.next().unwrap())?;
+        Ok(ArithmeticPart::VariableAssignment {
+          name,
+          value: Box::new(value),
         })
-        .map_infix(|lhs, op, rhs| {
-            let operator = match op.as_rule() {
-                Rule::add => BinaryArithmeticOp::Add,
-                Rule::subtract => BinaryArithmeticOp::Subtract,
-                Rule::multiply => BinaryArithmeticOp::Multiply,
-                Rule::divide => BinaryArithmeticOp::Divide,
-                Rule::modulo => BinaryArithmeticOp::Modulo,
-                Rule::power => BinaryArithmeticOp::Power,
-                Rule::left_shift => BinaryArithmeticOp::LeftShift,
-                Rule::right_shift => BinaryArithmeticOp::RightShift,
-                Rule::bitwise_and => BinaryArithmeticOp::BitwiseAnd,
-                Rule::bitwise_xor => BinaryArithmeticOp::BitwiseXor,
-                Rule::bitwise_or => BinaryArithmeticOp::BitwiseOr,
-                Rule::logical_and => BinaryArithmeticOp::LogicalAnd,
-                Rule::logical_or => BinaryArithmeticOp::LogicalOr,
-                _ => return Err(miette!("Unexpected infix operator: {:?}", op.as_rule())),
-            };
-            Ok(ArithmeticPart::BinaryArithmeticExpr {
-                left: Box::new(lhs),
-                operator,
-                right: Box::new(rhs),
-            })
+      }
+      Rule::triple_conditional_expr => {
+        let mut inner = primary.into_inner();
+        let condition = parse_arithmetic_expr(inner.next().unwrap())?;
+        let true_expr = parse_arithmetic_expr(inner.next().unwrap())?;
+        let false_expr = parse_arithmetic_expr(inner.next().unwrap())?;
+        Ok(ArithmeticPart::TripleConditionalExpr {
+          condition: Box::new(condition),
+          true_expr: Box::new(true_expr),
+          false_expr: Box::new(false_expr),
         })
-        .parse(pair.into_inner())
+      }
+      Rule::unary_arithmetic_expr => parse_unary_arithmetic_expr(primary),
+      Rule::VARIABLE => {
+        Ok(ArithmeticPart::Variable(primary.as_str().to_string()))
+      }
+      Rule::NUMBER => Ok(ArithmeticPart::Number(primary.as_str().to_string())),
+      _ => Err(miette!(
+        "Unexpected rule in arithmetic expression: {:?}",
+        primary.as_rule()
+      )),
+    })
+    .map_infix(|lhs, op, rhs| {
+      let operator = match op.as_rule() {
+        Rule::add => BinaryArithmeticOp::Add,
+        Rule::subtract => BinaryArithmeticOp::Subtract,
+        Rule::multiply => BinaryArithmeticOp::Multiply,
+        Rule::divide => BinaryArithmeticOp::Divide,
+        Rule::modulo => BinaryArithmeticOp::Modulo,
+        Rule::power => BinaryArithmeticOp::Power,
+        Rule::left_shift => BinaryArithmeticOp::LeftShift,
+        Rule::right_shift => BinaryArithmeticOp::RightShift,
+        Rule::bitwise_and => BinaryArithmeticOp::BitwiseAnd,
+        Rule::bitwise_xor => BinaryArithmeticOp::BitwiseXor,
+        Rule::bitwise_or => BinaryArithmeticOp::BitwiseOr,
+        Rule::logical_and => BinaryArithmeticOp::LogicalAnd,
+        Rule::logical_or => BinaryArithmeticOp::LogicalOr,
+        _ => {
+          return Err(miette!("Unexpected infix operator: {:?}", op.as_rule()))
+        }
+      };
+      let lhs = lhs.unwrap();
+      let rhs = rhs.unwrap();
+      Ok(ArithmeticPart::BinaryArithmeticExpr {
+        left: Box::new(lhs),
+        operator,
+        right: Box::new(rhs),
+      })
+    })
+    .parse(pair.into_inner())
 }
 
 fn parse_unary_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
-    let mut inner = pair.into_inner();
-    let first = inner.next().unwrap();
-    
-    match first.as_rule() {
-        Rule::unary_arithmetic_op => {
-            let op = parse_unary_arithmetic_op(first)?;
-            let operand = parse_arithmetic_expr(inner.next().unwrap())?;
-            Ok(ArithmeticPart::UnaryArithmeticExpr {
-                operator: op,
-                operand: Box::new(operand),
-            })
-        }
-        Rule::post_arithmetic_op => {
-            let operand = parse_arithmetic_expr(inner.next().unwrap())?;
-            let op = parse_post_arithmetic_op(first)?;
-            Ok(ArithmeticPart::PostArithmeticExpr {
-                operand: Box::new(operand),
-                operator: op,
-            })
-        }
-        _ => {
-            let operand = parse_arithmetic_expr(first)?;
-            let op = parse_post_arithmetic_op(inner.next().unwrap())?;
-            Ok(ArithmeticPart::PostArithmeticExpr {
-                operand: Box::new(operand),
-                operator: op,
-            })
-        }
+  let mut inner = pair.into_inner();
+  let first = inner.next().unwrap();
+
+  match first.as_rule() {
+    Rule::unary_arithmetic_op => {
+      let op = parse_unary_arithmetic_op(first)?;
+      let operand = parse_arithmetic_expr(inner.next().unwrap())?;
+      Ok(ArithmeticPart::UnaryArithmeticExpr {
+        operator: op,
+        operand: Box::new(operand),
+      })
     }
+    Rule::post_arithmetic_op => {
+      let operand = parse_arithmetic_expr(inner.next().unwrap())?;
+      let op = parse_post_arithmetic_op(first)?;
+      Ok(ArithmeticPart::PostArithmeticExpr {
+        operand: Box::new(operand),
+        operator: op,
+      })
+    }
+    _ => {
+      let operand = parse_arithmetic_expr(first)?;
+      let op = parse_post_arithmetic_op(inner.next().unwrap())?;
+      Ok(ArithmeticPart::PostArithmeticExpr {
+        operand: Box::new(operand),
+        operator: op,
+      })
+    }
+  }
 }
 
 fn parse_unary_arithmetic_op(pair: Pair<Rule>) -> Result<UnaryArithmeticOp> {
-    match pair.as_str() {
-        "+" => Ok(UnaryArithmeticOp::Plus),
-        "-" => Ok(UnaryArithmeticOp::Minus),
-        "!" => Ok(UnaryArithmeticOp::LogicalNot),
-        "~" => Ok(UnaryArithmeticOp::BitwiseNot),
-        _ => Err(miette!("Invalid unary arithmetic operator: {}", pair.as_str())),
-    }
+  match pair.as_str() {
+    "+" => Ok(UnaryArithmeticOp::Plus),
+    "-" => Ok(UnaryArithmeticOp::Minus),
+    "!" => Ok(UnaryArithmeticOp::LogicalNot),
+    "~" => Ok(UnaryArithmeticOp::BitwiseNot),
+    _ => Err(miette!(
+      "Invalid unary arithmetic operator: {}",
+      pair.as_str()
+    )),
+  }
 }
 
 fn parse_post_arithmetic_op(pair: Pair<Rule>) -> Result<PostArithmeticOp> {
-    match pair.as_str() {
-        "++" => Ok(PostArithmeticOp::Increment),
-        "--" => Ok(PostArithmeticOp::Decrement),
-        _ => Err(miette!("Invalid post arithmetic operator: {}", pair.as_str())),
-    }
+  match pair.as_str() {
+    "++" => Ok(PostArithmeticOp::Increment),
+    "--" => Ok(PostArithmeticOp::Decrement),
+    _ => Err(miette!(
+      "Invalid post arithmetic operator: {}",
+      pair.as_str()
+    )),
+  }
 }
-
 
 fn parse_tilde_prefix(pair: Pair<Rule>) -> Result<WordPart> {
   let tilde_prefix_str = pair.as_str();
