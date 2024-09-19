@@ -2,13 +2,17 @@
 
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::fmt;
+use std::fmt::Display;
 use std::fs;
 use std::io::Read;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::str::FromStr;
 
+use anyhow::Error;
 use anyhow::Result;
 use futures::future::LocalBoxFuture;
 use tokio::task::JoinHandle;
@@ -280,7 +284,7 @@ impl ShellState {
   }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, PartialOrd)]
 pub enum EnvChange {
   /// `export ENV_VAR=VALUE`
   SetEnvVar(String, String),
@@ -526,4 +530,586 @@ pub fn pipe() -> (ShellPipeReader, ShellPipeWriter) {
     ShellPipeReader::OsPipe(reader),
     ShellPipeWriter::OsPipe(writer),
   )
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, thiserror::Error)]
+pub struct ArithmeticResult {
+  pub value: ArithmeticValue,
+  pub changes: Vec<EnvChange>,
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, thiserror::Error)]
+pub enum ArithmeticValue {
+  Float(f64),
+  Integer(i64),
+}
+
+impl Display for ArithmeticResult {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "{}", self.value)
+  }
+}
+
+impl Display for ArithmeticValue {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    match self {
+      ArithmeticValue::Float(val) => write!(f, "{}", val),
+      ArithmeticValue::Integer(val) => write!(f, "{}", val),
+    }
+  }
+}
+
+impl ArithmeticResult {
+  pub fn new(value: ArithmeticValue) -> Self {
+    ArithmeticResult {
+      value,
+      changes: Vec::new(),
+    }
+  }
+
+  pub fn is_zero(&self) -> bool {
+    match &self.value {
+      ArithmeticValue::Integer(val) => *val == 0,
+      ArithmeticValue::Float(val) => *val == 0.0,
+    }
+  }
+
+  pub fn checked_add(
+    &self,
+    other: &ArithmeticResult,
+  ) -> Result<ArithmeticResult, Error> {
+    let result = match (&self.value, &other.value) {
+      (ArithmeticValue::Integer(lhs), ArithmeticValue::Integer(rhs)) => lhs
+        .checked_add(*rhs)
+        .map(ArithmeticValue::Integer)
+        .ok_or_else(|| {
+          anyhow::anyhow!("Integer overflow: {} + {}", lhs, rhs)
+        })?,
+      (ArithmeticValue::Float(lhs), ArithmeticValue::Float(rhs)) => {
+        let sum = lhs + rhs;
+        if sum.is_finite() {
+          ArithmeticValue::Float(sum)
+        } else {
+          return Err(anyhow::anyhow!("Float overflow: {} + {}", lhs, rhs));
+        }
+      }
+      (ArithmeticValue::Integer(lhs), ArithmeticValue::Float(rhs))
+      | (ArithmeticValue::Float(rhs), ArithmeticValue::Integer(lhs)) => {
+        let sum = *lhs as f64 + rhs;
+        if sum.is_finite() {
+          ArithmeticValue::Float(sum)
+        } else {
+          return Err(anyhow::anyhow!("Float overflow: {} + {}", lhs, rhs));
+        }
+      }
+    };
+
+    let mut changes = self.changes.clone();
+    changes.extend(other.changes.clone());
+
+    Ok(ArithmeticResult {
+      value: result,
+      changes,
+    })
+  }
+
+  pub fn checked_sub(
+    &self,
+    other: &ArithmeticResult,
+  ) -> Result<ArithmeticResult, Error> {
+    let result = match (&self.value, &other.value) {
+      (ArithmeticValue::Integer(lhs), ArithmeticValue::Integer(rhs)) => lhs
+        .checked_sub(*rhs)
+        .map(ArithmeticValue::Integer)
+        .ok_or_else(|| {
+          anyhow::anyhow!("Integer overflow: {} - {}", lhs, rhs)
+        })?,
+      (ArithmeticValue::Float(lhs), ArithmeticValue::Float(rhs)) => {
+        let diff = lhs - rhs;
+        if diff.is_finite() {
+          ArithmeticValue::Float(diff)
+        } else {
+          return Err(anyhow::anyhow!("Float overflow: {} - {}", lhs, rhs));
+        }
+      }
+      (ArithmeticValue::Integer(lhs), ArithmeticValue::Float(rhs)) => {
+        let diff = *lhs as f64 - rhs;
+        if diff.is_finite() {
+          ArithmeticValue::Float(diff)
+        } else {
+          return Err(anyhow::anyhow!("Float overflow: {} - {}", lhs, rhs));
+        }
+      }
+      (ArithmeticValue::Float(lhs), ArithmeticValue::Integer(rhs)) => {
+        let diff = lhs - *rhs as f64;
+        if diff.is_finite() {
+          ArithmeticValue::Float(diff)
+        } else {
+          return Err(anyhow::anyhow!("Float overflow: {} - {}", lhs, rhs));
+        }
+      }
+    };
+
+    let mut changes = self.changes.clone();
+    changes.extend(other.changes.clone());
+
+    Ok(ArithmeticResult {
+      value: result,
+      changes,
+    })
+  }
+
+  pub fn checked_mul(
+    &self,
+    other: &ArithmeticResult,
+  ) -> Result<ArithmeticResult, Error> {
+    let result = match (&self.value, &other.value) {
+      (ArithmeticValue::Integer(lhs), ArithmeticValue::Integer(rhs)) => lhs
+        .checked_mul(*rhs)
+        .map(ArithmeticValue::Integer)
+        .ok_or_else(|| {
+          anyhow::anyhow!("Integer overflow: {} * {}", lhs, rhs)
+        })?,
+      (ArithmeticValue::Float(lhs), ArithmeticValue::Float(rhs)) => {
+        let product = lhs * rhs;
+        if product.is_finite() {
+          ArithmeticValue::Float(product)
+        } else {
+          return Err(anyhow::anyhow!("Float overflow: {} * {}", lhs, rhs));
+        }
+      }
+      (ArithmeticValue::Integer(lhs), ArithmeticValue::Float(rhs))
+      | (ArithmeticValue::Float(rhs), ArithmeticValue::Integer(lhs)) => {
+        let product = *lhs as f64 * rhs;
+        if product.is_finite() {
+          ArithmeticValue::Float(product)
+        } else {
+          return Err(anyhow::anyhow!("Float overflow: {} * {}", lhs, rhs));
+        }
+      }
+    };
+
+    let mut changes = self.changes.clone();
+    changes.extend(other.changes.clone());
+
+    Ok(ArithmeticResult {
+      value: result,
+      changes,
+    })
+  }
+
+  pub fn checked_div(
+    &self,
+    other: &ArithmeticResult,
+  ) -> Result<ArithmeticResult, Error> {
+    let result = match (&self.value, &other.value) {
+      (ArithmeticValue::Integer(lhs), ArithmeticValue::Integer(rhs)) => {
+        if *rhs == 0 {
+          return Err(anyhow::anyhow!("Division by zero: {} / {}", lhs, rhs));
+        }
+        lhs
+          .checked_div(*rhs)
+          .map(ArithmeticValue::Integer)
+          .ok_or_else(|| {
+            anyhow::anyhow!("Integer overflow: {} / {}", lhs, rhs)
+          })?
+      }
+      (ArithmeticValue::Float(lhs), ArithmeticValue::Float(rhs)) => {
+        if *rhs == 0.0 {
+          return Err(anyhow::anyhow!("Division by zero: {} / {}", lhs, rhs));
+        }
+        let quotient = lhs / rhs;
+        if quotient.is_finite() {
+          ArithmeticValue::Float(quotient)
+        } else {
+          return Err(anyhow::anyhow!("Float overflow: {} / {}", lhs, rhs));
+        }
+      }
+      (ArithmeticValue::Integer(lhs), ArithmeticValue::Float(rhs)) => {
+        if *rhs == 0.0 {
+          return Err(anyhow::anyhow!("Division by zero: {} / {}", lhs, rhs));
+        }
+        let quotient = *lhs as f64 / rhs;
+        if quotient.is_finite() {
+          ArithmeticValue::Float(quotient)
+        } else {
+          return Err(anyhow::anyhow!("Float overflow: {} / {}", lhs, rhs));
+        }
+      }
+      (ArithmeticValue::Float(lhs), ArithmeticValue::Integer(rhs)) => {
+        if *rhs == 0 {
+          return Err(anyhow::anyhow!("Division by zero: {} / {}", lhs, rhs));
+        }
+        let quotient = lhs / *rhs as f64;
+        if quotient.is_finite() {
+          ArithmeticValue::Float(quotient)
+        } else {
+          return Err(anyhow::anyhow!("Float overflow: {} / {}", lhs, rhs));
+        }
+      }
+    };
+
+    let mut changes = self.changes.clone();
+    changes.extend(other.changes.clone());
+
+    Ok(ArithmeticResult {
+      value: result,
+      changes,
+    })
+  }
+
+  pub fn checked_rem(
+    &self,
+    other: &ArithmeticResult,
+  ) -> Result<ArithmeticResult, Error> {
+    let result = match (&self.value, &other.value) {
+      (ArithmeticValue::Integer(lhs), ArithmeticValue::Integer(rhs)) => {
+        if *rhs == 0 {
+          return Err(anyhow::anyhow!("Modulo by zero: {} % {}", lhs, rhs));
+        }
+        lhs
+          .checked_rem(*rhs)
+          .map(ArithmeticValue::Integer)
+          .ok_or_else(|| {
+            anyhow::anyhow!("Integer overflow: {} % {}", lhs, rhs)
+          })?
+      }
+      (ArithmeticValue::Float(lhs), ArithmeticValue::Float(rhs)) => {
+        if *rhs == 0.0 {
+          return Err(anyhow::anyhow!("Modulo by zero: {} % {}", lhs, rhs));
+        }
+        let remainder = lhs % rhs;
+        if remainder.is_finite() {
+          ArithmeticValue::Float(remainder)
+        } else {
+          return Err(anyhow::anyhow!("Float overflow: {} % {}", lhs, rhs));
+        }
+      }
+      (ArithmeticValue::Integer(lhs), ArithmeticValue::Float(rhs)) => {
+        if *rhs == 0.0 {
+          return Err(anyhow::anyhow!("Modulo by zero: {} % {}", lhs, rhs));
+        }
+        let remainder = *lhs as f64 % rhs;
+        if remainder.is_finite() {
+          ArithmeticValue::Float(remainder)
+        } else {
+          return Err(anyhow::anyhow!("Float overflow: {} % {}", lhs, rhs));
+        }
+      }
+      (ArithmeticValue::Float(lhs), ArithmeticValue::Integer(rhs)) => {
+        if *rhs == 0 {
+          return Err(anyhow::anyhow!("Modulo by zero: {} % {}", lhs, rhs));
+        }
+        let remainder = lhs % *rhs as f64;
+        if remainder.is_finite() {
+          ArithmeticValue::Float(remainder)
+        } else {
+          return Err(anyhow::anyhow!("Float overflow: {} % {}", lhs, rhs));
+        }
+      }
+    };
+
+    let mut changes = self.changes.clone();
+    changes.extend(other.changes.clone());
+
+    Ok(ArithmeticResult {
+      value: result,
+      changes,
+    })
+  }
+
+  pub fn checked_pow(
+    &self,
+    other: &ArithmeticResult,
+  ) -> Result<ArithmeticResult, Error> {
+    let result = match (&self.value, &other.value) {
+      (ArithmeticValue::Integer(lhs), ArithmeticValue::Integer(rhs)) => {
+        if *rhs < 0 {
+          let result = (*lhs as f64).powf(*rhs as f64);
+          if result.is_finite() {
+            ArithmeticValue::Float(result)
+          } else {
+            return Err(anyhow::anyhow!("Float overflow: {} ** {}", lhs, rhs));
+          }
+        } else {
+          lhs
+            .checked_pow(*rhs as u32)
+            .map(ArithmeticValue::Integer)
+            .ok_or_else(|| {
+              anyhow::anyhow!("Integer overflow: {} ** {}", lhs, rhs)
+            })?
+        }
+      }
+      (ArithmeticValue::Float(lhs), ArithmeticValue::Float(rhs)) => {
+        let result = lhs.powf(*rhs);
+        if result.is_finite() {
+          ArithmeticValue::Float(result)
+        } else {
+          return Err(anyhow::anyhow!("Float overflow: {} ** {}", lhs, rhs));
+        }
+      }
+      (ArithmeticValue::Integer(lhs), ArithmeticValue::Float(rhs)) => {
+        let result = (*lhs as f64).powf(*rhs);
+        if result.is_finite() {
+          ArithmeticValue::Float(result)
+        } else {
+          return Err(anyhow::anyhow!("Float overflow: {} ** {}", lhs, rhs));
+        }
+      }
+      (ArithmeticValue::Float(lhs), ArithmeticValue::Integer(rhs)) => {
+        let result = lhs.powf(*rhs as f64);
+        if result.is_finite() {
+          ArithmeticValue::Float(result)
+        } else {
+          return Err(anyhow::anyhow!("Float overflow: {} ** {}", lhs, rhs));
+        }
+      }
+    };
+
+    let mut changes = self.changes.clone();
+    changes.extend(other.changes.clone());
+
+    Ok(ArithmeticResult {
+      value: result,
+      changes,
+    })
+  }
+
+  pub fn checked_neg(&self) -> Result<ArithmeticResult, Error> {
+    let result = match &self.value {
+      ArithmeticValue::Integer(val) => val
+        .checked_neg()
+        .map(ArithmeticValue::Integer)
+        .ok_or_else(|| anyhow::anyhow!("Integer overflow: -{}", val))?,
+      ArithmeticValue::Float(val) => {
+        let result = -val;
+        if result.is_finite() {
+          ArithmeticValue::Float(result)
+        } else {
+          return Err(anyhow::anyhow!("Float overflow: -{}", val));
+        }
+      }
+    };
+
+    Ok(ArithmeticResult {
+      value: result,
+      changes: self.changes.clone(),
+    })
+  }
+
+  pub fn checked_not(&self) -> Result<ArithmeticResult, Error> {
+    let result = match &self.value {
+      ArithmeticValue::Integer(val) => ArithmeticValue::Integer(!val),
+      ArithmeticValue::Float(_) => {
+        return Err(anyhow::anyhow!(
+          "Invalid arithmetic result type for bitwise NOT: {}",
+          self
+        ))
+      }
+    };
+
+    Ok(ArithmeticResult {
+      value: result,
+      changes: self.changes.clone(),
+    })
+  }
+
+  pub fn checked_shl(
+    &self,
+    other: &ArithmeticResult,
+  ) -> Result<ArithmeticResult, Error> {
+    let result = match (&self.value, &other.value) {
+      (ArithmeticValue::Integer(lhs), ArithmeticValue::Integer(rhs)) => {
+        if *rhs < 0 {
+          return Err(anyhow::anyhow!(
+            "Negative shift amount: {} << {}",
+            lhs,
+            rhs
+          ));
+        }
+        lhs
+          .checked_shl(*rhs as u32)
+          .map(ArithmeticValue::Integer)
+          .ok_or_else(|| {
+            anyhow::anyhow!("Integer overflow: {} << {}", lhs, rhs)
+          })?
+      }
+      _ => {
+        return Err(anyhow::anyhow!(
+          "Invalid arithmetic result types for left shift: {} << {}",
+          self,
+          other
+        ))
+      }
+    };
+
+    let mut changes = self.changes.clone();
+    changes.extend(other.changes.clone());
+
+    Ok(ArithmeticResult {
+      value: result,
+      changes,
+    })
+  }
+
+  pub fn checked_shr(
+    &self,
+    other: &ArithmeticResult,
+  ) -> Result<ArithmeticResult, Error> {
+    let result = match (&self.value, &other.value) {
+      (ArithmeticValue::Integer(lhs), ArithmeticValue::Integer(rhs)) => {
+        if *rhs < 0 {
+          return Err(anyhow::anyhow!(
+            "Negative shift amount: {} >> {}",
+            lhs,
+            rhs
+          ));
+        }
+        lhs
+          .checked_shr(*rhs as u32)
+          .map(ArithmeticValue::Integer)
+          .ok_or_else(|| {
+            anyhow::anyhow!("Integer underflow: {} >> {}", lhs, rhs)
+          })?
+      }
+      _ => {
+        return Err(anyhow::anyhow!(
+          "Invalid arithmetic result types for right shift: {} >> {}",
+          self,
+          other
+        ))
+      }
+    };
+
+    let mut changes = self.changes.clone();
+    changes.extend(other.changes.clone());
+
+    Ok(ArithmeticResult {
+      value: result,
+      changes,
+    })
+  }
+
+  pub fn checked_and(
+    &self,
+    other: &ArithmeticResult,
+  ) -> Result<ArithmeticResult, Error> {
+    let result = match (&self.value, &other.value) {
+      (ArithmeticValue::Integer(lhs), ArithmeticValue::Integer(rhs)) => {
+        ArithmeticValue::Integer(lhs & rhs)
+      }
+      _ => {
+        return Err(anyhow::anyhow!(
+          "Invalid arithmetic result types for bitwise AND: {} & {}",
+          self,
+          other
+        ))
+      }
+    };
+
+    let mut changes = self.changes.clone();
+    changes.extend(other.changes.clone());
+
+    Ok(ArithmeticResult {
+      value: result,
+      changes,
+    })
+  }
+
+  pub fn checked_or(
+    &self,
+    other: &ArithmeticResult,
+  ) -> Result<ArithmeticResult, Error> {
+    let result = match (&self.value, &other.value) {
+      (ArithmeticValue::Integer(lhs), ArithmeticValue::Integer(rhs)) => {
+        ArithmeticValue::Integer(lhs | rhs)
+      }
+      _ => {
+        return Err(anyhow::anyhow!(
+          "Invalid arithmetic result types for bitwise OR: {} | {}",
+          self,
+          other
+        ))
+      }
+    };
+
+    let mut changes = self.changes.clone();
+    changes.extend(other.changes.clone());
+
+    Ok(ArithmeticResult {
+      value: result,
+      changes,
+    })
+  }
+
+  pub fn checked_xor(
+    &self,
+    other: &ArithmeticResult,
+  ) -> Result<ArithmeticResult, Error> {
+    let result = match (&self.value, &other.value) {
+      (ArithmeticValue::Integer(lhs), ArithmeticValue::Integer(rhs)) => {
+        ArithmeticValue::Integer(lhs ^ rhs)
+      }
+      _ => {
+        return Err(anyhow::anyhow!(
+          "Invalid arithmetic result types for bitwise XOR: {} ^ {}",
+          self,
+          other
+        ))
+      }
+    };
+
+    let mut changes = self.changes.clone();
+    changes.extend(other.changes.clone());
+
+    Ok(ArithmeticResult {
+      value: result,
+      changes,
+    })
+  }
+
+  pub fn with_changes(mut self, changes: Vec<EnvChange>) -> Self {
+    self.changes = changes;
+    self
+  }
+}
+
+impl From<String> for ArithmeticResult {
+  fn from(value: String) -> Self {
+    if let Ok(int_val) = value.parse::<i64>() {
+      ArithmeticResult::new(ArithmeticValue::Integer(int_val))
+    } else if let Ok(float_val) = value.parse::<f64>() {
+      ArithmeticResult::new(ArithmeticValue::Float(float_val))
+    } else {
+      panic!("Invalid arithmetic result: {}", value);
+    }
+  }
+}
+
+impl FromStr for ArithmeticResult {
+  type Err = String;
+
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    Ok(s.to_string().into())
+  }
+}
+
+pub struct WordEvalResult {
+  pub value: Vec<String>,
+  pub changes: Vec<EnvChange>,
+}
+
+impl WordEvalResult {
+  pub fn new(value: Vec<String>, changes: Vec<EnvChange>) -> Self {
+    WordEvalResult { value, changes }
+  }
+
+  pub fn extend(&mut self, other: WordEvalResult) {
+    self.value.extend(other.value);
+    self.changes.extend(other.changes);
+  }
+
+  pub fn join(&self, sep: &str) -> String {
+    self.value.join(sep)
+  }
 }

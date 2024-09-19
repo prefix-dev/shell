@@ -163,7 +163,7 @@ compound_command = {
 
 ARITHMETIC_EXPRESSION = !{ "((" ~ arithmetic_sequence ~ "))" }
 arithmetic_sequence = !{ arithmetic_expr ~ ("," ~ arithmetic_expr)* }
-arithmetic_expr = _{ parentheses_expr | variable_assignment | triple_conditional_expr | binary_arithmetic_expr | binary_conditional_expression | unary_arithmetic_expr | VARIABLE | NUMBER }
+arithmetic_expr = { parentheses_expr | variable_assignment | triple_conditional_expr | binary_arithmetic_expr | binary_conditional_expression | unary_arithmetic_expr | VARIABLE | NUMBER }
 parentheses_expr = !{ "(" ~ arithmetic_sequence ~ ")" }
 
 variable_assignment = !{
@@ -176,15 +176,15 @@ triple_conditional_expr = !{
     ":" ~ (parentheses_expr | variable_assignment | binary_arithmetic_expr | binary_conditional_expression | unary_arithmetic_expr | VARIABLE | NUMBER)
 }
 
-binary_arithmetic_expr = !{
+binary_arithmetic_expr = _{
     (parentheses_expr | binary_conditional_expression | unary_arithmetic_expr | variable_assignment | VARIABLE | NUMBER) ~
     (binary_arithmetic_op ~
         (parentheses_expr | variable_assignment | binary_conditional_expression | unary_arithmetic_expr | VARIABLE | NUMBER)
-    )*
+    )+
 }
 
 binary_arithmetic_op = _{
-    add | subtract | multiply | divide | modulo | power | left_shift | right_shift |
+    add | subtract | power | multiply | divide | modulo | left_shift | right_shift |
     bitwise_and | bitwise_xor | bitwise_or | logical_and | logical_or
 }
 
@@ -223,7 +223,7 @@ post_arithmetic_op = !{
 increment = { "++" }
 decrement = { "--" }
 
-assignment_operator = !{
+assignment_operator = _{
     assign | multiply_assign | divide_assign | modulo_assign | add_assign | subtract_assign |
     left_shift_assign | right_shift_assign | bitwise_and_assign | bitwise_xor_assign | bitwise_or_assign
 }

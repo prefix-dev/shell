@@ -202,14 +202,15 @@ async fn parse_shebang_args(
     return err_unsupported(text);
   }
 
-  super::execute::evaluate_args(
+  let result = super::execute::evaluate_args(
     cmd.args,
     &context.state,
     context.stdin.clone(),
     context.stderr.clone(),
   )
   .await
-  .map_err(|e| miette!(e.to_string()))
+  .map_err(|e| miette!(e.to_string()))?;
+  Ok(result.value)
 }
 
 /// Errors for executable commands.

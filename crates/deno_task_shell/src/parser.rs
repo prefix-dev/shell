@@ -405,6 +405,7 @@ pub enum ArithmeticPart {
   #[error("Invalid variable assignment")]
   VariableAssignment {
     name: String,
+    op: AssignmentOp,
     value: Box<ArithmeticPart>,
   },
   #[error("Invalid triple conditional expression")]
@@ -462,7 +463,24 @@ pub enum BinaryArithmeticOp {
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
 #[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Copy)]
+pub enum AssignmentOp {
+  Assign,           // =
+  MultiplyAssign,   // *=
+  DivideAssign,     // /=
+  ModuloAssign,     // %=
+  AddAssign,        // +=
+  SubtractAssign,   // -=
+  LeftShiftAssign,  // <<=
+  RightShiftAssign, // >>=
+  BitwiseAndAssign, // &=
+  BitwiseXorAssign, // ^=
+  BitwiseOrAssign,  // |=
+}
+
+#[cfg_attr(feature = "serialization", derive(serde::Serialize))]
+#[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
+#[derive(Debug, Clone, PartialEq, Eq, Copy)]
 pub enum UnaryArithmeticOp {
   Plus,       // +
   Minus,      // -
@@ -551,6 +569,19 @@ lazy_static! {
     use Rule::*;
 
     PrattParser::new()
+      .op(
+        Op::infix(assign, Right)
+          | Op::infix(multiply_assign, Right)
+          | Op::infix(divide_assign, Right)
+          | Op::infix(modulo_assign, Right)
+          | Op::infix(add_assign, Right)
+          | Op::infix(subtract_assign, Right)
+          | Op::infix(left_shift_assign, Right)
+          | Op::infix(right_shift_assign, Right)
+          | Op::infix(bitwise_and_assign, Right)
+          | Op::infix(bitwise_xor_assign, Right)
+          | Op::infix(bitwise_or_assign, Right),
+      )
       .op(Op::infix(logical_or, Left))
       .op(Op::infix(logical_and, Left))
       .op(Op::infix(bitwise_or, Left))
@@ -1293,8 +1324,11 @@ fn parse_arithmetic_expression(pair: Pair<Rule>) -> Result<Arithmetic> {
 
 fn parse_arithmetic_sequence(pair: Pair<Rule>) -> Result<Vec<ArithmeticPart>> {
   assert!(pair.as_rule() == Rule::arithmetic_sequence);
-  let expr = pair.into_inner().next().unwrap();
-  Ok(vec![parse_arithmetic_expr(expr)?])
+  let mut parts = Vec::new();
+  for expr in pair.into_inner() {
+    parts.push(parse_arithmetic_expr(expr)?);
+  }
+  Ok(parts)
 }
 
 fn parse_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
@@ -1310,9 +1344,27 @@ fn parse_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
       Rule::variable_assignment => {
         let mut inner = primary.into_inner();
         let name = inner.next().unwrap().as_str().to_string();
+        let op = inner.next().unwrap();
+
         let value = parse_arithmetic_expr(inner.next().unwrap())?;
         Ok(ArithmeticPart::VariableAssignment {
           name,
+          op: match op.as_rule() {
+            Rule::assign => AssignmentOp::Assign,
+            Rule::multiply_assign => AssignmentOp::MultiplyAssign,
+            Rule::divide_assign => AssignmentOp::DivideAssign,
+            Rule::modulo_assign => AssignmentOp::ModuloAssign,
+            Rule::add_assign => AssignmentOp::AddAssign,
+            Rule::subtract_assign => AssignmentOp::SubtractAssign,
+            Rule::left_shift_assign => AssignmentOp::LeftShiftAssign,
+            Rule::right_shift_assign => AssignmentOp::RightShiftAssign,
+            _ => {
+              return Err(miette!(
+                "Unexpected assignment operator: {:?}",
+                op.as_rule()
+              ));
+            }
+          },
           value: Box::new(value),
         })
       }
@@ -1654,7 +1706,6 @@ mod test {
         .map_err(|e| miette!(e.to_string()))?
         .next()
         .unwrap();
-      //   println!("pairs: {:?}", pairs);
       parse_complete_command(pairs)
     };
 
