@@ -813,6 +813,63 @@ async fn which() {
         .await;
 }
 
+#[tokio::test]
+async fn arithmetic() {
+    TestBuilder::new()
+        .command("echo $((1 + 2 * 3 + (4 / 5)))")
+        .assert_stdout("7\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("echo $((a=1, b=2))")
+        .assert_stdout("2\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("echo $((a=1, b=2, a+b))")
+        .assert_stdout("3\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("echo $((1 + 2))")
+        .assert_stdout("3\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("echo $((5 * 4))")
+        .assert_stdout("20\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("echo $((10 / 3))")
+        .assert_stdout("3\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("echo $((2 ** 3))")
+        .assert_stdout("8\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("echo $((2 << 3))")
+        .assert_stdout("16\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("echo $((2 << 3))")
+        .assert_stdout("16\n")
+        .run()
+        .await;
+}
+
 #[cfg(test)]
 fn no_such_file_error_text() -> &'static str {
     if cfg!(windows) {
