@@ -34,7 +34,7 @@ To compile and run the project, you need to have Rust & Cargo installed.
 cargo r
 
 # To run a script
-cargo r -- -f ./scripts/hello_world.sh
+cargo r -- ./scripts/hello_world.sh
 ```
 
 ## License
