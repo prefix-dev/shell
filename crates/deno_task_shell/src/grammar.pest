@@ -203,9 +203,17 @@ logical_and = { "&&" }
 logical_or = { "||" }
 
 unary_arithmetic_expr = !{
-    (unary_arithmetic_op | post_arithmetic_op) ~ (parentheses_expr | VARIABLE | NUMBER) |
+    unary_pre_arithmetic_expr | unary_post_arithmatic_expr
+}
+
+unary_pre_arithmetic_expr = !{
+    (post_arithmetic_op | unary_arithmetic_op) ~ (parentheses_expr | VARIABLE | NUMBER)
+}
+
+unary_post_arithmatic_expr = !{
     (parentheses_expr | VARIABLE | NUMBER) ~ post_arithmetic_op
 }
+
 
 unary_arithmetic_op = _{
     unary_plus | unary_minus | logical_not | bitwise_not
