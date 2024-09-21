@@ -1419,37 +1419,22 @@ fn parse_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
 
 fn parse_unary_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
   let mut inner = pair.into_inner();
-  let first = inner.next().unwrap();
+  let first = inner.next().ok_or_else(|| miette!("Expected unary operator"))?;
 
   match first.as_rule() {
     Rule::unary_pre_arithmetic_expr => unary_pre_arithmetic_expr(first),
     Rule::unary_post_arithmetic_expr => unary_post_arithmetic_expr(first),
-    _ => {
-      let operand = parse_arithmetic_expr(first)?;
-      let op = parse_post_arithmetic_op(inner.next().unwrap())?;
-      Ok(ArithmeticPart::PostArithmeticExpr {
-        operand: Box::new(operand),
-        operator: op,
-      })
-    }
-  }
-}
-
-fn parse_unary_arithmetic_op_type(pair: Pair<Rule>) -> Result<bool> {
-  match pair.as_rule() {
-    Rule::unary_arithmetic_op => Ok(true),
-    Rule::post_arithmetic_op => Ok(false),
     _ => Err(miette!(
-      "Unexpected rule in unary arithmetic operator: {:?}",
-      pair.as_rule()
+      "Unexpected rule in unary arithmetic expression: {:?}",
+      first.as_rule()
     )),
   }
 }
 
 fn unary_pre_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
   let mut inner = pair.into_inner();
-  let first = inner.next().unwrap();
-  let second = inner.next().unwrap();
+  let first = inner.next().ok_or_else(|| miette!("Expected unary pre operator"))?;
+  let second = inner.next().ok_or_else(|| miette!("Expected operand"))?;
   let operand = match second.as_rule() {
     Rule::parentheses_expr => {
       let inner = second.into_inner().next().unwrap();
@@ -1466,25 +1451,33 @@ fn unary_pre_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
     )),
   }?;
 
-  if parse_unary_arithmetic_op_type(first.clone())? {
-    let op = parse_unary_arithmetic_op(first)?;
-    Ok(ArithmeticPart::UnaryArithmeticExpr {
-      operator: (op),
-      operand: (Box::new(operand)),
-    })
-  } else {
-    let op = parse_post_arithmetic_op(first)?;
-    Ok(ArithmeticPart::PostArithmeticExpr {
-      operator: (op),
-      operand: (Box::new(operand)),
-    })
+  match first.as_rule() {
+    Rule::pre_arithmetic_op => {
+      let op = parse_unary_arithmetic_op(first)?;
+      Ok(ArithmeticPart::UnaryArithmeticExpr {
+        operator: (op),
+        operand: (Box::new(operand)),
+      })
+    },
+    Rule::post_arithmetic_op => {
+      let op = parse_post_arithmetic_op(first)?;
+      Ok(ArithmeticPart::PostArithmeticExpr {
+        operator: (op),
+        operand: (Box::new(operand)),
+      })
+    },
+    _ => Err(miette!(
+      "Unexpected rule in unary arithmetic operator: {:?}",
+      first.as_rule()
+    )),
   }
 }
 
 fn unary_post_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
   let mut inner = pair.into_inner();
-  let first = inner.next().unwrap();
-  let second = inner.next().unwrap();
+  let first = inner.next().ok_or_else(|| miette!("Expected unary post operator"))?;
+  let second = inner.next().ok_or_else(|| miette!("Expected operand"))?;
+
   let operand = match first.as_rule() {
     Rule::parentheses_expr => {
       let inner = first.into_inner().next().unwrap();
@@ -1508,7 +1501,8 @@ fn unary_post_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
 }
 
 fn parse_unary_arithmetic_op(pair: Pair<Rule>) -> Result<UnaryArithmeticOp> {
-  let first = pair.into_inner().next().unwrap();
+  let first = pair.into_inner().next().ok_or_else(|| miette!("Expected unary operator"))?;
+
   match first.as_rule() {
     Rule::add => Ok(UnaryArithmeticOp::Plus),
     Rule::subtract => Ok(UnaryArithmeticOp::Minus),
@@ -1522,7 +1516,7 @@ fn parse_unary_arithmetic_op(pair: Pair<Rule>) -> Result<UnaryArithmeticOp> {
 }
 
 fn parse_post_arithmetic_op(pair: Pair<Rule>) -> Result<PostArithmeticOp> {
-  let first = pair.into_inner().next().unwrap();
+  let first = pair.into_inner().next().ok_or_else(|| miette!("Expected increament or decreament operator"))?;
   match first.as_rule() {
     Rule::increment => Ok(PostArithmeticOp::Increment),
     Rule::decrement => Ok(PostArithmeticOp::Decrement),
