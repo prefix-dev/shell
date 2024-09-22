@@ -12,8 +12,8 @@ pub mod touch;
 pub mod uname;
 pub mod which;
 
-pub use touch::TouchCommand;
 pub use date::DateCommand;
+pub use touch::TouchCommand;
 pub use uname::UnameCommand;
 pub use which::WhichCommand;
 

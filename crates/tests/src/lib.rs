@@ -878,8 +878,8 @@ async fn date() {
         .check_stdout(false)
         .run()
         .await;
-  
-     TestBuilder::new()
+
+    TestBuilder::new()
         .command("date +%Y-%m-%d")
         .assert_exit_code(0)
         .check_stdout(false)
@@ -895,7 +895,7 @@ async fn touch() {
         .check_stdout(false)
         .run()
         .await;
-  
+
     TestBuilder::new()
         .command("touch -m file.txt")
         .assert_exists("file.txt")
