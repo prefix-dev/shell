@@ -870,6 +870,16 @@ async fn arithmetic() {
         .await;
 }
 
+#[tokio::test]
+async fn touch() {
+    TestBuilder::new()
+        .command("touch file.txt")
+        .assert_exists("file.txt")
+        .run()
+        .await;
+
+}
+
 #[cfg(test)]
 fn no_such_file_error_text() -> &'static str {
     if cfg!(windows) {

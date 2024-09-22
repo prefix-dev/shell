@@ -256,6 +256,8 @@ impl TestBuilder {
         for assertion in &self.assertions {
             match assertion {
                 TestAssertion::FileExists(path) => {
+                    println!("path: {}", path);
+                    println!("cwd: {:?}", cwd.join(path));
                     assert!(
                         cwd.join(path).exists(),
                         "\n\nFailed for: {}\nExpected '{}' to exist.",

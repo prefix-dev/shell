@@ -8,9 +8,11 @@ use uu_ls::uumain as uu_ls;
 use crate::execute;
 
 pub mod uname;
+pub mod touch;
 pub mod which;
 
 pub use uname::UnameCommand;
+pub use touch::TouchCommand;
 pub use which::WhichCommand;
 
 pub struct LsCommand;
@@ -43,6 +45,10 @@ pub fn get_commands() -> HashMap<String, Rc<dyn ShellCommand>> {
         (
             "uname".to_string(),
             Rc::new(UnameCommand) as Rc<dyn ShellCommand>,
+        ),
+        (
+            "touch".to_string(),
+            Rc::new(TouchCommand) as Rc<dyn ShellCommand>,
         ),
     ])
 }
