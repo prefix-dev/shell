@@ -870,6 +870,23 @@ async fn arithmetic() {
         .await;
 }
 
+#[tokio::test]
+async fn date() {
+    TestBuilder::new()
+        .command("date")
+        .assert_exit_code(0)
+        .check_stdout(false)
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("date +%Y-%m-%d")
+        .assert_exit_code(0)
+        .check_stdout(false)
+        .run()
+        .await;
+}
+
 #[cfg(test)]
 fn no_such_file_error_text() -> &'static str {
     if cfg!(windows) {
