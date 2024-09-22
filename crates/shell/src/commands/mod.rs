@@ -7,12 +7,12 @@ use uu_ls::uumain as uu_ls;
 
 use crate::execute;
 
-pub mod uname;
 pub mod touch;
+pub mod uname;
 pub mod which;
 
-pub use uname::UnameCommand;
 pub use touch::TouchCommand;
+pub use uname::UnameCommand;
 pub use which::WhichCommand;
 
 pub struct LsCommand;

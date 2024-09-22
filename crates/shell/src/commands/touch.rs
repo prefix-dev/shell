@@ -1,4 +1,4 @@
-use std::ffi::OsString;
+use std::{ffi::OsString, path::Path};
 
 use deno_task_shell::{ExecuteResult, ShellCommand, ShellCommandContext};
 use futures::future::LocalBoxFuture;
@@ -22,6 +22,32 @@ fn execute_touch(context: &mut ShellCommandContext) -> Result<(), i32> {
         .args
         .iter()
         .for_each(|arg| args.push(OsString::from(arg)));
+
+    let mut new_args = Vec::new();
+    let mut skip_next = false;
+
+    for (index, arg) in args[1..].iter().enumerate() {
+        if skip_next {
+            skip_next = false;
+            continue;
+        }
+
+        if arg.to_str().map_or(false, |s| s == "-t" || s == "-d") && index + 1 < args[1..].len() {
+            new_args.push(arg.clone());
+            new_args.push(args[index + 2].clone());
+            skip_next = true;
+        } else if !arg.to_str().map_or(false, |s| s.starts_with('-')) {
+            new_args.push(if Path::new(arg).is_absolute() {
+                arg.clone()
+            } else {
+                context.state.cwd().join(arg).into_os_string()
+            });
+        } else {
+            new_args.push(arg.clone());
+        }
+    }
+
+    args.splice(1.., new_args);
 
     let exit_code = uu_touch(args.into_iter());
     if exit_code != 0 {

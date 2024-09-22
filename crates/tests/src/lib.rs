@@ -878,6 +878,36 @@ async fn touch() {
         .run()
         .await;
 
+    TestBuilder::new()
+        .command("touch -m file.txt")
+        .assert_exists("file.txt")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("touch -c nonexistent.txt")
+        .assert_not_exists("nonexistent.txt")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("touch file1.txt file2.txt")
+        .assert_exists("file1.txt")
+        .assert_exists("file2.txt")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("touch -t 202401010000.00 timestamp.txt")
+        .assert_exists("timestamp.txt")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("touch file.txt && touch -r file.txt reference.txt")
+        .assert_exists("reference.txt")
+        .run()
+        .await;
 }
 
 #[cfg(test)]
