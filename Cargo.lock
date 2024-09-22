@@ -1185,6 +1185,7 @@ dependencies = [
  "futures",
  "rustyline",
  "tokio",
+ "uu_date",
  "uu_ls",
  "uu_touch",
  "uu_uname",
@@ -1425,6 +1426,20 @@ name = "utf8parse"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
+
+[[package]]
+name = "uu_date"
+version = "0.0.27"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09b64040b532d67a399c8670da5c5ba12bf38ee8b9d845330580f3ba7b1eabc7"
+dependencies = [
+ "chrono",
+ "clap",
+ "libc",
+ "parse_datetime",
+ "uucore",
+ "windows-sys 0.48.0",
+]
 
 [[package]]
 name = "uu_ls"

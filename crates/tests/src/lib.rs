@@ -871,13 +871,31 @@ async fn arithmetic() {
 }
 
 #[tokio::test]
+async fn date() {
+    TestBuilder::new()
+        .command("date")
+        .assert_exit_code(0)
+        .check_stdout(false)
+        .run()
+        .await;
+  
+     TestBuilder::new()
+        .command("date +%Y-%m-%d")
+        .assert_exit_code(0)
+        .check_stdout(false)
+        .run()
+        .await;
+}
+
+#[tokio::test]
 async fn touch() {
     TestBuilder::new()
         .command("touch file.txt")
         .assert_exists("file.txt")
+        .check_stdout(false)
         .run()
         .await;
-
+  
     TestBuilder::new()
         .command("touch -m file.txt")
         .assert_exists("file.txt")
