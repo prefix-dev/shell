@@ -868,6 +868,31 @@ async fn arithmetic() {
         .assert_stdout("16\n")
         .run()
         .await;
+
+    TestBuilder::new()
+        .command("echo $((a=1, ++a))")
+        .assert_stdout("2\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("echo $((a=1, a++))")
+        .assert_stdout("1\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("echo $((a=1, a--))")
+        .assert_stdout("1\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("echo $((a=1, --a))")
+        .assert_stdout("0\n")
+        .run()
+        .await;
+
 }
 
 #[tokio::test]
