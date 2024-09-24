@@ -1512,7 +1512,7 @@ fn parse_pre_arithmetic_op(pair: Pair<Rule>) -> Result<PreArithmeticOp> {
   let first = pair
     .into_inner()
     .next()
-    .ok_or_else(|| miette!("Expected increament or decreament operator"))?;
+    .ok_or_else(|| miette!("Expected increment or decreament operator"))?;
   match first.as_rule() {
     Rule::increment => Ok(PreArithmeticOp::Increment),
     Rule::decrement => Ok(PreArithmeticOp::Decrement),
@@ -1531,7 +1531,7 @@ fn parse_post_arithmetic_op(pair: Pair<Rule>) -> Result<PostArithmeticOp> {
   let first = pair
     .into_inner()
     .next()
-    .ok_or_else(|| miette!("Expected increament or decreament operator"))?;
+    .ok_or_else(|| miette!("Expected increment or decreament operator"))?;
   match first.as_rule() {
     Rule::increment => Ok(PostArithmeticOp::Increment),
     Rule::decrement => Ok(PostArithmeticOp::Decrement),

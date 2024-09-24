@@ -740,7 +740,7 @@ fn apply_pre_op(
 ) -> Result<ArithmeticResult, Error> {
   match op {
     PreArithmeticOp::Increment => {
-      let result = val.pre_increament(operand)?;
+      let result = val.pre_increment(operand)?;
       let result_clone = result.clone();
       state.apply_changes(&result_clone.changes);
       Ok(result)
@@ -765,7 +765,7 @@ fn apply_post_op(
 ) -> Result<ArithmeticResult, Error> {
   match op {
     PostArithmeticOp::Increment => {
-      let result = val.post_increament(operand)?;
+      let result = val.post_increment(operand)?;
       let result_clone = result.clone();
       state.apply_changes(&result_clone.changes);
       Ok(result)

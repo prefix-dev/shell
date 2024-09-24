@@ -575,7 +575,7 @@ impl ArithmeticResult {
     }
   }
 
-  pub fn pre_increament(
+  pub fn pre_increment(
     &self,
     operand: &ArithmeticPart,
   ) -> Result<ArithmeticResult, Error> {
@@ -593,7 +593,7 @@ impl ArithmeticResult {
           })
         }
         _ => Err(anyhow::anyhow!(
-          "Invalid arithmetic result type for pre-increament: {}",
+          "Invalid arithmetic result type for pre-increment: {}",
           self
         )),
       },
@@ -610,7 +610,7 @@ impl ArithmeticResult {
           })
         }
         _ => Err(anyhow::anyhow!(
-          "Invalid arithmetic result type for pre-increament: {}",
+          "Invalid arithmetic result type for pre-increment: {}",
           self
         )),
       },
@@ -635,7 +635,7 @@ impl ArithmeticResult {
           })
         }
         _ => Err(anyhow::anyhow!(
-          "Invalid arithmetic result type for pre-increament: {}",
+          "Invalid arithmetic result type for pre-increment: {}",
           self
         )),
       },
@@ -652,14 +652,14 @@ impl ArithmeticResult {
           })
         }
         _ => Err(anyhow::anyhow!(
-          "Invalid arithmetic result type for pre-increament: {}",
+          "Invalid arithmetic result type for pre-increment: {}",
           self
         )),
       },
     }
   }
 
-  pub fn post_increament(
+  pub fn post_increment(
     &self,
     operand: &ArithmeticPart,
   ) -> Result<ArithmeticResult, Error> {
@@ -677,7 +677,7 @@ impl ArithmeticResult {
           })
         }
         _ => Err(anyhow::anyhow!(
-          "Invalid arithmetic result type for pre-increament: {}",
+          "Invalid arithmetic result type for pre-increment: {}",
           self
         )),
       },
@@ -694,7 +694,7 @@ impl ArithmeticResult {
           })
         }
         _ => Err(anyhow::anyhow!(
-          "Invalid arithmetic result type for pre-increament: {}",
+          "Invalid arithmetic result type for pre-increment: {}",
           self
         )),
       },
@@ -719,7 +719,7 @@ impl ArithmeticResult {
           })
         }
         _ => Err(anyhow::anyhow!(
-          "Invalid arithmetic result type for pre-increament: {}",
+          "Invalid arithmetic result type for pre-increment: {}",
           self
         )),
       },
@@ -736,7 +736,7 @@ impl ArithmeticResult {
           })
         }
         _ => Err(anyhow::anyhow!(
-          "Invalid arithmetic result type for pre-increament: {}",
+          "Invalid arithmetic result type for pre-increment: {}",
           self
         )),
       },
