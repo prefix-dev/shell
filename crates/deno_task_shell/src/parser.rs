@@ -426,15 +426,10 @@ pub enum ArithmeticPart {
     operator: BinaryOp,
     right: Box<ArithmeticPart>,
   },
-  #[error("Invalid pre arithmetic expression")]
-  PreArithmeticExpr {
-    operator: PreArithmeticOp,
+  #[error("Invalid unary arithmetic expression")]
+  UnaryAritheticExpr {
+    operator: UnaryArithmeticOp,
     operand: Box<ArithmeticPart>,
-  },
-  #[error("Invalid post arithmetic expression")]
-  PostArithmeticExpr {
-    operand: Box<ArithmeticPart>,
-    operator: PostArithmeticOp,
   },
   #[error("Invalid variable")]
   Variable(String),
@@ -496,6 +491,14 @@ pub enum PreArithmeticOp {
 pub enum PostArithmeticOp {
   Increment, // ++
   Decrement, // --
+}
+
+#[cfg_attr(feature = "serialization", derive(serde::Serialize))]
+#[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
+#[derive(Debug, Clone, PartialEq, Eq, Copy)]
+pub enum UnaryArithmeticOp {
+  Pre(PreArithmeticOp),
+  Post(PostArithmeticOp),
 }
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
@@ -1460,16 +1463,16 @@ fn unary_pre_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
   match first.as_rule() {
     Rule::pre_arithmetic_op => {
       let op = parse_pre_arithmetic_op(first)?;
-      Ok(ArithmeticPart::PreArithmeticExpr {
-        operator: op,
-        operand: (Box::new(operand)),
+      Ok(ArithmeticPart::UnaryAritheticExpr {
+        operator: UnaryArithmeticOp::Pre(op),
+        operand: Box::new(operand),
       })
     }
     Rule::post_arithmetic_op => {
       let op = parse_pre_arithmetic_op(first)?;
-      Ok(ArithmeticPart::PreArithmeticExpr {
-        operator: op,
-        operand: (Box::new(operand)),
+      Ok(ArithmeticPart::UnaryAritheticExpr {
+        operator: UnaryArithmeticOp::Pre(op),
+        operand: Box::new(operand),
       })
     }
     _ => Err(miette!(
@@ -1502,9 +1505,9 @@ fn unary_post_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
     )),
   }?;
   let op = parse_post_arithmetic_op(second)?;
-  Ok(ArithmeticPart::PostArithmeticExpr {
-    operator: op,
-    operand: (Box::new(operand)),
+  Ok(ArithmeticPart::UnaryAritheticExpr {
+    operator: UnaryArithmeticOp::Post(op),
+    operand: Box::new(operand),
   })
 }
 
@@ -1512,7 +1515,7 @@ fn parse_pre_arithmetic_op(pair: Pair<Rule>) -> Result<PreArithmeticOp> {
   let first = pair
     .into_inner()
     .next()
-    .ok_or_else(|| miette!("Expected increment or decreament operator"))?;
+    .ok_or_else(|| miette!("Expected increment or decrement operator"))?;
   match first.as_rule() {
     Rule::increment => Ok(PreArithmeticOp::Increment),
     Rule::decrement => Ok(PreArithmeticOp::Decrement),
@@ -1531,7 +1534,7 @@ fn parse_post_arithmetic_op(pair: Pair<Rule>) -> Result<PostArithmeticOp> {
   let first = pair
     .into_inner()
     .next()
-    .ok_or_else(|| miette!("Expected increment or decreament operator"))?;
+    .ok_or_else(|| miette!("Expected increment or decrement operator"))?;
   match first.as_rule() {
     Rule::increment => Ok(PostArithmeticOp::Increment),
     Rule::decrement => Ok(PostArithmeticOp::Decrement),

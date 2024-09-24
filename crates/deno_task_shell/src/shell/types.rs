@@ -19,6 +19,9 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 use crate::parser::ArithmeticPart;
+use crate::parser::PostArithmeticOp;
+use crate::parser::PreArithmeticOp;
+use crate::parser::UnaryArithmeticOp;
 use crate::shell::fs_util;
 
 use super::commands::builtin_commands;
@@ -575,170 +578,125 @@ impl ArithmeticResult {
     }
   }
 
-  pub fn pre_increment(
+  pub fn unary_op(
     &self,
     operand: &ArithmeticPart,
+    op: UnaryArithmeticOp,
   ) -> Result<ArithmeticResult, Error> {
-    match &self.value {
-      ArithmeticValue::Integer(val) => match operand {
-        ArithmeticPart::Variable(name) => {
-          let mut new_changes = self.changes.clone();
-          new_changes.push(EnvChange::SetShellVar(
-            name.to_string(),
-            (*val + 1).to_string(),
-          ));
-          Ok(ArithmeticResult {
-            value: ArithmeticValue::Integer(*val + 1),
-            changes: new_changes,
-          })
-        }
-        _ => Err(anyhow::anyhow!(
-          "Invalid arithmetic result type for pre-increment: {}",
-          self
-        )),
+    match op {
+      UnaryArithmeticOp::Post(op_type) => match &self.value {
+        ArithmeticValue::Integer(val) => match operand {
+          ArithmeticPart::Variable(name) => {
+            let mut new_changes = self.changes.clone();
+            new_changes.push(EnvChange::SetShellVar(
+              name.to_string(),
+              match op_type {
+                PostArithmeticOp::Increment => (*val + 1).to_string(),
+                PostArithmeticOp::Decrement => (*val - 1).to_string(),
+              },
+            ));
+            Ok(ArithmeticResult {
+              value: ArithmeticValue::Integer(*val),
+              changes: new_changes,
+            })
+          }
+          _ => Err(anyhow::anyhow!(
+            "Invalid arithmetic result type for post-increment: {}",
+            self
+          )),
+        },
+        ArithmeticValue::Float(val) => match operand {
+          ArithmeticPart::Variable(name) => {
+            let mut new_changes = self.changes.clone();
+            new_changes.push(EnvChange::SetShellVar(
+              name.to_string(),
+              match op_type {
+                PostArithmeticOp::Increment => (*val + 1.0).to_string(),
+                PostArithmeticOp::Decrement => (*val - 1.0).to_string(),
+              },
+            ));
+            Ok(ArithmeticResult {
+              value: ArithmeticValue::Float(*val),
+              changes: new_changes,
+            })
+          }
+          _ => Err(anyhow::anyhow!(
+            "Invalid arithmetic result type for post-increment: {}",
+            self
+          )),
+        },
       },
-      ArithmeticValue::Float(val) => match operand {
-        ArithmeticPart::Variable(name) => {
-          let mut new_changes = self.changes.clone();
-          new_changes.push(EnvChange::SetShellVar(
-            name.to_string(),
-            (*val + 1.0).to_string(),
-          ));
-          Ok(ArithmeticResult {
-            value: ArithmeticValue::Float(*val + 1.0),
-            changes: new_changes,
-          })
-        }
-        _ => Err(anyhow::anyhow!(
-          "Invalid arithmetic result type for pre-increment: {}",
-          self
-        )),
-      },
-    }
-  }
-
-  pub fn pre_decreament(
-    &self,
-    operand: &ArithmeticPart,
-  ) -> Result<ArithmeticResult, Error> {
-    match &self.value {
-      ArithmeticValue::Integer(val) => match operand {
-        ArithmeticPart::Variable(name) => {
-          let mut new_changes = self.changes.clone();
-          new_changes.push(EnvChange::SetShellVar(
-            name.to_string(),
-            (*val - 1).to_string(),
-          ));
-          Ok(ArithmeticResult {
-            value: ArithmeticValue::Integer(*val - 1),
-            changes: new_changes,
-          })
-        }
-        _ => Err(anyhow::anyhow!(
-          "Invalid arithmetic result type for pre-increment: {}",
-          self
-        )),
-      },
-      ArithmeticValue::Float(val) => match operand {
-        ArithmeticPart::Variable(name) => {
-          let mut new_changes = self.changes.clone();
-          new_changes.push(EnvChange::SetShellVar(
-            name.to_string(),
-            (*val - 1.0).to_string(),
-          ));
-          Ok(ArithmeticResult {
-            value: ArithmeticValue::Float(*val - 1.0),
-            changes: new_changes,
-          })
-        }
-        _ => Err(anyhow::anyhow!(
-          "Invalid arithmetic result type for pre-increment: {}",
-          self
-        )),
-      },
-    }
-  }
-
-  pub fn post_increment(
-    &self,
-    operand: &ArithmeticPart,
-  ) -> Result<ArithmeticResult, Error> {
-    match &self.value {
-      ArithmeticValue::Integer(val) => match operand {
-        ArithmeticPart::Variable(name) => {
-          let mut new_changes = self.changes.clone();
-          new_changes.push(EnvChange::SetShellVar(
-            name.to_string(),
-            (*val + 1).to_string(),
-          ));
-          Ok(ArithmeticResult {
-            value: ArithmeticValue::Integer(*val),
-            changes: new_changes,
-          })
-        }
-        _ => Err(anyhow::anyhow!(
-          "Invalid arithmetic result type for pre-increment: {}",
-          self
-        )),
-      },
-      ArithmeticValue::Float(val) => match operand {
-        ArithmeticPart::Variable(name) => {
-          let mut new_changes = self.changes.clone();
-          new_changes.push(EnvChange::SetShellVar(
-            name.to_string(),
-            (*val + 1.0).to_string(),
-          ));
-          Ok(ArithmeticResult {
-            value: ArithmeticValue::Float(*val),
-            changes: new_changes,
-          })
-        }
-        _ => Err(anyhow::anyhow!(
-          "Invalid arithmetic result type for pre-increment: {}",
-          self
-        )),
-      },
-    }
-  }
-
-  pub fn post_decreament(
-    &self,
-    operand: &ArithmeticPart,
-  ) -> Result<ArithmeticResult, Error> {
-    match &self.value {
-      ArithmeticValue::Integer(val) => match operand {
-        ArithmeticPart::Variable(name) => {
-          let mut new_changes = self.changes.clone();
-          new_changes.push(EnvChange::SetShellVar(
-            name.to_string(),
-            (*val - 1).to_string(),
-          ));
-          Ok(ArithmeticResult {
-            value: ArithmeticValue::Integer(*val),
-            changes: new_changes,
-          })
-        }
-        _ => Err(anyhow::anyhow!(
-          "Invalid arithmetic result type for pre-increment: {}",
-          self
-        )),
-      },
-      ArithmeticValue::Float(val) => match operand {
-        ArithmeticPart::Variable(name) => {
-          let mut new_changes = self.changes.clone();
-          new_changes.push(EnvChange::SetShellVar(
-            name.to_string(),
-            (*val - 1.0).to_string(),
-          ));
-          Ok(ArithmeticResult {
-            value: ArithmeticValue::Float(*val),
-            changes: new_changes,
-          })
-        }
-        _ => Err(anyhow::anyhow!(
-          "Invalid arithmetic result type for pre-increment: {}",
-          self
-        )),
+      UnaryArithmeticOp::Pre(op_type) => match &self.value {
+        ArithmeticValue::Integer(val) => match operand {
+          ArithmeticPart::Variable(name) => {
+            let mut new_changes = self.changes.clone();
+            new_changes.push(EnvChange::SetShellVar(
+              name.to_string(),
+              match op_type {
+                PreArithmeticOp::Increment => (*val + 1).to_string(),
+                PreArithmeticOp::Decrement => (*val - 1).to_string(),
+                _ => todo!(
+                  "Unary arithmetic operation not implemented {:?}",
+                  op_type
+                ),
+              },
+            ));
+            Ok(ArithmeticResult {
+              value: match op_type {
+                PreArithmeticOp::Increment => {
+                  ArithmeticValue::Integer(*val + 1)
+                }
+                PreArithmeticOp::Decrement => {
+                  ArithmeticValue::Integer(*val - 1)
+                }
+                _ => todo!(
+                  "Unary arithmetic operation not implemented {:?}",
+                  op_type
+                ),
+              },
+              changes: new_changes,
+            })
+          }
+          _ => Err(anyhow::anyhow!(
+            "Invalid arithmetic result type for pre-increment: {}",
+            self
+          )),
+        },
+        ArithmeticValue::Float(val) => match operand {
+          ArithmeticPart::Variable(name) => {
+            let mut new_changes = self.changes.clone();
+            new_changes.push(EnvChange::SetShellVar(
+              name.to_string(),
+              match op_type {
+                PreArithmeticOp::Increment => (*val + 1.0).to_string(),
+                PreArithmeticOp::Decrement => (*val - 1.0).to_string(),
+                _ => todo!(
+                  "Unary arithmetic operation not implemented {:?}",
+                  op_type
+                ),
+              },
+            ));
+            Ok(ArithmeticResult {
+              value: match op_type {
+                PreArithmeticOp::Increment => {
+                  ArithmeticValue::Float(*val + 1.0)
+                }
+                PreArithmeticOp::Decrement => {
+                  ArithmeticValue::Float(*val - 1.0)
+                }
+                _ => todo!(
+                  "Unary arithmetic operation not implemented {:?}",
+                  op_type
+                ),
+              },
+              changes: new_changes,
+            })
+          }
+          _ => Err(anyhow::anyhow!(
+            "Invalid arithmetic result type for pre-increment: {}",
+            self
+          )),
+        },
       },
     }
   }
