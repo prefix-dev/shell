@@ -18,6 +18,7 @@ use futures::future::LocalBoxFuture;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
+use crate::parser::ArithmeticPart;
 use crate::shell::fs_util;
 
 use super::commands::builtin_commands;
@@ -574,6 +575,174 @@ impl ArithmeticResult {
     }
   }
 
+  pub fn pre_increament(
+    &self,
+    operand: &ArithmeticPart,
+  ) -> Result<ArithmeticResult, Error> {
+    match &self.value {
+      ArithmeticValue::Integer(val) => match operand {
+        ArithmeticPart::Variable(name) => {
+          let mut new_changes = self.changes.clone();
+          new_changes.push(EnvChange::SetShellVar(
+            name.to_string(),
+            (*val + 1).to_string(),
+          ));
+          Ok(ArithmeticResult {
+            value: ArithmeticValue::Integer(*val + 1),
+            changes: new_changes,
+          })
+        }
+        _ => Err(anyhow::anyhow!(
+          "Invalid arithmetic result type for pre-increament: {}",
+          self
+        )),
+      },
+      ArithmeticValue::Float(val) => match operand {
+        ArithmeticPart::Variable(name) => {
+          let mut new_changes = self.changes.clone();
+          new_changes.push(EnvChange::SetShellVar(
+            name.to_string(),
+            (*val + 1.0).to_string(),
+          ));
+          Ok(ArithmeticResult {
+            value: ArithmeticValue::Float(*val + 1.0),
+            changes: new_changes,
+          })
+        }
+        _ => Err(anyhow::anyhow!(
+          "Invalid arithmetic result type for pre-increament: {}",
+          self
+        )),
+      },
+    }
+  }
+
+  pub fn pre_decreament(
+    &self,
+    operand: &ArithmeticPart,
+  ) -> Result<ArithmeticResult, Error> {
+    match &self.value {
+      ArithmeticValue::Integer(val) => match operand {
+        ArithmeticPart::Variable(name) => {
+          let mut new_changes = self.changes.clone();
+          new_changes.push(EnvChange::SetShellVar(
+            name.to_string(),
+            (*val - 1).to_string(),
+          ));
+          Ok(ArithmeticResult {
+            value: ArithmeticValue::Integer(*val - 1),
+            changes: new_changes,
+          })
+        }
+        _ => Err(anyhow::anyhow!(
+          "Invalid arithmetic result type for pre-increament: {}",
+          self
+        )),
+      },
+      ArithmeticValue::Float(val) => match operand {
+        ArithmeticPart::Variable(name) => {
+          let mut new_changes = self.changes.clone();
+          new_changes.push(EnvChange::SetShellVar(
+            name.to_string(),
+            (*val - 1.0).to_string(),
+          ));
+          Ok(ArithmeticResult {
+            value: ArithmeticValue::Float(*val - 1.0),
+            changes: new_changes,
+          })
+        }
+        _ => Err(anyhow::anyhow!(
+          "Invalid arithmetic result type for pre-increament: {}",
+          self
+        )),
+      },
+    }
+  }
+
+  pub fn post_increament(
+    &self,
+    operand: &ArithmeticPart,
+  ) -> Result<ArithmeticResult, Error> {
+    match &self.value {
+      ArithmeticValue::Integer(val) => match operand {
+        ArithmeticPart::Variable(name) => {
+          let mut new_changes = self.changes.clone();
+          new_changes.push(EnvChange::SetShellVar(
+            name.to_string(),
+            (*val + 1).to_string(),
+          ));
+          Ok(ArithmeticResult {
+            value: ArithmeticValue::Integer(*val),
+            changes: new_changes,
+          })
+        }
+        _ => Err(anyhow::anyhow!(
+          "Invalid arithmetic result type for pre-increament: {}",
+          self
+        )),
+      },
+      ArithmeticValue::Float(val) => match operand {
+        ArithmeticPart::Variable(name) => {
+          let mut new_changes = self.changes.clone();
+          new_changes.push(EnvChange::SetShellVar(
+            name.to_string(),
+            (*val + 1.0).to_string(),
+          ));
+          Ok(ArithmeticResult {
+            value: ArithmeticValue::Float(*val),
+            changes: new_changes,
+          })
+        }
+        _ => Err(anyhow::anyhow!(
+          "Invalid arithmetic result type for pre-increament: {}",
+          self
+        )),
+      },
+    }
+  }
+
+  pub fn post_decreament(
+    &self,
+    operand: &ArithmeticPart,
+  ) -> Result<ArithmeticResult, Error> {
+    match &self.value {
+      ArithmeticValue::Integer(val) => match operand {
+        ArithmeticPart::Variable(name) => {
+          let mut new_changes = self.changes.clone();
+          new_changes.push(EnvChange::SetShellVar(
+            name.to_string(),
+            (*val - 1).to_string(),
+          ));
+          Ok(ArithmeticResult {
+            value: ArithmeticValue::Integer(*val),
+            changes: new_changes,
+          })
+        }
+        _ => Err(anyhow::anyhow!(
+          "Invalid arithmetic result type for pre-increament: {}",
+          self
+        )),
+      },
+      ArithmeticValue::Float(val) => match operand {
+        ArithmeticPart::Variable(name) => {
+          let mut new_changes = self.changes.clone();
+          new_changes.push(EnvChange::SetShellVar(
+            name.to_string(),
+            (*val - 1.0).to_string(),
+          ));
+          Ok(ArithmeticResult {
+            value: ArithmeticValue::Float(*val),
+            changes: new_changes,
+          })
+        }
+        _ => Err(anyhow::anyhow!(
+          "Invalid arithmetic result type for pre-increament: {}",
+          self
+        )),
+      },
+    }
+  }
+
   pub fn checked_add(
     &self,
     other: &ArithmeticResult,
@@ -1111,5 +1280,9 @@ impl WordEvalResult {
 
   pub fn join(&self, sep: &str) -> String {
     self.value.join(sep)
+  }
+
+  pub fn with_changes(&mut self, changes: Vec<EnvChange>) {
+    self.changes.extend(changes);
   }
 }

@@ -1,5 +1,10 @@
 echo $((2 ** 3))
 
-echo $((a++))
+a=1
 
-echo $((--a))
+echo $a
+
+echo $((++(a)))
+
+
+echo $a

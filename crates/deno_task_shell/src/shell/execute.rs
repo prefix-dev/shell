@@ -19,6 +19,8 @@ use crate::parser::Condition;
 use crate::parser::ConditionInner;
 use crate::parser::ElsePart;
 use crate::parser::IoFile;
+use crate::parser::PostArithmeticOp;
+use crate::parser::PreArithmeticOp;
 use crate::parser::RedirectOpInput;
 use crate::parser::RedirectOpOutput;
 use crate::parser::UnaryOp;
@@ -599,7 +601,10 @@ async fn evaluate_arithmetic_part(
           }?
         }
       };
-      state.apply_env_var(name, &applied_value.to_string());
+      state.apply_change(&EnvChange::SetShellVar(
+        (&name).to_string(),
+        applied_value.value.to_string(),
+      ));
       Ok(
         applied_value
           .clone()
@@ -643,9 +648,13 @@ async fn evaluate_arithmetic_part(
       let val = Box::pin(evaluate_arithmetic_part(operand, state)).await?;
       apply_unary_op(*operator, val)
     }
-    ArithmeticPart::PostArithmeticExpr { operand, .. } => {
+    ArithmeticPart::PostArithmeticExpr { operand, operator } => {
       let val = Box::pin(evaluate_arithmetic_part(operand, state)).await?;
-      Ok(val)
+      apply_post_op(state, *operator, val, operand)
+    }
+    ArithmeticPart::PreArithmeticExpr { operator, operand } => {
+      let val = Box::pin(evaluate_arithmetic_part(operand, state)).await?;
+      apply_pre_op(state, *operator, val, operand)
     }
     ArithmeticPart::Variable(name) => state
       .get_var(name)
@@ -741,6 +750,50 @@ fn apply_unary_op(
       ArithmeticResult::new(ArithmeticValue::Integer(0))
     }),
     UnaryArithmeticOp::BitwiseNot => val.checked_not(),
+  }
+}
+
+fn apply_pre_op(
+  state: &mut ShellState,
+  op: PreArithmeticOp,
+  val: ArithmeticResult,
+  operand: &ArithmeticPart,
+) -> Result<ArithmeticResult, Error> {
+  match op {
+    PreArithmeticOp::Increment => {
+      let result = val.pre_increament(operand)?;
+      let result_clone = result.clone();
+      state.apply_changes(&result_clone.changes);
+      Ok(result)
+    }
+    PreArithmeticOp::Decrement => {
+      let result = val.pre_decreament(operand)?;
+      let result_clone = result.clone();
+      state.apply_changes(&result_clone.changes);
+      Ok(result)
+    }
+  }
+}
+
+fn apply_post_op(
+  state: &mut ShellState,
+  op: PostArithmeticOp,
+  val: ArithmeticResult,
+  operand: &ArithmeticPart,
+) -> Result<ArithmeticResult, Error> {
+  match op {
+    PostArithmeticOp::Increment => {
+      let result = val.post_increament(operand)?;
+      let result_clone = result.clone();
+      state.apply_changes(&result_clone.changes);
+      Ok(result)
+    }
+    PostArithmeticOp::Decrement => {
+      let result = val.post_decreament(operand)?;
+      let result_clone = result.clone();
+      state.apply_changes(&result_clone.changes);
+      Ok(result)
+    }
   }
 }
 
@@ -1350,6 +1403,7 @@ fn evaluate_word_parts(
       if !current_text.is_empty() {
         result.extend(evaluate_word_text(state, current_text, is_quoted)?);
       }
+      result.with_changes(changes);
       Ok(result)
     }
     .boxed_local()

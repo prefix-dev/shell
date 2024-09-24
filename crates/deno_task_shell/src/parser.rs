@@ -431,6 +431,11 @@ pub enum ArithmeticPart {
     operator: UnaryArithmeticOp,
     operand: Box<ArithmeticPart>,
   },
+  #[error("Invalid pre arithmetic expression")]
+  PreArithmeticExpr {
+    operator: PreArithmeticOp,
+    operand: Box<ArithmeticPart>,
+  },
   #[error("Invalid post arithmetic expression")]
   PostArithmeticExpr {
     operand: Box<ArithmeticPart>,
@@ -490,7 +495,15 @@ pub enum UnaryArithmeticOp {
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
 #[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Copy)]
+pub enum PreArithmeticOp {
+  Increment, // ++
+  Decrement, // --
+}
+
+#[cfg_attr(feature = "serialization", derive(serde::Serialize))]
+#[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
+#[derive(Debug, Clone, PartialEq, Eq, Copy)]
 pub enum PostArithmeticOp {
   Increment, // ++
   Decrement, // --
@@ -1419,7 +1432,9 @@ fn parse_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
 
 fn parse_unary_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
   let mut inner = pair.into_inner();
-  let first = inner.next().ok_or_else(|| miette!("Expected unary operator"))?;
+  let first = inner
+    .next()
+    .ok_or_else(|| miette!("Expected unary operator"))?;
 
   match first.as_rule() {
     Rule::unary_pre_arithmetic_expr => unary_pre_arithmetic_expr(first),
@@ -1433,7 +1448,9 @@ fn parse_unary_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
 
 fn unary_pre_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
   let mut inner = pair.into_inner();
-  let first = inner.next().ok_or_else(|| miette!("Expected unary pre operator"))?;
+  let first = inner
+    .next()
+    .ok_or_else(|| miette!("Expected unary pre operator"))?;
   let second = inner.next().ok_or_else(|| miette!("Expected operand"))?;
   let operand = match second.as_rule() {
     Rule::parentheses_expr => {
@@ -1458,14 +1475,14 @@ fn unary_pre_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
         operator: (op),
         operand: (Box::new(operand)),
       })
-    },
+    }
     Rule::post_arithmetic_op => {
-      let op = parse_post_arithmetic_op(first)?;
-      Ok(ArithmeticPart::PostArithmeticExpr {
+      let op = parse_pre_arithmetic_op(first)?;
+      Ok(ArithmeticPart::PreArithmeticExpr {
         operator: (op),
         operand: (Box::new(operand)),
       })
-    },
+    }
     _ => Err(miette!(
       "Unexpected rule in unary arithmetic operator: {:?}",
       first.as_rule()
@@ -1475,7 +1492,9 @@ fn unary_pre_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
 
 fn unary_post_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
   let mut inner = pair.into_inner();
-  let first = inner.next().ok_or_else(|| miette!("Expected unary post operator"))?;
+  let first = inner
+    .next()
+    .ok_or_else(|| miette!("Expected unary post operator"))?;
   let second = inner.next().ok_or_else(|| miette!("Expected operand"))?;
 
   let operand = match first.as_rule() {
@@ -1501,7 +1520,10 @@ fn unary_post_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
 }
 
 fn parse_unary_arithmetic_op(pair: Pair<Rule>) -> Result<UnaryArithmeticOp> {
-  let first = pair.into_inner().next().ok_or_else(|| miette!("Expected unary operator"))?;
+  let first = pair
+    .into_inner()
+    .next()
+    .ok_or_else(|| miette!("Expected unary operator"))?;
 
   match first.as_rule() {
     Rule::add => Ok(UnaryArithmeticOp::Plus),
@@ -1515,8 +1537,26 @@ fn parse_unary_arithmetic_op(pair: Pair<Rule>) -> Result<UnaryArithmeticOp> {
   }
 }
 
+fn parse_pre_arithmetic_op(pair: Pair<Rule>) -> Result<PreArithmeticOp> {
+  let first = pair
+    .into_inner()
+    .next()
+    .ok_or_else(|| miette!("Expected increament or decreament operator"))?;
+  match first.as_rule() {
+    Rule::increment => Ok(PreArithmeticOp::Increment),
+    Rule::decrement => Ok(PreArithmeticOp::Decrement),
+    _ => Err(miette!(
+      "Unexpected rule in post arithmetic operator: {:?}",
+      first.as_rule()
+    )),
+  }
+}
+
 fn parse_post_arithmetic_op(pair: Pair<Rule>) -> Result<PostArithmeticOp> {
-  let first = pair.into_inner().next().ok_or_else(|| miette!("Expected increament or decreament operator"))?;
+  let first = pair
+    .into_inner()
+    .next()
+    .ok_or_else(|| miette!("Expected increament or decreament operator"))?;
   match first.as_rule() {
     Rule::increment => Ok(PostArithmeticOp::Increment),
     Rule::decrement => Ok(PostArithmeticOp::Decrement),
