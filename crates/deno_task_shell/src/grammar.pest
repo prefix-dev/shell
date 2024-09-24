@@ -215,7 +215,6 @@ unary_post_arithmetic_expr = !{
     (parentheses_expr | VARIABLE | NUMBER) ~ post_arithmetic_op
 }
 
-
 pre_arithmetic_op= _{
     unary_plus | unary_minus | logical_not | bitwise_not
 }

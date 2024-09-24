@@ -892,7 +892,6 @@ async fn arithmetic() {
         .assert_stdout("0\n")
         .run()
         .await;
-
 }
 
 #[tokio::test]
