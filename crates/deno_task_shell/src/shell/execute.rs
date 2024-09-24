@@ -52,7 +52,6 @@ use crate::parser::RedirectOp;
 use crate::parser::Sequence;
 use crate::parser::SequentialList;
 use crate::parser::SimpleCommand;
-use crate::parser::UnaryArithmeticOp;
 use crate::parser::Word;
 use crate::parser::WordPart;
 use crate::shell::types::WordEvalResult;
@@ -644,10 +643,6 @@ async fn evaluate_arithmetic_part(
       let rhs = Box::pin(evaluate_arithmetic_part(right, state)).await?;
       apply_conditional_binary_op(lhs, operator, rhs)
     }
-    ArithmeticPart::UnaryArithmeticExpr { operator, operand } => {
-      let val = Box::pin(evaluate_arithmetic_part(operand, state)).await?;
-      apply_unary_op(*operator, val)
-    }
     ArithmeticPart::PostArithmeticExpr { operand, operator } => {
       let val = Box::pin(evaluate_arithmetic_part(operand, state)).await?;
       apply_post_op(state, *operator, val, operand)
@@ -737,22 +732,6 @@ fn apply_conditional_binary_op(
   }
 }
 
-fn apply_unary_op(
-  op: UnaryArithmeticOp,
-  val: ArithmeticResult,
-) -> Result<ArithmeticResult, Error> {
-  match op {
-    UnaryArithmeticOp::Plus => Ok(val),
-    UnaryArithmeticOp::Minus => val.checked_neg(),
-    UnaryArithmeticOp::LogicalNot => Ok(if val.is_zero() {
-      ArithmeticResult::new(ArithmeticValue::Integer(1))
-    } else {
-      ArithmeticResult::new(ArithmeticValue::Integer(0))
-    }),
-    UnaryArithmeticOp::BitwiseNot => val.checked_not(),
-  }
-}
-
 fn apply_pre_op(
   state: &mut ShellState,
   op: PreArithmeticOp,
@@ -771,6 +750,9 @@ fn apply_pre_op(
       let result_clone = result.clone();
       state.apply_changes(&result_clone.changes);
       Ok(result)
+    }
+    _ => {
+      todo!("Pre arithmetic operator {:?} is not implemented", op)
     }
   }
 }

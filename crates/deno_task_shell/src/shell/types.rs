@@ -1044,45 +1044,6 @@ impl ArithmeticResult {
     })
   }
 
-  pub fn checked_neg(&self) -> Result<ArithmeticResult, Error> {
-    let result = match &self.value {
-      ArithmeticValue::Integer(val) => val
-        .checked_neg()
-        .map(ArithmeticValue::Integer)
-        .ok_or_else(|| anyhow::anyhow!("Integer overflow: -{}", val))?,
-      ArithmeticValue::Float(val) => {
-        let result = -val;
-        if result.is_finite() {
-          ArithmeticValue::Float(result)
-        } else {
-          return Err(anyhow::anyhow!("Float overflow: -{}", val));
-        }
-      }
-    };
-
-    Ok(ArithmeticResult {
-      value: result,
-      changes: self.changes.clone(),
-    })
-  }
-
-  pub fn checked_not(&self) -> Result<ArithmeticResult, Error> {
-    let result = match &self.value {
-      ArithmeticValue::Integer(val) => ArithmeticValue::Integer(!val),
-      ArithmeticValue::Float(_) => {
-        return Err(anyhow::anyhow!(
-          "Invalid arithmetic result type for bitwise NOT: {}",
-          self
-        ))
-      }
-    };
-
-    Ok(ArithmeticResult {
-      value: result,
-      changes: self.changes.clone(),
-    })
-  }
-
   pub fn checked_shl(
     &self,
     other: &ArithmeticResult,

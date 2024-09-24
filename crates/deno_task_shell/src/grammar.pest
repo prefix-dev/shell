@@ -208,7 +208,6 @@ unary_arithmetic_expr = !{
 
 unary_pre_arithmetic_expr = !{
     (post_arithmetic_op | pre_arithmetic_op) ~ (parentheses_expr | VARIABLE | NUMBER)
-
 }
 
 unary_post_arithmetic_expr = !{
