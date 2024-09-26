@@ -20,7 +20,7 @@ impl ShellCommand for TouchCommand {
         Box::pin(futures::future::ready(match execute_touch(&mut context) {
             Ok(_) => ExecuteResult::from_exit_code(0),
             Err(e) => {
-                let _ = context.stderr.write_all(format!("{:#}", e).as_bytes());
+                let _ = context.stderr.write_all(format!("{:?}", e).as_bytes());
                 ExecuteResult::from_exit_code(1)
             }
         }))

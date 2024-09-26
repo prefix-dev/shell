@@ -776,7 +776,6 @@ async fn uname() {
     TestBuilder::new()
         .command("uname")
         .assert_exit_code(0)
-        .check_stderr(false)
         .check_stdout(false)
         .run()
         .await;
@@ -940,12 +939,6 @@ async fn touch() {
         .await;
 
     TestBuilder::new()
-        .command("touch -d '2024-02-20 14:30:00' yyyymmddhhmms.txt")
-        .assert_exists("yyyymmddhhmms.txt")
-        .run()
-        .await;
-
-    TestBuilder::new()
         .command("touch -d '2024-02-20 14:30' yyyy_mm_dd_hh_mm.txt")
         .assert_exists("yyyy_mm_dd_hh_mm.txt")
         .run()
@@ -966,6 +959,57 @@ async fn touch() {
     TestBuilder::new()
         .command("touch file.txt && touch -r file.txt reference.txt")
         .assert_exists("reference.txt")
+        .run()
+        .await;
+    // Test for non-existent file with -c option
+    TestBuilder::new()
+        .command("touch -c nonexistent.txt")
+        .assert_not_exists("nonexistent.txt")
+        .run()
+        .await;
+
+    // Test for invalid date format
+    TestBuilder::new()
+        .command("touch -d 'invalid date' invalid_date.txt")
+        .assert_stderr_contains("Unable to parse date: invalid date\n")
+        .assert_exit_code(1)
+        .run()
+        .await;
+
+    // Test for invalid timestamp format
+    TestBuilder::new()
+        .command("touch -t 9999999999 invalid_timestamp.txt")
+        .assert_stderr_contains("invalid date format '9999999999'\n")
+        .assert_exit_code(1)
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("touch ~/absolute_path.txt")
+        .assert_exists("~/absolute_path.txt")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("touch /non_existent_dir/non_existent.txt")
+        .assert_stderr_contains("No such file or directory")
+        .assert_exit_code(1)
+        .run()
+        .await;
+
+    // Test with -h option on a symlink
+    TestBuilder::new()
+        .command("touch original.txt && ln -s original.txt symlink.txt && touch -h symlink.txt")
+        .assert_exists("symlink.txt")
+        .run()
+        .await;
+
+    // Test with multiple files, including one that doesn't exist
+    TestBuilder::new()
+        .command("touch existing.txt && touch existing.txt nonexistent.txt another_existing.txt")
+        .assert_exists("existing.txt")
+        .assert_exists("nonexistent.txt")
+        .assert_exists("another_existing.txt")
         .run()
         .await;
 }

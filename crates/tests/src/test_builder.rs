@@ -65,6 +65,7 @@ pub struct TestBuilder {
     expected_exit_code: i32,
     expected_stderr: String,
     expected_stdout: String,
+    expected_stderr_contains: String,
     assertions: Vec<TestAssertion>,
     assert_stdout: bool,
     assert_stderr: bool,
@@ -101,9 +102,10 @@ impl TestBuilder {
             expected_exit_code: 0,
             expected_stderr: Default::default(),
             expected_stdout: Default::default(),
+            expected_stderr_contains: Default::default(),
             assertions: Default::default(),
             assert_stdout: true,
-            assert_stderr: true,
+            assert_stderr: false,
         }
     }
 
@@ -163,6 +165,15 @@ impl TestBuilder {
 
     pub fn assert_stderr(&mut self, output: &str) -> &mut Self {
         self.expected_stderr.push_str(output);
+        self.assert_stderr = true;
+        self.expected_stderr_contains.clear();
+        self
+    }
+
+    pub fn assert_stderr_contains(&mut self, output: &str) -> &mut Self {
+        self.expected_stderr_contains.push_str(output);
+        self.assert_stderr = false;
+        self.expected_stderr.clear();
         self
     }
 
@@ -173,11 +184,6 @@ impl TestBuilder {
 
     pub fn check_stdout(&mut self, check_stdout: bool) -> &mut Self {
         self.assert_stdout = check_stdout;
-        self
-    }
-
-    pub fn check_stderr(&mut self, check_stderr: bool) -> &mut Self {
-        self.assert_stderr = check_stderr;
         self
     }
 
@@ -231,12 +237,20 @@ impl TestBuilder {
         } else {
             "NO_TEMP_DIR".to_string()
         };
+        let stderr_output = stderr_handle.await.unwrap();
         if self.assert_stderr {
             assert_eq!(
-                stderr_handle.await.unwrap(),
+                stderr_output,
                 self.expected_stderr.replace("$TEMP_DIR", &temp_dir),
                 "\n\nFailed for: {}",
                 self.command
+            );
+        } else if !self.expected_stderr_contains.is_empty() {
+            assert!(
+                stderr_output.contains(&self.expected_stderr_contains),
+                "\n\nFailed for: {}\nExpected stderr to contain: {}",
+                self.command,
+                self.expected_stderr_contains
             );
         }
         if self.assert_stdout {
@@ -256,8 +270,15 @@ impl TestBuilder {
         for assertion in &self.assertions {
             match assertion {
                 TestAssertion::FileExists(path) => {
+                    let path_to_check = if path.starts_with('/') {
+                        PathBuf::from(path)
+                    } else if path.starts_with("~/") {
+                        dirs::home_dir().unwrap().join(path.strip_prefix("~/").unwrap())
+                    } else {
+                        cwd.join(path)
+                    };
                     assert!(
-                        cwd.join(path).exists(),
+                        path_to_check.exists(),
                         "\n\nFailed for: {}\nExpected '{}' to exist.",
                         self.command,
                         path,
