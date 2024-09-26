@@ -273,7 +273,9 @@ impl TestBuilder {
                     let path_to_check = if path.starts_with('/') {
                         PathBuf::from(path)
                     } else if path.starts_with("~/") {
-                        dirs::home_dir().unwrap().join(path.strip_prefix("~/").unwrap())
+                        dirs::home_dir()
+                            .unwrap()
+                            .join(path.strip_prefix("~/").unwrap())
                     } else {
                         cwd.join(path)
                     };
