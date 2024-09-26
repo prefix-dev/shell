@@ -618,7 +618,7 @@ async fn evaluate_arithmetic_part(
       let rhs = Box::pin(evaluate_arithmetic_part(right, state)).await?;
       apply_conditional_binary_op(lhs, operator, rhs)
     }
-    ArithmeticPart::UnaryAritheticExpr { operator, operand } => {
+    ArithmeticPart::UnaryArithmeticExpr { operator, operand } => {
       let val = Box::pin(evaluate_arithmetic_part(operand, state)).await?;
       apply_unary_op(state, *operator, val, operand)
     }

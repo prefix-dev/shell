@@ -427,7 +427,7 @@ pub enum ArithmeticPart {
     right: Box<ArithmeticPart>,
   },
   #[error("Invalid unary arithmetic expression")]
-  UnaryAritheticExpr {
+  UnaryArithmeticExpr {
     operator: UnaryArithmeticOp,
     operand: Box<ArithmeticPart>,
   },
@@ -1463,14 +1463,14 @@ fn unary_pre_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
   match first.as_rule() {
     Rule::pre_arithmetic_op => {
       let op = parse_pre_arithmetic_op(first)?;
-      Ok(ArithmeticPart::UnaryAritheticExpr {
+      Ok(ArithmeticPart::UnaryArithmeticExpr {
         operator: UnaryArithmeticOp::Pre(op),
         operand: Box::new(operand),
       })
     }
     Rule::post_arithmetic_op => {
       let op = parse_pre_arithmetic_op(first)?;
-      Ok(ArithmeticPart::UnaryAritheticExpr {
+      Ok(ArithmeticPart::UnaryArithmeticExpr {
         operator: UnaryArithmeticOp::Pre(op),
         operand: Box::new(operand),
       })
@@ -1505,7 +1505,7 @@ fn unary_post_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
     )),
   }?;
   let op = parse_post_arithmetic_op(second)?;
-  Ok(ArithmeticPart::UnaryAritheticExpr {
+  Ok(ArithmeticPart::UnaryArithmeticExpr {
     operator: UnaryArithmeticOp::Post(op),
     operand: Box::new(operand),
   })
