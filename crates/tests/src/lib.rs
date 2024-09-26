@@ -991,7 +991,7 @@ async fn touch() {
         .await;
 
     TestBuilder::new()
-        .command("touch /non_existent_dir/non_existent.txt")
+        .command("touch ~/non_existent_dir/non_existent.txt")
         .assert_stderr_contains("No such file or directory")
         .assert_exit_code(1)
         .run()
