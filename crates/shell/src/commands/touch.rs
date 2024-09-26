@@ -281,19 +281,13 @@ fn pathbuf_from_stdout() -> Result<PathBuf> {
 
         let buffer_size = match ret {
             ERROR_PATH_NOT_FOUND | ERROR_NOT_ENOUGH_MEMORY | ERROR_INVALID_PARAMETER => {
-                return Err(USimpleError::new(
-                    1,
-                    format!("GetFinalPathNameByHandleW failed with code {ret}"),
-                ))
+                return Err(miette!("GetFinalPathNameByHandleW failed with code {ret}"))
             }
             0 => {
-                return Err(USimpleError::new(
-                    1,
-                    format!(
-                        "GetFinalPathNameByHandleW failed with code {}",
-                        // SAFETY: GetLastError is thread-safe and has no documented memory unsafety.
-                        unsafe { GetLastError() }
-                    ),
+                return Err(miette!(
+                    "GetFinalPathNameByHandleW failed with code {}",
+                    // SAFETY: GetLastError is thread-safe and has no documented memory unsafety.
+                    unsafe { GetLastError() }
                 ));
             }
             e => e as usize,
@@ -301,7 +295,7 @@ fn pathbuf_from_stdout() -> Result<PathBuf> {
 
         // Don't include the null terminator
         Ok(String::from_utf16(&file_path_buffer[0..buffer_size])
-            .map_err(|e| USimpleError::new(1, e.to_string()))?
+            .map_err(|e| miette!("GetFinalPathNameByHandleW failed with code {ret}"))?
             .into())
     }
 }
