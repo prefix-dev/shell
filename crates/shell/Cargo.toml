@@ -39,6 +39,9 @@ miette = { version = "7.2.0", features = ["fancy"] }
 thiserror = "1.0.64"
 filetime = "0.2.25"
 datetime = "0.5.2"
+chrono = "0.4.38"
+parse_datetime = "0.6.0"
+dtparse = "2.0.1"
 
 [package.metadata.release]
 # Dont publish the binary

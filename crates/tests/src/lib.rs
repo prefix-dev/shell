@@ -916,8 +916,50 @@ async fn touch() {
         .await;
 
     TestBuilder::new()
-        .command("touch -t 202401010000.00 timestamp.txt")
-        .assert_exists("timestamp.txt")
+        .command("touch -d 'Tue Feb 20 14:30:00 2024' posix_locale.txt")
+        .assert_exists("posix_locale.txt")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("touch -d '2024-02-20' iso_8601.txt")
+        .assert_exists("iso_8601.txt")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("touch -t 202402201430.00 yyyymmddhhmmss.txt")
+        .assert_exists("yyyymmddhhmmss.txt")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("touch -d '2024-02-20 14:30:00.000000' yyyymmddhhmmss_ms.txt")
+        .assert_exists("yyyymmddhhmmss_ms.txt")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("touch -d '2024-02-20 14:30:00' yyyymmddhhmms.txt")
+        .assert_exists("yyyymmddhhmms.txt")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("touch -d '2024-02-20 14:30' yyyy_mm_dd_hh_mm.txt")
+        .assert_exists("yyyy_mm_dd_hh_mm.txt")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("touch -t 202402201430 yyyymmddhhmm.txt")
+        .assert_exists("yyyymmddhhmm.txt")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("touch -d '2024-02-20 14:30 +0000' yyyymmddhhmm_offset.txt")
+        .assert_exists("yyyymmddhhmm_offset.txt")
         .run()
         .await;
 

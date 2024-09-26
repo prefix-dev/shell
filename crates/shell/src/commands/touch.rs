@@ -1,10 +1,15 @@
-use std::{ffi::OsString, fs::{self, File}, path::{Path, PathBuf}};
+use std::{
+    ffi::OsString,
+    fs::{self, File},
+    path::{Path, PathBuf},
+};
 
+use chrono::{DateTime, Duration, Local, NaiveDateTime, TimeZone, Timelike};
 use deno_task_shell::{ExecuteResult, ShellCommand, ShellCommandContext};
-use futures::future::LocalBoxFuture;
-use uu_touch::{uu_app as uu_touch, options};
-use miette::{miette, Result, IntoDiagnostic};
 use filetime::{set_file_times, set_symlink_file_times, FileTime};
+use futures::future::LocalBoxFuture;
+use miette::{miette, IntoDiagnostic, Result};
+use uu_touch::{options, uu_app as uu_touch};
 
 static ARG_FILES: &str = "files";
 
@@ -17,13 +22,17 @@ impl ShellCommand for TouchCommand {
             Err(e) => {
                 let _ = context.stderr.write_all(format!("{:#}", e).as_bytes());
                 ExecuteResult::from_exit_code(1)
-            },
+            }
         }))
     }
 }
 
 fn execute_touch(context: &mut ShellCommandContext) -> Result<()> {
-    let matches = uu_touch().try_get_matches_from(context.args.clone()).into_diagnostic()?;
+    let matches = uu_touch()
+        .override_usage("touch [OPTION]...")
+        .no_binary_name(true)
+        .try_get_matches_from(&context.args)
+        .into_diagnostic()?;
 
     let files = match matches.get_many::<OsString>(ARG_FILES) {
         Some(files) => files.map(|file| {
@@ -35,26 +44,38 @@ fn execute_touch(context: &mut ShellCommandContext) -> Result<()> {
             }
         }),
         None => {
-            return Err(miette!("missing file operand\nTry 'touch --help' for more information."));
+            return Err(miette!(
+                "missing file operand\nTry 'touch --help' for more information."
+            ))
         }
     };
 
-    let (atime, mtime) = match (
+    let (mut atime, mut mtime) = match (
         matches.get_one::<OsString>(options::sources::REFERENCE),
         matches.get_one::<String>(options::sources::DATE),
     ) {
         (Some(reference), Some(date)) => {
-            let (atime, mtime) = stat(Path::new(&reference), !matches.get_flag(options::NO_DEREF))?;
-            let atime = filetime_to_datetime(&atime).ok_or_else(|| {
-                miette!("Could not process the reference access time")
-            })?;
-            let mtime = filetime_to_datetime(&mtime).ok_or_else(|| {
-                miette!("Could not process the reference modification time")
-            })?;
+            let reference_path = PathBuf::from(reference);
+            let reference_path = if reference_path.is_absolute() {
+                reference_path
+            } else {
+                context.state.cwd().join(reference_path)
+            };
+            let (atime, mtime) = stat(&reference_path, !matches.get_flag(options::NO_DEREF))?;
+            let atime = filetime_to_datetime(&atime)
+                .ok_or_else(|| miette!("Could not process the reference access time"))?;
+            let mtime = filetime_to_datetime(&mtime)
+                .ok_or_else(|| miette!("Could not process the reference modification time"))?;
             Ok((parse_date(atime, date)?, parse_date(mtime, date)?))
         }
         (Some(reference), None) => {
-            stat(Path::new(&reference), !matches.get_flag(options::NO_DEREF))
+            let reference_path = PathBuf::from(reference);
+            let reference_path = if reference_path.is_absolute() {
+                reference_path
+            } else {
+                context.state.cwd().join(reference_path)
+            };
+            stat(&reference_path, !matches.get_flag(options::NO_DEREF))
         }
         (None, Some(date)) => {
             let timestamp = parse_date(Local::now(), date)?;
@@ -69,15 +90,14 @@ fn execute_touch(context: &mut ShellCommandContext) -> Result<()> {
             };
             Ok((timestamp, timestamp))
         }
-    }.map_err(|e| miette!("{}", e))?;
+    }
+    .map_err(|e| miette!("{}", e))?;
 
     for filename in files {
-        // FIXME: find a way to avoid having to clone the path
-        let pathbuf = if filename.to_string_lossy() == "-" {
-            pathbuf_from_stdout()
-                .into_diagnostic()?
+        let pathbuf = if filename.to_str() == Some("-") {
+            pathbuf_from_stdout()?
         } else {
-            PathBuf::from(filename)
+            filename
         };
 
         let path = pathbuf.as_path();
@@ -90,7 +110,7 @@ fn execute_touch(context: &mut ShellCommandContext) -> Result<()> {
 
         if let Err(e) = metadata_result {
             if e.kind() != std::io::ErrorKind::NotFound {
-                return Err(miette!("setting times of {}: {}", filename.to_string_lossy(), e));
+                return Err(miette!("setting times of {}: {}", path.display(), e));
             }
 
             if matches.get_flag(options::NO_CREATE) {
@@ -98,8 +118,13 @@ fn execute_touch(context: &mut ShellCommandContext) -> Result<()> {
             }
 
             if matches.get_flag(options::NO_DEREF) {
-                context.stderr.write_all(format!("setting times of {}: No such file or directory", filename.to_string_lossy()).as_bytes())
-                    .map_err(|e| miette!("Failed to write to stderr: {}", e))?;
+                let _ = context.stderr.write_all(
+                    format!(
+                        "setting times of {:?}: No such file or directory",
+                        path.display()
+                    )
+                    .as_bytes(),
+                );
                 continue;
             }
 
@@ -145,15 +170,15 @@ fn execute_touch(context: &mut ShellCommandContext) -> Result<()> {
         // If the filename is not "-", indicating a special case for touch -h -,
         // the code checks if the NO_DEREF flag is set, which means the user wants to
         // set the times for a symbolic link itself, rather than the file it points to.
-        if filename.to_string_lossy() == "-" {
-            filetime::set_file_times(path, atime, mtime)
+        if path.to_string_lossy() == "-" {
+            set_file_times(path, atime, mtime)
         } else if matches.get_flag(options::NO_DEREF) {
             set_symlink_file_times(path, atime, mtime)
         } else {
             set_file_times(path, atime, mtime)
         }
         .map_err(|e| miette!("setting times of {}: {}", path.display(), e))?;
-        }
+    }
 
     Ok(())
 }
@@ -177,54 +202,36 @@ fn filetime_to_datetime(ft: &FileTime) -> Option<DateTime<Local>> {
 }
 
 fn parse_timestamp(s: &str) -> Result<FileTime> {
-    let current_year = || Local::now().year();
-
-    let (format, ts) = match s.chars().count() {
-        15 => (YYYYMMDDHHMM_DOT_SS, s.to_owned()),
-        12 => (YYYYMMDDHHMM, s.to_owned()),
-        // If we don't add "20", we have insufficient information to parse
-        13 => (YYYYMMDDHHMM_DOT_SS, format!("20{}", s)),
-        10 => (YYYYMMDDHHMM, format!("20{}", s)),
-        11 => (YYYYMMDDHHMM_DOT_SS, format!("{}{}", current_year(), s)),
-        8 => (YYYYMMDDHHMM, format!("{}{}", current_year(), s)),
-        _ => {
-            return Err(miette!("invalid date format '{}'", s));
-        }
+    let now = Local::now();
+    let parsed = if s.len() == 15 && s.contains('.') {
+        // Handle the specific format "202401010000.00"
+        NaiveDateTime::parse_from_str(s, "%Y%m%d%H%M.%S")
+            .map_err(|_| miette!("invalid date format '{}'", s))?
+    } else {
+        dtparse::parse(s)
+            .map(|(dt, _)| dt)
+            .map_err(|_| miette!("invalid date format '{}'", s))?
     };
 
-    let local = NaiveDateTime::parse_from_str(&ts, format)
-        .map_err(|_| miette!("invalid date ts format '{}'", s))?;
-    let mut local = match chrono::Local.from_local_datetime(&local) {
-        LocalResult::Single(dt) => dt,
-        _ => {
-            return Err(miette!(
-                "invalid date ts format '{}'", s,
-            ))
-        }
+    let local = now
+        .timezone()
+        .from_local_datetime(&parsed)
+        .single()
+        .ok_or_else(|| miette!("invalid date '{}'", s))?;
+
+    // Handle leap seconds
+    let local = if parsed.second() == 59 && s.ends_with(".60") {
+        local + Duration::seconds(1)
+    } else {
+        local
     };
 
-    // Chrono caps seconds at 59, but 60 is valid. It might be a leap second
-    // or wrap to the next minute. But that doesn't really matter, because we
-    // only care about the timestamp anyway.
-    // Tested in gnu/tests/touch/60-seconds
-    if local.second() == 59 && ts.ends_with(".60") {
-        local += Duration::try_seconds(1).unwrap();
+    // Check for daylight saving time issues
+    if (local + Duration::hours(1) - Duration::hours(1)).hour() != local.hour() {
+        return Err(miette!("invalid date '{}'", s));
     }
 
-    // Due to daylight saving time switch, local time can jump from 1:59 AM to
-    // 3:00 AM, in which case any time between 2:00 AM and 2:59 AM is not
-    // valid. If we are within this jump, chrono takes the offset from before
-    // the jump. If we then jump forward an hour, we get the new corrected
-    // offset. Jumping back will then now correctly take the jump into account.
-    let local2 = local + Duration::try_hours(1).unwrap() - Duration::try_hours(1).unwrap();
-    if local.hour() != local2.hour() {
-        return Err(miette!(
-            "invalid date format '{}'", s,
-        ));
-    }
-
-    let local = FileTime::from_unix_time(local.timestamp(), local.timestamp_subsec_nanos());
-    Ok(local)
+    Ok(datetime_to_filetime(&local))
 }
 
 // TODO: this may be a good candidate to put in fsext.rs
@@ -297,4 +304,36 @@ fn pathbuf_from_stdout() -> Result<PathBuf> {
             .map_err(|e| USimpleError::new(1, e.to_string()))?
             .into())
     }
+}
+
+fn parse_date(ref_time: DateTime<Local>, s: &str) -> Result<FileTime> {
+    // Using the dtparse crate for more robust date parsing
+
+    match dtparse::parse(s) {
+        Ok((naive_dt, offset)) => {
+            let dt = offset.map_or_else(
+                || Local.from_local_datetime(&naive_dt).unwrap(),
+                |off| DateTime::<Local>::from_naive_utc_and_offset(naive_dt, off),
+            );
+            Ok(datetime_to_filetime(&dt))
+        }
+        Err(_) => {
+            // Fallback to parsing Unix timestamp if dtparse fails
+            if let Some(stripped) = s.strip_prefix('@') {
+                stripped
+                    .parse::<i64>()
+                    .map(|ts| FileTime::from_unix_time(ts, 0))
+                    .map_err(|_| miette!("Unable to parse date: {s}"))
+            } else {
+                // Use ref_time as a base for relative date parsing
+                parse_datetime::parse_datetime_at_date(ref_time, s)
+                    .map(|dt| datetime_to_filetime(&dt))
+                    .map_err(|_| miette!("Unable to parse date: {s}"))
+            }
+        }
+    }
+}
+
+fn datetime_to_filetime<T: TimeZone>(dt: &DateTime<T>) -> FileTime {
+    FileTime::from_unix_time(dt.timestamp(), dt.timestamp_subsec_nanos())
 }
