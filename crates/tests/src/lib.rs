@@ -985,13 +985,13 @@ async fn touch() {
         .await;
 
     TestBuilder::new()
-        .command("touch ~/absolute_path.txt")
-        .assert_exists("~/absolute_path.txt")
+        .command("touch $TEMP_DIR/absolute_path.txt")
+        .assert_exists("$TEMP_DIR/absolute_path.txt")
         .run()
         .await;
 
     TestBuilder::new()
-        .command("touch ~/non_existent_dir/non_existent.txt")
+        .command("touch $TEMP_DIR/non_existent_dir/non_existent.txt")
         .assert_stderr_contains("No such file or directory")
         .assert_exit_code(1)
         .run()
