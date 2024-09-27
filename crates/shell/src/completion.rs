@@ -62,6 +62,9 @@ fn complete_filenames(_is_start: bool, word: &str, matches: &mut Vec<Pair>) {
     // Determine the full directory path to search
     let search_dir = if dir_path.starts_with('/') {
         dir_path.to_string()
+    } else if dir_path.starts_with('~') {
+        let home_dir = dirs::home_dir().unwrap();
+        format!("{}{}", home_dir.display(), &dir_path[1..])
     } else {
         format!("./{}", dir_path)
     };
