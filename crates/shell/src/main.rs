@@ -35,6 +35,11 @@ async fn interactive() -> anyhow::Result<()> {
         .completion_type(CompletionType::List)
         .build();
 
+    ctrlc::set_handler(move || {
+        println!("Received Ctrl+C");
+    })
+    .expect("Error setting Ctrl-C handler");
+
     let mut rl = Editor::with_config(config)?;
 
     let helper = helper::ShellPromptHelper::default();
