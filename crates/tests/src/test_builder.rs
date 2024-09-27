@@ -118,7 +118,8 @@ impl TestBuilder {
         if self.temp_dir.is_none() {
             self.temp_dir = Some(TempDir::new());
             let temp_dir_string = self.temp_dir_path().display().to_string();
-            self.env_vars.insert("TEMP_DIR".to_string(), temp_dir_string);
+            self.env_vars
+                .insert("TEMP_DIR".to_string(), temp_dir_string);
         }
         self.temp_dir.as_mut().unwrap()
     }
@@ -191,13 +192,14 @@ impl TestBuilder {
 
     pub fn assert_exists(&mut self, path: &str) -> &mut Self {
         self.ensure_temp_dir();
-        let temp_dir =  if let Some(temp_dir) = &self.temp_dir {
+        let temp_dir = if let Some(temp_dir) = &self.temp_dir {
             temp_dir.cwd.display().to_string()
         } else {
             "NO_TEMP_DIR".to_string()
         };
-        self.assertions
-            .push(TestAssertion::FileExists(path.to_string().replace("$TEMP_DIR", &temp_dir)));
+        self.assertions.push(TestAssertion::FileExists(
+            path.to_string().replace("$TEMP_DIR", &temp_dir),
+        ));
         self
     }
 
@@ -254,7 +256,11 @@ impl TestBuilder {
             );
         } else if !self.expected_stderr_contains.is_empty() {
             assert!(
-                stderr_output.contains(&self.expected_stderr_contains.replace("$TEMP_DIR", &temp_dir)),
+                stderr_output.contains(
+                    &self
+                        .expected_stderr_contains
+                        .replace("$TEMP_DIR", &temp_dir)
+                ),
                 "\n\nFailed for: {}\nExpected stderr to contain: {}",
                 self.command,
                 self.expected_stderr_contains
@@ -278,7 +284,7 @@ impl TestBuilder {
             match assertion {
                 TestAssertion::FileExists(path) => {
                     let path_to_check = cwd.join(path);
-                    
+
                     assert!(
                         path_to_check.exists(),
                         "\n\nFailed for: {}\nExpected '{}' to exist.",
