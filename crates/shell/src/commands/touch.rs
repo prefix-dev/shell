@@ -1,6 +1,6 @@
 use std::{
     ffi::OsString,
-    fs::{self, File},
+    fs::{self, OpenOptions},
     path::{Path, PathBuf},
 };
 
@@ -128,7 +128,7 @@ fn execute_touch(context: &mut ShellCommandContext) -> Result<()> {
                 continue;
             }
 
-            File::create(path)
+            OpenOptions::new().create(true).truncate(false).write(true).open(path)
                 .into_diagnostic()
                 .map_err(|e| miette!("cannot touch {}: {}", path.display(), e))?;
 
