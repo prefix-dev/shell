@@ -1,6 +1,7 @@
 use std::{
     ffi::OsString,
     fs::{self, OpenOptions},
+    io,
     path::{Path, PathBuf},
 };
 
@@ -133,8 +134,16 @@ fn execute_touch(context: &mut ShellCommandContext) -> Result<()> {
                 .truncate(false)
                 .write(true)
                 .open(path)
-                .into_diagnostic()
-                .map_err(|e| miette!("cannot touch {}: {}", path.display(), e))?;
+                .map_err(|e| match e.kind() {
+                    io::ErrorKind::NotFound => {
+                        miette!(
+                            "cannot touch {}: {}",
+                            path.display(),
+                            "No such file or directory".to_string()
+                        )
+                    }
+                    _ => miette!("cannot touch {}: {}", path.display(), e),
+                })?;
 
             // Minor optimization: if no reference time was specified, we're done.
             if !matches.contains_id(options::SOURCES) {

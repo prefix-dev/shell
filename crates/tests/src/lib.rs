@@ -997,18 +997,9 @@ async fn touch() {
         .run()
         .await;
 
-    #[cfg(not(windows))]
     TestBuilder::new()
         .command("touch $TEMP_DIR/non_existent_dir/non_existent.txt")
         .assert_stderr_contains("No such file or directory")
-        .assert_exit_code(1)
-        .run()
-        .await;
-
-    #[cfg(windows)]
-    TestBuilder::new()
-        .command("touch $TEMP_DIR/non_existent_dir/non_existent.txt")
-        .assert_stderr_contains("The system cannot find the path specified")
         .assert_exit_code(1)
         .run()
         .await;
