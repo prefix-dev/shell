@@ -289,8 +289,8 @@ else_part = !{
 }
 
 conditional_expression = !{
-    ("[[" ~ (unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD) ~ "]]") |
-    ("[" ~ (unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD) ~ "]") | 
+    ("[[" ~ (unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD) ~ "]]" ~ ";"?) |
+    ("[" ~ (unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD) ~ "]" ~ ";"?) | 
     ("test" ~ (unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD))
 }
 

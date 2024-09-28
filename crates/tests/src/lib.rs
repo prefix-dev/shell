@@ -887,6 +887,25 @@ async fn date() {
         .await;
 }
 
+#[tokio::test]
+async fn if_clause() {
+    TestBuilder::new()
+        .command(r#"FOO=2; if [[ $FOO == 1 ]]; then echo "FOO is 1"; elif [[ $FOO -eq 2 ]]; then echo "FOO is 2"; else echo "FOO is not 1 or 2"; fi"#)
+        .assert_stdout("FOO is 2\n")
+        .run()
+        .await;
+    TestBuilder::new()
+        .command(r#"FOO=3; if [[ $FOO == 1 ]]; then echo "FOO is 1"; elif [[ $FOO -eq 2 ]]; then echo "FOO is 2"; else echo "FOO is not 1 or 2"; fi"#)
+        .assert_stdout("FOO is not 1 or 2\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"FOO=1; if [[ $FOO == 1 ]]; then echo "FOO is 1"; elif [[ $FOO -eq 2 ]]; then echo "FOO is 2"; else echo "FOO is not 1 or 2"; fi"#)
+        .assert_stdout("FOO is 1\n")
+        .run()
+        .await;
+}
 #[cfg(test)]
 fn no_such_file_error_text() -> &'static str {
     if cfg!(windows) {
