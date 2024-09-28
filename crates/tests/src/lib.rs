@@ -905,7 +905,18 @@ async fn if_clause() {
         .assert_stdout("FOO is 1\n")
         .run()
         .await;
+
+    TestBuilder::new()
+        .from_file("../../scripts/if_else.sh")
+        .assert_exit_code(0)
+        .assert_stdout("FOO is 2\n")
+        .assert_stdout("FOO is 2\n")
+        .assert_stdout("FOO is 2\n")
+        .assert_stdout("FOO is 2\n")
+        .run()
+        .await;
 }
+
 #[cfg(test)]
 fn no_such_file_error_text() -> &'static str {
     if cfg!(windows) {
