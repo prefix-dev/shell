@@ -32,8 +32,13 @@ fn init_state() -> ShellState {
 async fn interactive() -> anyhow::Result<()> {
     let config = Config::builder()
         .history_ignore_space(true)
-        .completion_type(CompletionType::Circular)
+        .completion_type(CompletionType::List)
         .build();
+
+    ctrlc::set_handler(move || {
+        println!("Received Ctrl+C");
+    })
+    .expect("Error setting Ctrl-C handler");
 
     let mut rl = Editor::with_config(config)?;
 
