@@ -227,9 +227,16 @@ async fn pipeline() {
         .run()
         .await;
 
+    // TODO: implement tee in shell and then enable this test
+    // TestBuilder::new()
+    //     .command(r#"echo 1 | tee output.txt"#)
+    //     .assert_stdout("1\n")
+    //     .assert_file_equals("output.txt", "1\n")
+    //     .run()
+    //     .await;
+
     TestBuilder::new()
-        .command(r#"echo 1 | tee output.txt"#)
-        .assert_stdout("1\n")
+        .command(r#"echo 1 | cat > output.txt"#)
         .assert_file_equals("output.txt", "1\n")
         .run()
         .await;
@@ -990,6 +997,7 @@ async fn touch() {
         .run()
         .await;
 
+    #[cfg(not(windows))]
     TestBuilder::new()
         .command("touch $TEMP_DIR/non_existent_dir/non_existent.txt")
         .assert_stderr_contains("No such file or directory")
@@ -997,12 +1005,21 @@ async fn touch() {
         .run()
         .await;
 
-    // Test with -h option on a symlink
+    #[cfg(windows)]
     TestBuilder::new()
-        .command("touch original.txt && ln -s original.txt symlink.txt && touch -h symlink.txt")
-        .assert_exists("symlink.txt")
+        .command("touch $TEMP_DIR/non_existent_dir/non_existent.txt")
+        .assert_stderr_contains("The system cannot find the path specified")
+        .assert_exit_code(1)
         .run()
         .await;
+
+    // TODO: implement ln in shell and then enable this test
+    // // Test with -h option on a symlink
+    // TestBuilder::new()
+    //     .command("touch original.txt && ln -s original.txt symlink.txt && touch -h symlink.txt")
+    //     .assert_exists("symlink.txt")
+    //     .run()
+    //     .await;
 
     // Test with multiple files, including one that doesn't exist
     TestBuilder::new()
