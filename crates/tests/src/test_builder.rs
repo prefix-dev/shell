@@ -128,8 +128,9 @@ impl TestBuilder {
         self
     }
 
-    pub fn from_file(&mut self, path: &str) -> &mut Self {
-        self.command(fs::read_to_string(path).unwrap().as_str())
+    pub fn script_file(&mut self, path: &str) -> &mut Self {
+        self.command(fs::read_to_string(path).unwrap().as_str());
+        self
     }
 
     pub fn stdin(&mut self, stdin: &str) -> &mut Self {

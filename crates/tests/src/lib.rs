@@ -907,7 +907,7 @@ async fn if_clause() {
         .await;
 
     TestBuilder::new()
-        .from_file("../../scripts/if_else.sh")
+        .script_file("../../scripts/if_else.sh")
         .assert_exit_code(0)
         .assert_stdout("FOO is 2\n")
         .assert_stdout("FOO is 2\n")
