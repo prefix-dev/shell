@@ -1,7 +1,7 @@
 // Copyright 2018-2024 the Deno authors. MIT license.
 
 use lazy_static::lazy_static;
-use miette::{miette, Context, Result};
+use miette::{miette, Context, IntoDiagnostic, Result};
 use pest::iterators::Pair;
 use pest::pratt_parser::{Assoc, Op, PrattParser};
 use pest::Parser;
@@ -375,12 +375,12 @@ impl Word {
 pub enum VariableModifier {
   #[error("Invalid substring")]
   Substring {
-    begin: WordPart,
-    length: Option<WordPart>,
+    begin: i64,
+    length: Option<i64>,
   },
-  DefaultValue(WordPart),
-  AssignDefault(WordPart),
-  AlternateValue(WordPart),
+  DefaultValue(Word),
+  AssignDefault(Word),
+  AlternateValue(Word),
 }
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
@@ -1501,33 +1501,41 @@ fn parse_variable_expansion(part: Pair<Rule>) -> Result<WordPart> {
   let variable_name = variable.as_str().to_string();
 
   let modifier = inner.next();
-
   let parsed_modifier = if let Some(modifier) = modifier {
     match modifier.as_rule() {
       Rule::VAR_SUBSTRING => {
         let mut numbers = modifier.into_inner();
-        let begin = numbers
-          .next()
-          .and_then(|n| n.as_str())
-          .unwrap_or("0");
-        let length =
-          numbers.next().and_then(|n| n.as_str().parse::<i64>().ok());
-        Some(VariableModifier::Substring { begin, length })
+        let begin = numbers.next().and_then(|n| n.as_str().parse::<i64>().ok()).unwrap_or(0);
+        
+        let length = if let Some(len_word) = numbers.next() {
+          Some(len_word.as_str().parse::<i64>().into_diagnostic()?)
+        } else {
+          None
+        };
+        Some(Box::new(VariableModifier::Substring { begin, length }))
       }
       Rule::VAR_DEFAULT_VALUE => {
-        let value =
-          modifier.into_inner().next().map(|v| v.as_str().to_string());
-        Some(VariableModifier::DefaultValue(value.unwrap_or_default()))
+        let value = if let Some(val) = modifier.into_inner().next() {
+          parse_word(val)?
+        } else {
+          Word::new_empty()
+        };
+        Some(Box::new(VariableModifier::DefaultValue(value)))
       }
       Rule::VAR_ASSIGN_DEFAULT => {
-        let value = modifier.into_inner().next().unwrap().as_str().to_string();
-        Some(VariableModifier::AssignDefault(value))
+        let value = modifier.into_inner().next().unwrap();
+        Some(Box::new(VariableModifier::AssignDefault(parse_word(value)?)))
       }
       Rule::VAR_ALTERNATE_VALUE => {
-        let value = modifier.into_inner().next().unwrap().as_str().to_string();
-        Some(VariableModifier::AlternateValue(value))
+        let value = modifier.into_inner().next().unwrap();
+        Some(Box::new(VariableModifier::AlternateValue(parse_word(value)?)))
       }
-      _ => unreachable!("Should not reach"),
+      _ => {
+        return Err(miette!(
+          "Unexpected rule in variable expansion modifier: {:?}",
+          modifier.as_rule()
+        ));
+      }
     }
   } else {
     None

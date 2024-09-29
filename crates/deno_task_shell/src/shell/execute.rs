@@ -9,6 +9,7 @@ use anyhow::Error;
 use futures::future;
 use futures::future::LocalBoxFuture;
 use futures::FutureExt;
+use miette::IntoDiagnostic;
 use thiserror::Error;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -1120,28 +1121,32 @@ impl From<anyhow::Error> for EvaluateWordTextError {
 }
 
 impl VariableModifier {
-  pub fn apply(&self, variable: Option<&String>) -> Result<Option<String>, anyhow::Error> {
+  pub async fn apply(&self, variable: Option<&String>,
+    state: &ShellState,
+    stdin: ShellPipeReader,
+    stderr: ShellPipeWriter,
+) -> Result<Option<String>, miette::Report> {
     match self {
       VariableModifier::DefaultValue(default_value) => match variable {
         Some(v) => Ok(Some(v.to_string())),
-        None => Ok(Some(default_value.clone())),
+        None => Ok(Some(evaluate_word(default_value.clone(), state, stdin, stderr).await.into_diagnostic()?)),
       },
-      VariableModifier::Substring { begin, length } => {
-        if variable.is_none() {
-          return Err(anyhow::anyhow!("Variable not found"));
-        }
-        let variable = variable.unwrap();
-        let chars: Vec<char> = variable.chars().collect();
-        let start = usize::try_from(*begin).unwrap();
-        let end = match length {
-          Some(len) => {
-            (start + usize::try_from(*len).unwrap()).min(chars.len())
-          }
-          None => chars.len(),
-        };
-        Ok(Some(chars[start..end].iter().collect()))
-      },
-      _ => Err(anyhow::anyhow!("Unsupported variable modifier")),
+      // VariableModifier::Substring { begin, length } => {
+      //   if variable.is_none() {
+      //     return Err(miette::miette!("Variable not found"));
+      //   }
+      //   let variable = variable.unwrap();
+      //   let chars: Vec<char> = variable.chars().collect();
+      //   let start = usize::try_from(*begin).unwrap();
+      //   let end = match length {
+      //     Some(len) => {
+      //       (start + usize::try_from(*len).unwrap()).min(chars.len())
+      //     }
+      //     None => chars.len(),
+      //   };
+      //   Ok(Some(chars[start..end].iter().collect()))
+      // },
+      _ => Err(miette::miette!("Unsupported variable modifier")),
     }
   }
 }
@@ -1285,7 +1290,7 @@ fn evaluate_word_parts(
           WordPart::Variable(name, modifier) => {
             let value = state.get_var(&name).map(|v| v.to_string());
             if let Some(modifier) = modifier {
-              modifier.apply(value.as_ref())?
+              modifier.apply(value.as_ref(), state, stdin, stderr)
             } else {
               value
             }
