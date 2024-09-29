@@ -15,7 +15,6 @@ shell = ["futures", "glob", "os_pipe", "path-dedot", "tokio", "tokio-util"]
 serialization = ["serde"]
 
 [dependencies]
-anyhow = "1.0.87"
 futures = { version = "0.3.30", optional = true }
 glob = { version = "0.3.1", optional = true }
 path-dedot = { version = "3.1.1", optional = true }
