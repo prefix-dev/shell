@@ -121,16 +121,6 @@ pub struct PipeSequence {
   pub next: PipelineInner,
 }
 
-#[cfg_attr(feature = "serialization", derive(serde::Serialize))]
-#[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Error)]
-pub enum PipeSequenceOperator {
-  #[error("Stdout pipe operator")]
-  Stdout,
-  #[error("Stdout and stderr pipe operator")]
-  StdoutStderr,
-}
-
 impl From<PipeSequence> for Sequence {
   fn from(p: PipeSequence) -> Self {
     Sequence::Pipeline(Pipeline {
@@ -385,12 +375,12 @@ impl Word {
 pub enum VariableModifier {
   #[error("Invalid substring")]
   Substring {
-    begin: i64,
-    length: Option<i64>,
+    begin: WordPart,
+    length: Option<WordPart>,
   },
-  DefaultValue(String),
-  AssignDefault(String),
-  AlternateValue(String),
+  DefaultValue(WordPart),
+  AssignDefault(WordPart),
+  AlternateValue(WordPart),
 }
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
@@ -403,7 +393,7 @@ pub enum WordPart {
   #[error("Invalid text")]
   Text(String),
   #[error("Invalid variable")]
-  Variable(String, Option<VariableModifier>),
+  Variable(String, Option<Box<VariableModifier>>),
   #[error("Invalid command")]
   Command(SequentialList),
   #[error("Invalid quoted string")]
@@ -1258,9 +1248,6 @@ fn parse_word(pair: Pair<Rule>) -> Result<Word> {
               parse_complete_command(part.into_inner().next().unwrap())?;
             parts.push(WordPart::Command(command));
           }
-          Rule::VARIABLE => {
-            parts.push(WordPart::Variable(part.as_str().to_string(), None))
-          }
           Rule::VARIABLE_EXPANSION => {
             let variable_expansion = parse_variable_expansion(part)?;
             parts.push(variable_expansion);
@@ -1513,7 +1500,7 @@ fn parse_variable_expansion(part: Pair<Rule>) -> Result<WordPart> {
     .ok_or_else(|| miette!("Expected variable name"))?;
   let variable_name = variable.as_str().to_string();
 
-  let modifier = inner.next().unwrap().into_inner().next();
+  let modifier = inner.next();
 
   let parsed_modifier = if let Some(modifier) = modifier {
     match modifier.as_rule() {
@@ -1521,8 +1508,8 @@ fn parse_variable_expansion(part: Pair<Rule>) -> Result<WordPart> {
         let mut numbers = modifier.into_inner();
         let begin = numbers
           .next()
-          .and_then(|n| n.as_str().parse::<i64>().ok())
-          .unwrap_or(0);
+          .and_then(|n| n.as_str())
+          .unwrap_or("0");
         let length =
           numbers.next().and_then(|n| n.as_str().parse::<i64>().ok());
         Some(VariableModifier::Substring { begin, length })
@@ -2020,7 +2007,7 @@ mod test {
           env_vars: vec![],
           args: vec![
             Word::new_word("echo"),
-            Word(vec![WordPart::Variable("MY_ENV".to_string())]),
+            Word(vec![WordPart::Variable("MY_ENV".to_string(), None)]),
           ],
         }
         .into(),

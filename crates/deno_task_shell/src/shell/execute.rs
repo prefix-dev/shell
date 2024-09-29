@@ -1120,13 +1120,16 @@ impl From<anyhow::Error> for EvaluateWordTextError {
 }
 
 impl VariableModifier {
-  pub fn apply(&self, variable: Option<&String>) -> Option<String> {
+  pub fn apply(&self, variable: Option<&String>) -> Result<Option<String>, anyhow::Error> {
     match self {
       VariableModifier::DefaultValue(default_value) => match variable {
-        Some(v) => Some(v.to_string()),
-        None => Some(default_value.clone()),
+        Some(v) => Ok(Some(v.to_string())),
+        None => Ok(Some(default_value.clone())),
       },
       VariableModifier::Substring { begin, length } => {
+        if variable.is_none() {
+          return Err(anyhow::anyhow!("Variable not found"));
+        }
         let variable = variable.unwrap();
         let chars: Vec<char> = variable.chars().collect();
         let start = usize::try_from(*begin).unwrap();
@@ -1136,9 +1139,9 @@ impl VariableModifier {
           }
           None => chars.len(),
         };
-        Some(chars[start..end].iter().collect())
-      }
-      _ => unreachable!("Should not reach"),
+        Ok(Some(chars[start..end].iter().collect()))
+      },
+      _ => Err(anyhow::anyhow!("Unsupported variable modifier")),
     }
   }
 }
@@ -1282,7 +1285,7 @@ fn evaluate_word_parts(
           WordPart::Variable(name, modifier) => {
             let value = state.get_var(&name).map(|v| v.to_string());
             if let Some(modifier) = modifier {
-              modifier.apply(value.as_ref())
+              modifier.apply(value.as_ref())?
             } else {
               value
             }
