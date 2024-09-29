@@ -4,11 +4,10 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
 
-use anyhow::Context;
-use anyhow::Error;
 use futures::future;
 use futures::future::LocalBoxFuture;
 use futures::FutureExt;
+use miette::Error;
 use thiserror::Error;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -580,9 +579,9 @@ async fn evaluate_arithmetic_part(
         _ => {
           let var = state
             .get_var(name)
-            .ok_or_else(|| anyhow::anyhow!("Undefined variable: {}", name))?;
+            .ok_or_else(|| miette::miette!("Undefined variable: {}", name))?;
           let parsed_var = var.parse::<ArithmeticResult>().map_err(|e| {
-            anyhow::anyhow!("Failed to parse variable '{}': {}", name, e)
+            miette::miette!("Failed to parse variable '{}': {}", name, e)
           })?;
           match op {
             AssignmentOp::MultiplyAssign => val.checked_mul(&parsed_var),
@@ -651,11 +650,11 @@ async fn evaluate_arithmetic_part(
       .get_var(name)
       .and_then(|s| s.parse::<ArithmeticResult>().ok())
       .ok_or_else(|| {
-        anyhow::anyhow!("Undefined or non-integer variable: {}", name)
+        miette::miette!("Undefined or non-integer variable: {}", name)
       }),
     ArithmeticPart::Number(num_str) => num_str
       .parse::<ArithmeticResult>()
-      .map_err(|e| anyhow::anyhow!(e.to_string())),
+      .map_err(|e| miette::miette!(e.to_string())),
   }
 }
 
@@ -1102,7 +1101,7 @@ pub enum EvaluateWordTextError {
   #[error("glob: no matches found '{}'", pattern)]
   NoFilesMatched { pattern: String },
   #[error("Failed to get home directory")]
-  FailedToGetHomeDirectory(anyhow::Error),
+  FailedToGetHomeDirectory(miette::Error),
 }
 
 impl EvaluateWordTextError {
@@ -1112,8 +1111,8 @@ impl EvaluateWordTextError {
   }
 }
 
-impl From<anyhow::Error> for EvaluateWordTextError {
-  fn from(err: anyhow::Error) -> Self {
+impl From<miette::Error> for EvaluateWordTextError {
+  fn from(err: miette::Error) -> Self {
     Self::FailedToGetHomeDirectory(err)
   }
 }
@@ -1284,7 +1283,7 @@ fn evaluate_word_parts(
           WordPart::Tilde(tilde_prefix) => {
             if tilde_prefix.only_tilde() {
               let home_str = dirs::home_dir()
-                .context("Failed to get home directory")?
+                .ok_or_else(|| miette::miette!("Failed to get home directory"))?
                 .display()
                 .to_string();
               current_text.push(TextPart::Text(home_str));

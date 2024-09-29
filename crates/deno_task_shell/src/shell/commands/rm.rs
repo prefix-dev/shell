@@ -1,9 +1,9 @@
 // Copyright 2018-2024 the Deno authors. MIT license.
 
-use anyhow::bail;
-use anyhow::Result;
 use futures::future::LocalBoxFuture;
 use futures::FutureExt;
+use miette::bail;
+use miette::Result;
 use std::io::ErrorKind;
 use std::path::Path;
 
