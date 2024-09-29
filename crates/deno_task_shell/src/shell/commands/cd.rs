@@ -3,9 +3,9 @@
 use std::path::Path;
 use std::path::PathBuf;
 
+use futures::future::LocalBoxFuture;
 use miette::bail;
 use miette::Result;
-use futures::future::LocalBoxFuture;
 use path_dedot::ParseDot;
 
 use crate::shell::fs_util;

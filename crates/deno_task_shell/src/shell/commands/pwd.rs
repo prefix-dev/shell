@@ -1,8 +1,8 @@
 // Copyright 2018-2024 the Deno authors. MIT license.
 
+use futures::future::LocalBoxFuture;
 use miette::Context;
 use miette::Result;
-use futures::future::LocalBoxFuture;
 use std::path::Path;
 
 use crate::shell::fs_util;

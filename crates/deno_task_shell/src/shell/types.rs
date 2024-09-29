@@ -12,10 +12,10 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::str::FromStr;
 
+use futures::future::LocalBoxFuture;
 use miette::Error;
 use miette::IntoDiagnostic;
 use miette::Result;
-use futures::future::LocalBoxFuture;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
@@ -389,8 +389,12 @@ impl ShellPipeReader {
     loop {
       let mut buffer = [0; 512]; // todo: what is an appropriate buffer size?
       let size = match &mut self {
-        ShellPipeReader::OsPipe(pipe) => pipe.read(&mut buffer).into_diagnostic()?,
-        ShellPipeReader::StdFile(file) => file.read(&mut buffer).into_diagnostic()?,
+        ShellPipeReader::OsPipe(pipe) => {
+          pipe.read(&mut buffer).into_diagnostic()?
+        }
+        ShellPipeReader::StdFile(file) => {
+          file.read(&mut buffer).into_diagnostic()?
+        }
       };
       if size == 0 {
         break;

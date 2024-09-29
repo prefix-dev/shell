@@ -1,8 +1,8 @@
 // Copyright 2018-2024 the Deno authors. MIT license.
 
+use futures::future::LocalBoxFuture;
 use miette::bail;
 use miette::Result;
-use futures::future::LocalBoxFuture;
 
 use crate::shell::types::ExecuteResult;
 

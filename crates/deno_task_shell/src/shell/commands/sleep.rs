@@ -2,11 +2,11 @@
 
 use std::time::Duration;
 
+use futures::future::LocalBoxFuture;
+use futures::FutureExt;
 use miette::bail;
 use miette::IntoDiagnostic;
 use miette::Result;
-use futures::future::LocalBoxFuture;
-use futures::FutureExt;
 
 use crate::shell::types::ExecuteResult;
 use crate::shell::types::ShellPipeWriter;

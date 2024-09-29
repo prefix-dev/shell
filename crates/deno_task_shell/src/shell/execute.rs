@@ -4,10 +4,10 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
 
-use miette::Error;
 use futures::future;
 use futures::future::LocalBoxFuture;
 use futures::FutureExt;
+use miette::Error;
 use thiserror::Error;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;

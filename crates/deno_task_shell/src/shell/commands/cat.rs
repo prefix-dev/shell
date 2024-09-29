@@ -1,8 +1,8 @@
 // Copyright 2018-2024 the Deno authors. MIT license.
 
+use futures::future::LocalBoxFuture;
 use miette::IntoDiagnostic;
 use miette::Result;
-use futures::future::LocalBoxFuture;
 use std::fs::File;
 use std::io::IsTerminal;
 use std::io::Read;

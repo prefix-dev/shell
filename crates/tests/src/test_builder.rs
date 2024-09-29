@@ -1,6 +1,6 @@
 // Copyright 2018-2024 the Deno authors. MIT license.
-use miette::IntoDiagnostic;
 use futures::future::LocalBoxFuture;
+use miette::IntoDiagnostic;
 use pretty_assertions::assert_eq;
 use std::collections::HashMap;
 use std::fs;

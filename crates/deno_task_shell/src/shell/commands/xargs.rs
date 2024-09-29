@@ -1,10 +1,10 @@
 // Copyright 2018-2024 the Deno authors. MIT license.
 
+use futures::future::LocalBoxFuture;
+use futures::FutureExt;
 use miette::bail;
 use miette::IntoDiagnostic;
 use miette::Result;
-use futures::future::LocalBoxFuture;
-use futures::FutureExt;
 
 use crate::shell::types::ExecuteResult;
 use crate::shell::types::ShellPipeReader;

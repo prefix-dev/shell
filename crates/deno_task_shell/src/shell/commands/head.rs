@@ -3,10 +3,10 @@
 use std::fs::File;
 use std::io::Read;
 
+use futures::future::LocalBoxFuture;
 use miette::bail;
 use miette::IntoDiagnostic;
 use miette::Result;
-use futures::future::LocalBoxFuture;
 use tokio_util::sync::CancellationToken;
 
 use crate::ExecuteResult;

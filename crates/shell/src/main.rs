@@ -1,10 +1,10 @@
 use std::path::Path;
 use std::path::PathBuf;
 
-use miette::Context;
 use clap::Parser;
 use deno_task_shell::parser::debug_parse;
 use deno_task_shell::ShellState;
+use miette::Context;
 use miette::IntoDiagnostic;
 use rustyline::error::ReadlineError;
 use rustyline::{CompletionType, Config, Editor};
@@ -66,9 +66,9 @@ async fn interactive() -> miette::Result<()> {
         // Display the prompt and read a line
         let readline = {
             let cwd = state.cwd().to_string_lossy().to_string();
-            let home_str = home
-                .to_str()
-                .ok_or(miette::miette!("Couldn't convert home directory path to UTF-8 string"))?;
+            let home_str = home.to_str().ok_or(miette::miette!(
+                "Couldn't convert home directory path to UTF-8 string"
+            ))?;
             if !state.last_command_cd() {
                 state.update_git_branch();
             }
