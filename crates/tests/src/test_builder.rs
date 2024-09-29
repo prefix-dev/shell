@@ -117,9 +117,6 @@ impl TestBuilder {
     fn get_temp_dir(&mut self) -> &mut TempDir {
         if self.temp_dir.is_none() {
             self.temp_dir = Some(TempDir::new());
-            let temp_dir_string = self.temp_dir_path().display().to_string();
-            self.env_vars
-                .insert("TEMP_DIR".to_string(), temp_dir_string);
         }
         self.temp_dir.as_mut().unwrap()
     }
@@ -238,6 +235,7 @@ impl TestBuilder {
         let (stderr, stderr_handle) = get_output_writer_and_handle();
 
         let local_set = tokio::task::LocalSet::new();
+        self.env_var("TEMP_DIR", &cwd.display().to_string());
         let state = ShellState::new(
             self.env_vars.clone(),
             &cwd,
@@ -266,8 +264,9 @@ impl TestBuilder {
                         .expected_stderr_contains
                         .replace("$TEMP_DIR", &temp_dir)
                 ),
-                "\n\nFailed for: {}\nExpected stderr to contain: {}",
+                "\n\nFailed for: {}\nExpected stderr to contain: {}, {}",
                 self.command,
+                stderr_output,
                 self.expected_stderr_contains
             );
         }
