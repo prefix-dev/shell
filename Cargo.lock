@@ -1239,7 +1239,6 @@ dependencies = [
  "futures",
  "miette",
  "parse_datetime",
- "miette",
  "rustyline",
  "tokio",
  "uu_date",
