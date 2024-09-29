@@ -266,9 +266,8 @@ impl TestBuilder {
                         .expected_stderr_contains
                         .replace("$TEMP_DIR", &temp_dir)
                 ),
-                "\n\nFailed for: {}\nExpected stderr to contain: {}, {}",
+                "\n\nFailed for: {}\nExpected stderr to contain: {}",
                 self.command,
-                stderr_output,
                 self.expected_stderr_contains
             );
         }
