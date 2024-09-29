@@ -304,7 +304,7 @@ dependencies = [
  "os_pipe",
  "parking_lot",
  "path-dedot",
- "pest 2.7.12 (git+https://github.com/pest-parser/pest.git?branch=master)",
+ "pest",
  "pest_ascii_tree",
  "pest_derive",
  "pretty_assertions",
@@ -898,19 +898,9 @@ dependencies = [
 
 [[package]]
 name = "pest"
-version = "2.7.12"
+version = "2.7.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c73c26c01b8c87956cea613c907c9d6ecffd8d18a2a5908e5de0adfaa185cea"
-dependencies = [
- "memchr",
- "thiserror",
- "ucd-trie",
-]
-
-[[package]]
-name = "pest"
-version = "2.7.12"
-source = "git+https://github.com/pest-parser/pest.git?branch=master#65e5b2b754a4d9bb9b231ab61ef0af437b556fbe"
+checksum = "fdbef9d1d47087a895abd220ed25eb4ad973a5e26f6a4367b038c25e28dfc2d9"
 dependencies = [
  "memchr",
  "miette",
@@ -923,11 +913,12 @@ dependencies = [
 [[package]]
 name = "pest_ascii_tree"
 version = "0.1.0"
-source = "git+https://github.com/prsabahrami/pest_ascii_tree.git?branch=master#65ef51a888730598336b0628c3e42bc5ec2f358b"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4152b393638a9816cd3dedb5aea2fb60ab0b641315aa133cea219c8797e768fc"
 dependencies = [
  "ascii_tree",
  "escape_string",
- "pest 2.7.12 (git+https://github.com/pest-parser/pest.git?branch=master)",
+ "pest",
  "pest_derive",
 ]
 
@@ -937,7 +928,7 @@ version = "2.7.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "664d22978e2815783adbdd2c588b455b1bd625299ce36b2a99881ac9627e6d8d"
 dependencies = [
- "pest 2.7.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pest",
  "pest_generator",
 ]
 
@@ -947,7 +938,7 @@ version = "2.7.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2d5487022d5d33f4c30d91c22afa240ce2a644e87fe08caad974d4eab6badbe"
 dependencies = [
- "pest 2.7.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pest",
  "pest_meta",
  "proc-macro2",
  "quote",
@@ -961,7 +952,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0091754bbd0ea592c4deb3a122ce8ecbb0753b738aa82bc055fcc2eccc8d8174"
 dependencies = [
  "once_cell",
- "pest 2.7.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pest",
  "sha2",
 ]
 
