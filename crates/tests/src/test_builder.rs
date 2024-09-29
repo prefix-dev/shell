@@ -222,6 +222,8 @@ impl TestBuilder {
     }
 
     pub async fn run(&mut self) {
+        std::env::set_var("NO_GRAPHICS", "1");
+
         let list = parse(&self.command).unwrap();
         let cwd = if let Some(temp_dir) = &self.temp_dir {
             temp_dir.cwd.clone()
