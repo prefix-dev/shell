@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::path::PathBuf;
 
 use anyhow::Context;
@@ -31,8 +32,13 @@ fn init_state() -> ShellState {
 async fn interactive() -> anyhow::Result<()> {
     let config = Config::builder()
         .history_ignore_space(true)
-        .completion_type(CompletionType::Circular)
+        .completion_type(CompletionType::List)
         .build();
+
+    ctrlc::set_handler(move || {
+        println!("Received Ctrl+C");
+    })
+    .expect("Error setting Ctrl-C handler");
 
     let mut rl = Editor::with_config(config)?;
 
@@ -42,6 +48,13 @@ async fn interactive() -> anyhow::Result<()> {
     let mut state = init_state();
 
     let home = dirs::home_dir().context("Couldn't get home directory")?;
+    let history_file: PathBuf = [home.as_path(), Path::new(".shell_history")]
+        .iter()
+        .collect();
+    if Path::new(history_file.as_path()).exists() {
+        rl.load_history(history_file.as_path())
+            .context("Failed to read the command history")?;
+    }
 
     let mut _prev_exit_code = 0;
     loop {
@@ -117,6 +130,8 @@ async fn interactive() -> anyhow::Result<()> {
             }
         }
     }
+    rl.save_history(history_file.as_path())
+        .context("Failed to write the command history")?;
 
     Ok(())
 }

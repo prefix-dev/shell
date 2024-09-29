@@ -194,19 +194,23 @@ async fn parse_shebang_args(
     crate::parser::CommandInner::Simple(cmd) => cmd,
     crate::parser::CommandInner::Subshell(_) => return err_unsupported(text),
     crate::parser::CommandInner::If(_) => return err_unsupported(text),
+    crate::parser::CommandInner::ArithmeticExpression(_) => {
+      return err_unsupported(text)
+    }
   };
   if !cmd.env_vars.is_empty() {
     return err_unsupported(text);
   }
 
-  super::execute::evaluate_args(
+  let result = super::execute::evaluate_args(
     cmd.args,
     &context.state,
     context.stdin.clone(),
     context.stderr.clone(),
   )
   .await
-  .map_err(|e| miette!(e.to_string()))
+  .map_err(|e| miette!(e.to_string()))?;
+  Ok(result.value)
 }
 
 /// Errors for executable commands.

@@ -5,6 +5,7 @@ use std::path::Path;
 use std::rc::Rc;
 
 use anyhow::Context;
+use anyhow::Error;
 use futures::future;
 use futures::future::LocalBoxFuture;
 use futures::FutureExt;
@@ -12,6 +13,7 @@ use thiserror::Error;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
+use crate::parser::AssignmentOp;
 use crate::parser::BinaryOp;
 use crate::parser::Condition;
 use crate::parser::ConditionInner;
@@ -24,6 +26,8 @@ use crate::parser::VariableModifier;
 use crate::shell::commands::ShellCommand;
 use crate::shell::commands::ShellCommandContext;
 use crate::shell::types::pipe;
+use crate::shell::types::ArithmeticResult;
+use crate::shell::types::ArithmeticValue;
 use crate::shell::types::EnvChange;
 use crate::shell::types::ExecuteResult;
 use crate::shell::types::FutureExecuteResult;
@@ -31,6 +35,9 @@ use crate::shell::types::ShellPipeReader;
 use crate::shell::types::ShellPipeWriter;
 use crate::shell::types::ShellState;
 
+use crate::parser::Arithmetic;
+use crate::parser::ArithmeticPart;
+use crate::parser::BinaryArithmeticOp;
 use crate::parser::Command;
 use crate::parser::CommandInner;
 use crate::parser::IfClause;
@@ -44,10 +51,10 @@ use crate::parser::RedirectOp;
 use crate::parser::Sequence;
 use crate::parser::SequentialList;
 use crate::parser::SimpleCommand;
+use crate::parser::UnaryArithmeticOp;
 use crate::parser::Word;
 use crate::parser::WordPart;
-// use crate::parser::ElsePart;
-// use crate::parser::ElifClause;
+use crate::shell::types::WordEvalResult;
 
 use super::command::execute_unresolved_command_name;
 use super::command::UnresolvedCommandName;
@@ -429,21 +436,21 @@ async fn resolve_redirect_word_pipe(
     }
   };
   // edge case that's not supported
-  if words.is_empty() {
+  if words.value.is_empty() {
     let _ = stderr.write_line("redirect path must be 1 argument, but found 0");
     return Err(ExecuteResult::from_exit_code(1));
-  } else if words.len() > 1 {
+  } else if words.value.len() > 1 {
     let _ = stderr.write_line(&format!(
       concat!(
         "redirect path must be 1 argument, but found {0} ({1}). ",
         "Did you mean to quote it (ex. \"{1}\")?"
       ),
-      words.len(),
+      words.value.len(),
       words.join(" ")
     ));
     return Err(ExecuteResult::from_exit_code(1));
   }
-  let output_path = &words[0];
+  let output_path = &words.value[0];
 
   match &redirect_op {
     RedirectOp::Input(RedirectOpInput::Redirect) => {
@@ -481,7 +488,7 @@ async fn execute_command(
   stdout: ShellPipeWriter,
   mut stderr: ShellPipeWriter,
 ) -> ExecuteResult {
-  let (stdin, stdout, stderr) = if let Some(redirect) = &command.redirect {
+  let (stdin, stdout, mut stderr) = if let Some(redirect) = &command.redirect {
     let pipe = match resolve_redirect_pipe(
       redirect,
       &state,
@@ -529,6 +536,212 @@ async fn execute_command(
     CommandInner::If(if_clause) => {
       execute_if_clause(if_clause, state, stdin, stdout, stderr).await
     }
+    CommandInner::ArithmeticExpression(arithmetic) => {
+      match execute_arithmetic_expression(arithmetic, state).await {
+        Ok(result) => ExecuteResult::Continue(0, result.changes, Vec::new()),
+        Err(e) => {
+          let _ = stderr.write_line(&e.to_string());
+          ExecuteResult::Continue(2, Vec::new(), Vec::new())
+        }
+      }
+    }
+  }
+}
+
+async fn execute_arithmetic_expression(
+  arithmetic: Arithmetic,
+  mut state: ShellState,
+) -> Result<ArithmeticResult, Error> {
+  evaluate_arithmetic(&arithmetic, &mut state).await
+}
+
+async fn evaluate_arithmetic(
+  arithmetic: &Arithmetic,
+  state: &mut ShellState,
+) -> Result<ArithmeticResult, Error> {
+  let mut result = ArithmeticResult::new(ArithmeticValue::Integer(0));
+  for part in &arithmetic.parts {
+    result = Box::pin(evaluate_arithmetic_part(part, state)).await?;
+  }
+  Ok(result)
+}
+
+async fn evaluate_arithmetic_part(
+  part: &ArithmeticPart,
+  state: &mut ShellState,
+) -> Result<ArithmeticResult, Error> {
+  match part {
+    ArithmeticPart::ParenthesesExpr(expr) => {
+      Box::pin(evaluate_arithmetic(expr, state)).await
+    }
+    ArithmeticPart::VariableAssignment { name, op, value } => {
+      let val = Box::pin(evaluate_arithmetic_part(value, state)).await?;
+      let applied_value = match op {
+        AssignmentOp::Assign => val.clone(),
+        _ => {
+          let var = state
+            .get_var(name)
+            .ok_or_else(|| anyhow::anyhow!("Undefined variable: {}", name))?;
+          let parsed_var = var.parse::<ArithmeticResult>().map_err(|e| {
+            anyhow::anyhow!("Failed to parse variable '{}': {}", name, e)
+          })?;
+          match op {
+            AssignmentOp::MultiplyAssign => val.checked_mul(&parsed_var),
+            AssignmentOp::DivideAssign => val.checked_div(&parsed_var),
+            AssignmentOp::ModuloAssign => val.checked_rem(&parsed_var),
+            AssignmentOp::AddAssign => val.checked_add(&parsed_var),
+            AssignmentOp::SubtractAssign => val.checked_sub(&parsed_var),
+            AssignmentOp::LeftShiftAssign => val.checked_shl(&parsed_var),
+            AssignmentOp::RightShiftAssign => val.checked_shr(&parsed_var),
+            AssignmentOp::BitwiseAndAssign => val.checked_and(&parsed_var),
+            AssignmentOp::BitwiseXorAssign => val.checked_xor(&parsed_var),
+            AssignmentOp::BitwiseOrAssign => val.checked_or(&parsed_var),
+            _ => unreachable!(),
+          }?
+        }
+      };
+      state.apply_env_var(name, &applied_value.to_string());
+      Ok(
+        applied_value
+          .clone()
+          .with_changes(vec![EnvChange::SetShellVar(
+            name.clone(),
+            applied_value.to_string(),
+          )]),
+      )
+    }
+    ArithmeticPart::TripleConditionalExpr {
+      condition,
+      true_expr,
+      false_expr,
+    } => {
+      let cond = Box::pin(evaluate_arithmetic_part(condition, state)).await?;
+      if cond.is_zero() {
+        Box::pin(evaluate_arithmetic_part(true_expr, state)).await
+      } else {
+        Box::pin(evaluate_arithmetic_part(false_expr, state)).await
+      }
+    }
+    ArithmeticPart::BinaryArithmeticExpr {
+      left,
+      operator,
+      right,
+    } => {
+      let lhs = Box::pin(evaluate_arithmetic_part(left, state)).await?;
+      let rhs = Box::pin(evaluate_arithmetic_part(right, state)).await?;
+      apply_binary_op(lhs, *operator, rhs)
+    }
+    ArithmeticPart::BinaryConditionalExpr {
+      left,
+      operator,
+      right,
+    } => {
+      let lhs = Box::pin(evaluate_arithmetic_part(left, state)).await?;
+      let rhs = Box::pin(evaluate_arithmetic_part(right, state)).await?;
+      apply_conditional_binary_op(lhs, operator, rhs)
+    }
+    ArithmeticPart::UnaryArithmeticExpr { operator, operand } => {
+      let val = Box::pin(evaluate_arithmetic_part(operand, state)).await?;
+      apply_unary_op(*operator, val)
+    }
+    ArithmeticPart::PostArithmeticExpr { operand, .. } => {
+      let val = Box::pin(evaluate_arithmetic_part(operand, state)).await?;
+      Ok(val)
+    }
+    ArithmeticPart::Variable(name) => state
+      .get_var(name)
+      .and_then(|s| s.parse::<ArithmeticResult>().ok())
+      .ok_or_else(|| {
+        anyhow::anyhow!("Undefined or non-integer variable: {}", name)
+      }),
+    ArithmeticPart::Number(num_str) => num_str
+      .parse::<ArithmeticResult>()
+      .map_err(|e| anyhow::anyhow!(e.to_string())),
+  }
+}
+
+fn apply_binary_op(
+  lhs: ArithmeticResult,
+  op: BinaryArithmeticOp,
+  rhs: ArithmeticResult,
+) -> Result<ArithmeticResult, Error> {
+  match op {
+    BinaryArithmeticOp::Add => lhs.checked_add(&rhs),
+    BinaryArithmeticOp::Subtract => lhs.checked_sub(&rhs),
+    BinaryArithmeticOp::Multiply => lhs.checked_mul(&rhs),
+    BinaryArithmeticOp::Divide => lhs.checked_div(&rhs),
+    BinaryArithmeticOp::Modulo => lhs.checked_rem(&rhs),
+    BinaryArithmeticOp::Power => lhs.checked_pow(&rhs),
+    BinaryArithmeticOp::LeftShift => lhs.checked_shl(&rhs),
+    BinaryArithmeticOp::RightShift => lhs.checked_shr(&rhs),
+    BinaryArithmeticOp::BitwiseAnd => lhs.checked_and(&rhs),
+    BinaryArithmeticOp::BitwiseXor => lhs.checked_xor(&rhs),
+    BinaryArithmeticOp::BitwiseOr => lhs.checked_or(&rhs),
+    BinaryArithmeticOp::LogicalAnd => Ok(if lhs.is_zero() && rhs.is_zero() {
+      ArithmeticResult::new(ArithmeticValue::Integer(0))
+    } else {
+      ArithmeticResult::new(ArithmeticValue::Integer(1))
+    }),
+    BinaryArithmeticOp::LogicalOr => Ok(if !lhs.is_zero() || !rhs.is_zero() {
+      ArithmeticResult::new(ArithmeticValue::Integer(1))
+    } else {
+      ArithmeticResult::new(ArithmeticValue::Integer(0))
+    }),
+  }
+}
+
+fn apply_conditional_binary_op(
+  lhs: ArithmeticResult,
+  op: &BinaryOp,
+  rhs: ArithmeticResult,
+) -> Result<ArithmeticResult, Error> {
+  match op {
+    BinaryOp::Equal => Ok(if lhs == rhs {
+      ArithmeticResult::new(ArithmeticValue::Integer(1))
+    } else {
+      ArithmeticResult::new(ArithmeticValue::Integer(0))
+    }),
+    BinaryOp::NotEqual => Ok(if lhs != rhs {
+      ArithmeticResult::new(ArithmeticValue::Integer(1))
+    } else {
+      ArithmeticResult::new(ArithmeticValue::Integer(0))
+    }),
+    BinaryOp::LessThan => Ok(if lhs < rhs {
+      ArithmeticResult::new(ArithmeticValue::Integer(1))
+    } else {
+      ArithmeticResult::new(ArithmeticValue::Integer(0))
+    }),
+    BinaryOp::LessThanOrEqual => Ok(if lhs <= rhs {
+      ArithmeticResult::new(ArithmeticValue::Integer(1))
+    } else {
+      ArithmeticResult::new(ArithmeticValue::Integer(0))
+    }),
+    BinaryOp::GreaterThan => Ok(if lhs > rhs {
+      ArithmeticResult::new(ArithmeticValue::Integer(1))
+    } else {
+      ArithmeticResult::new(ArithmeticValue::Integer(0))
+    }),
+    BinaryOp::GreaterThanOrEqual => Ok(if lhs >= rhs {
+      ArithmeticResult::new(ArithmeticValue::Integer(1))
+    } else {
+      ArithmeticResult::new(ArithmeticValue::Integer(0))
+    }),
+  }
+}
+
+fn apply_unary_op(
+  op: UnaryArithmeticOp,
+  val: ArithmeticResult,
+) -> Result<ArithmeticResult, Error> {
+  match op {
+    UnaryArithmeticOp::Plus => Ok(val),
+    UnaryArithmeticOp::Minus => val.checked_neg(),
+    UnaryArithmeticOp::LogicalNot => Ok(if val.is_zero() {
+      ArithmeticResult::new(ArithmeticValue::Integer(1))
+    } else {
+      ArithmeticResult::new(ArithmeticValue::Integer(0))
+    }),
+    UnaryArithmeticOp::BitwiseNot => val.checked_not(),
   }
 }
 
@@ -752,8 +965,8 @@ async fn execute_simple_command(
 ) -> ExecuteResult {
   let args =
     evaluate_args(command.args, &state, stdin.clone(), stderr.clone()).await;
-  let args = match args {
-    Ok(args) => args,
+  let (args, changes) = match args {
+    Ok(args) => (args.value, args.changes),
     Err(err) => {
       return err.into_exit_code(&mut stderr);
     }
@@ -770,7 +983,15 @@ async fn execute_simple_command(
     };
     state.apply_env_var(&env_var.name, &value);
   }
-  execute_command_args(args, state, stdin, stdout, stderr).await
+  let result = execute_command_args(args, state, stdin, stdout, stderr).await;
+  match result {
+    ExecuteResult::Exit(code, handles) => ExecuteResult::Exit(code, handles),
+    ExecuteResult::Continue(code, env_changes, handles) => {
+      let mut combined_changes = env_changes.clone();
+      combined_changes.extend(changes);
+      ExecuteResult::Continue(code, combined_changes, handles)
+    }
+  }
 }
 
 fn execute_command_args(
@@ -844,8 +1065,8 @@ pub async fn evaluate_args(
   state: &ShellState,
   stdin: ShellPipeReader,
   stderr: ShellPipeWriter,
-) -> Result<Vec<String>, EvaluateWordTextError> {
-  let mut result = Vec::new();
+) -> Result<WordEvalResult, EvaluateWordTextError> {
+  let mut result = WordEvalResult::new(Vec::new(), Vec::new());
   for arg in args {
     let parts = evaluate_word_parts(
       arg.into_parts(),
@@ -927,7 +1148,7 @@ fn evaluate_word_parts(
   state: &ShellState,
   stdin: ShellPipeReader,
   stderr: ShellPipeWriter,
-) -> LocalBoxFuture<Result<Vec<String>, EvaluateWordTextError>> {
+) -> LocalBoxFuture<Result<WordEvalResult, EvaluateWordTextError>> {
   #[derive(Debug)]
   enum TextPart {
     Quoted(String),
@@ -956,7 +1177,7 @@ fn evaluate_word_parts(
     state: &ShellState,
     text_parts: Vec<TextPart>,
     is_quoted: bool,
-  ) -> Result<Vec<String>, EvaluateWordTextError> {
+  ) -> Result<WordEvalResult, EvaluateWordTextError> {
     if !is_quoted
       && text_parts
         .iter()
@@ -1026,13 +1247,16 @@ fn evaluate_word_parts(
                 })
                 .collect::<Vec<_>>()
             };
-            Ok(paths)
+            Ok(WordEvalResult::new(paths, Vec::new()))
           }
         }
         Err(err) => Err(EvaluateWordTextError::InvalidPattern { pattern, err }),
       }
     } else {
-      Ok(vec![text_parts_to_string(text_parts)])
+      Ok(WordEvalResult {
+        value: vec![text_parts_to_string(text_parts)],
+        changes: Vec::new(),
+      })
     }
   }
 
@@ -1042,10 +1266,12 @@ fn evaluate_word_parts(
     state: &ShellState,
     stdin: ShellPipeReader,
     stderr: ShellPipeWriter,
-  ) -> LocalBoxFuture<Result<Vec<String>, EvaluateWordTextError>> {
+  ) -> LocalBoxFuture<Result<WordEvalResult, EvaluateWordTextError>> {
     // recursive async, so requires boxing
+    let mut changes: Vec<EnvChange> = Vec::new();
+
     async move {
-      let mut result = Vec::new();
+      let mut result = WordEvalResult::new(Vec::new(), Vec::new());
       let mut current_text = Vec::new();
       for part in parts {
         let evaluation_result_text = match part {
@@ -1095,6 +1321,13 @@ fn evaluate_word_parts(
             } else {
               todo!("tilde expansion with user name is not supported");
             }
+            continue;
+          }
+          WordPart::Arithmetic(arithmetic) => {
+            let arithmetic_result =
+              execute_arithmetic_expression(arithmetic, state.clone()).await?;
+            current_text.push(TextPart::Text(arithmetic_result.to_string()));
+            changes.extend(arithmetic_result.changes);
             continue;
           }
           WordPart::ExitStatus => {

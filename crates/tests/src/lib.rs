@@ -813,6 +813,110 @@ async fn which() {
         .await;
 }
 
+#[tokio::test]
+async fn arithmetic() {
+    TestBuilder::new()
+        .command("echo $((1 + 2 * 3 + (4 / 5)))")
+        .assert_stdout("7\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("echo $((a=1, b=2))")
+        .assert_stdout("2\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("echo $((a=1, b=2, a+b))")
+        .assert_stdout("3\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("echo $((1 + 2))")
+        .assert_stdout("3\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("echo $((5 * 4))")
+        .assert_stdout("20\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("echo $((10 / 3))")
+        .assert_stdout("3\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("echo $((2 ** 3))")
+        .assert_stdout("8\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("echo $((2 << 3))")
+        .assert_stdout("16\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("echo $((2 << 3))")
+        .assert_stdout("16\n")
+        .run()
+        .await;
+}
+
+#[tokio::test]
+async fn date() {
+    TestBuilder::new()
+        .command("date")
+        .assert_exit_code(0)
+        .check_stdout(false)
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("date +%Y-%m-%d")
+        .assert_exit_code(0)
+        .check_stdout(false)
+        .run()
+        .await;
+}
+
+#[tokio::test]
+async fn if_clause() {
+    TestBuilder::new()
+        .command(r#"FOO=2; if [[ $FOO == 1 ]]; then echo "FOO is 1"; elif [[ $FOO -eq 2 ]]; then echo "FOO is 2"; else echo "FOO is not 1 or 2"; fi"#)
+        .assert_stdout("FOO is 2\n")
+        .run()
+        .await;
+    TestBuilder::new()
+        .command(r#"FOO=3; if [[ $FOO == 1 ]]; then echo "FOO is 1"; elif [[ $FOO -eq 2 ]]; then echo "FOO is 2"; else echo "FOO is not 1 or 2"; fi"#)
+        .assert_stdout("FOO is not 1 or 2\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"FOO=1; if [[ $FOO == 1 ]]; then echo "FOO is 1"; elif [[ $FOO -eq 2 ]]; then echo "FOO is 2"; else echo "FOO is not 1 or 2"; fi"#)
+        .assert_stdout("FOO is 1\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .script_file("../../scripts/if_else.sh")
+        .assert_exit_code(0)
+        .assert_stdout("FOO is 2\n")
+        .assert_stdout("FOO is 2\n")
+        .assert_stdout("FOO is 2\n")
+        .assert_stdout("FOO is 2\n")
+        .run()
+        .await;
+}
+
 #[cfg(test)]
 fn no_such_file_error_text() -> &'static str {
     if cfg!(windows) {

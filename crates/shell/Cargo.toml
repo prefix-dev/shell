@@ -33,6 +33,8 @@ uu_ls = "0.0.27"
 dirs = "5.0.1"
 which = "6.0.3"
 uu_uname = "0.0.27"
+uu_date = "0.0.27"
+ctrlc = "3.4.5"
 
 [package.metadata.release]
 # Dont publish the binary
