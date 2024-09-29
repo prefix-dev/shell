@@ -1,10 +1,11 @@
 use std::path::Path;
 use std::path::PathBuf;
 
-use anyhow::Context;
 use clap::Parser;
 use deno_task_shell::parser::debug_parse;
 use deno_task_shell::ShellState;
+use miette::Context;
+use miette::IntoDiagnostic;
 use rustyline::error::ReadlineError;
 use rustyline::{CompletionType, Config, Editor};
 
@@ -29,7 +30,7 @@ fn init_state() -> ShellState {
     ShellState::new(env_vars, &cwd, commands::get_commands())
 }
 
-async fn interactive() -> anyhow::Result<()> {
+async fn interactive() -> miette::Result<()> {
     let config = Config::builder()
         .history_ignore_space(true)
         .completion_type(CompletionType::List)
@@ -40,19 +41,20 @@ async fn interactive() -> anyhow::Result<()> {
     })
     .expect("Error setting Ctrl-C handler");
 
-    let mut rl = Editor::with_config(config)?;
+    let mut rl = Editor::with_config(config).into_diagnostic()?;
 
     let helper = helper::ShellPromptHelper::default();
     rl.set_helper(Some(helper));
 
     let mut state = init_state();
 
-    let home = dirs::home_dir().context("Couldn't get home directory")?;
+    let home = dirs::home_dir().ok_or(miette::miette!("Couldn't get home directory"))?;
     let history_file: PathBuf = [home.as_path(), Path::new(".shell_history")]
         .iter()
         .collect();
     if Path::new(history_file.as_path()).exists() {
         rl.load_history(history_file.as_path())
+            .into_diagnostic()
             .context("Failed to read the command history")?;
     }
 
@@ -64,9 +66,9 @@ async fn interactive() -> anyhow::Result<()> {
         // Display the prompt and read a line
         let readline = {
             let cwd = state.cwd().to_string_lossy().to_string();
-            let home_str = home
-                .to_str()
-                .context("Couldn't convert home directory path to UTF-8 string")?;
+            let home_str = home.to_str().ok_or(miette::miette!(
+                "Couldn't convert home directory path to UTF-8 string"
+            ))?;
             if !state.last_command_cd() {
                 state.update_git_branch();
             }
@@ -101,7 +103,7 @@ async fn interactive() -> anyhow::Result<()> {
         match readline {
             Ok(line) => {
                 // Add the line to history
-                rl.add_history_entry(line.as_str())?;
+                rl.add_history_entry(line.as_str()).into_diagnostic()?;
 
                 // Process the input (here we just echo it back)
                 let prev_exit_code = execute(&line, &mut state)
@@ -131,13 +133,14 @@ async fn interactive() -> anyhow::Result<()> {
         }
     }
     rl.save_history(history_file.as_path())
+        .into_diagnostic()
         .context("Failed to write the command history")?;
 
     Ok(())
 }
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() -> miette::Result<()> {
     let options = Options::parse();
 
     if let Some(file) = options.file {

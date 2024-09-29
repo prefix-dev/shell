@@ -23,7 +23,6 @@ path = "src/main.rs"
 [features]
 
 [dependencies]
-anyhow = "1.0.87"
 clap = { version = "4.5.17", features = ["derive"] }
 deno_task_shell = { path = "../deno_task_shell", features = ["shell"] }
 futures = "0.3.30"
@@ -42,6 +41,7 @@ parse_datetime = "0.6.0"
 dtparse = "2.0.1"
 windows-sys = "0.59.0"
 ctrlc = "3.4.5"
+miette = { version="7.2.0", features = ["fancy"] }
 
 [package.metadata.release]
 # Dont publish the binary

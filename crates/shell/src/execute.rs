@@ -1,10 +1,10 @@
-use anyhow::Context;
 use deno_task_shell::{
     execute_sequential_list, AsyncCommandBehavior, ExecuteResult, ShellPipeReader, ShellPipeWriter,
     ShellState,
 };
+use miette::{Context, IntoDiagnostic};
 
-pub async fn execute_inner(text: &str, state: ShellState) -> anyhow::Result<ExecuteResult> {
+pub async fn execute_inner(text: &str, state: ShellState) -> miette::Result<ExecuteResult> {
     let list = deno_task_shell::parser::parse(text);
 
     let mut stderr = ShellPipeWriter::stderr();
@@ -30,14 +30,16 @@ pub async fn execute_inner(text: &str, state: ShellState) -> anyhow::Result<Exec
     Ok(result)
 }
 
-pub async fn execute(text: &str, state: &mut ShellState) -> anyhow::Result<i32> {
+pub async fn execute(text: &str, state: &mut ShellState) -> miette::Result<i32> {
     let result = execute_inner(text, state.clone()).await?;
 
     match result {
         ExecuteResult::Continue(exit_code, changes, _) => {
             // set CWD to the last command's CWD
             state.apply_changes(&changes);
-            std::env::set_current_dir(state.cwd()).context("Failed to set CWD")?;
+            std::env::set_current_dir(state.cwd())
+                .into_diagnostic()
+                .context("Failed to set CWD")?;
             Ok(exit_code)
         }
         ExecuteResult::Exit(_, _) => Ok(0),

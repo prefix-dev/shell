@@ -100,12 +100,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "anyhow"
-version = "1.0.89"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86fdf8605db99b54d3cd748a44c6d04df638eb5dafb219b135d0149bd0db01f6"
-
-[[package]]
 name = "arrayvec"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -310,7 +304,6 @@ dependencies = [
 name = "deno_task_shell"
 version = "0.17.0"
 dependencies = [
- "anyhow",
  "dirs",
  "futures",
  "glob",
@@ -1236,7 +1229,6 @@ dependencies = [
 name = "shell"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "chrono",
  "clap",
  "ctrlc",
@@ -1247,6 +1239,7 @@ dependencies = [
  "futures",
  "miette",
  "parse_datetime",
+ "miette",
  "rustyline",
  "tokio",
  "uu_date",
@@ -1368,10 +1361,10 @@ dependencies = [
 name = "tests"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "deno_task_shell",
  "dirs",
  "futures",
+ "miette",
  "pretty_assertions",
  "shell",
  "tempfile",

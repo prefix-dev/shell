@@ -1,6 +1,6 @@
 // Copyright 2018-2024 the Deno authors. MIT license.
-use anyhow::Context;
 use futures::future::LocalBoxFuture;
+use miette::IntoDiagnostic;
 use pretty_assertions::assert_eq;
 use std::collections::HashMap;
 use std::fs;
@@ -307,7 +307,7 @@ impl TestBuilder {
                 }
                 TestAssertion::FileTextEquals(path, text) => {
                     let actual_text = std::fs::read_to_string(cwd.join(path))
-                        .with_context(|| format!("Error reading {path}"))
+                        .into_diagnostic()
                         .unwrap();
                     assert_eq!(
                         &actual_text, text,

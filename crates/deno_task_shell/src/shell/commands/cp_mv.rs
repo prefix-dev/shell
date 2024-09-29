@@ -3,12 +3,13 @@
 use std::path::Path;
 use std::path::PathBuf;
 
-use anyhow::bail;
-use anyhow::Context;
-use anyhow::Result;
 use futures::future::BoxFuture;
 use futures::future::LocalBoxFuture;
 use futures::FutureExt;
+use miette::bail;
+use miette::Context;
+use miette::IntoDiagnostic;
+use miette::Result;
 
 use crate::shell::types::ExecuteResult;
 use crate::shell::types::ShellPipeWriter;
@@ -87,7 +88,9 @@ async fn do_copy_operation(
       bail!("source was a directory; maybe specify -r")
     }
   } else {
-    tokio::fs::copy(&from.path, &to.path).await?;
+    tokio::fs::copy(&from.path, &to.path)
+      .await
+      .into_diagnostic()?;
   }
   Ok(())
 }
@@ -100,13 +103,15 @@ fn copy_dir_recursively(
   async move {
     tokio::fs::create_dir_all(&to)
       .await
-      .with_context(|| format!("Creating {}", to.display()))?;
+      .into_diagnostic()
+      .context(miette::miette!("Creating {}", to.display()))?;
     let mut read_dir = tokio::fs::read_dir(&from)
       .await
-      .with_context(|| format!("Reading {}", from.display()))?;
+      .into_diagnostic()
+      .context(miette::miette!("Reading {}", from.display()))?;
 
-    while let Some(entry) = read_dir.next_entry().await? {
-      let file_type = entry.file_type().await?;
+    while let Some(entry) = read_dir.next_entry().await.into_diagnostic()? {
+      let file_type = entry.file_type().await.into_diagnostic()?;
       let new_from = from.join(entry.file_name());
       let new_to = to.join(entry.file_name());
 
@@ -117,9 +122,12 @@ fn copy_dir_recursively(
             format!("Dir {} to {}", new_from.display(), new_to.display())
           })?;
       } else if file_type.is_file() {
-        tokio::fs::copy(&new_from, &new_to).await.with_context(|| {
-          format!("Copying {} to {}", new_from.display(), new_to.display())
-        })?;
+        tokio::fs::copy(&new_from, &new_to)
+          .await
+          .into_diagnostic()
+          .with_context(|| {
+            format!("Copying {} to {}", new_from.display(), new_to.display())
+          })?;
       }
     }
 
