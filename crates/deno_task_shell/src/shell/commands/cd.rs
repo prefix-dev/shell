@@ -3,8 +3,8 @@
 use std::path::Path;
 use std::path::PathBuf;
 
-use anyhow::bail;
-use anyhow::Result;
+use miette::bail;
+use miette::Result;
 use futures::future::LocalBoxFuture;
 use path_dedot::ParseDot;
 
@@ -47,7 +47,7 @@ fn execute_cd(cwd: &Path, args: Vec<String>) -> Result<PathBuf> {
   let path = parse_args(args.clone())?;
   let new_dir = if path == "~" {
     dirs::home_dir()
-      .ok_or_else(|| anyhow::anyhow!("Home directory not found"))?
+      .ok_or_else(|| miette::miette!("Home directory not found"))?
   } else {
     cwd.join(&path)
   };

@@ -1,6 +1,7 @@
 // Copyright 2018-2024 the Deno authors. MIT license.
 
-use anyhow::Result;
+use miette::IntoDiagnostic;
+use miette::Result;
 use futures::future::LocalBoxFuture;
 use std::fs::File;
 use std::io::IsTerminal;
@@ -52,7 +53,7 @@ fn execute_cat(mut context: ShellCommandContext) -> Result<ExecuteResult> {
             return Ok(ExecuteResult::for_cancellation());
           }
 
-          let size = file.read(&mut buf)?;
+          let size = file.read(&mut buf).into_diagnostic()?;
           if size == 0 {
             break;
           } else {

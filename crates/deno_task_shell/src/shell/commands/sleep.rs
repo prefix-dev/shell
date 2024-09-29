@@ -2,8 +2,9 @@
 
 use std::time::Duration;
 
-use anyhow::bail;
-use anyhow::Result;
+use miette::bail;
+use miette::IntoDiagnostic;
+use miette::Result;
 use futures::future::LocalBoxFuture;
 use futures::FutureExt;
 
@@ -54,19 +55,19 @@ async fn execute_sleep(args: Vec<String>) -> Result<()> {
 
 fn parse_arg(arg: &str) -> Result<f64> {
   if let Some(t) = arg.strip_suffix('s') {
-    return Ok(t.parse()?);
+    return t.parse().into_diagnostic();
   }
   if let Some(t) = arg.strip_suffix('m') {
-    return Ok(t.parse::<f64>()? * 60.);
+    return Ok(t.parse::<f64>().into_diagnostic()? * 60.);
   }
   if let Some(t) = arg.strip_suffix('h') {
-    return Ok(t.parse::<f64>()? * 60. * 60.);
+    return Ok(t.parse::<f64>().into_diagnostic()? * 60. * 60.);
   }
   if let Some(t) = arg.strip_suffix('d') {
-    return Ok(t.parse::<f64>()? * 60. * 60. * 24.);
+    return Ok(t.parse::<f64>().into_diagnostic()? * 60. * 60. * 24.);
   }
 
-  Ok(arg.parse()?)
+  arg.parse().into_diagnostic()
 }
 
 fn parse_args(args: Vec<String>) -> Result<u64> {

@@ -3,8 +3,9 @@
 use std::fs::File;
 use std::io::Read;
 
-use anyhow::bail;
-use anyhow::Result;
+use miette::bail;
+use miette::IntoDiagnostic;
+use miette::Result;
 use futures::future::LocalBoxFuture;
 use tokio_util::sync::CancellationToken;
 
@@ -96,7 +97,7 @@ fn execute_head(mut context: ShellCommandContext) -> Result<ExecuteResult> {
         &mut context.stdout,
         flags.lines,
         context.state.token(),
-        |buf| file.read(buf).map_err(Into::into),
+        |buf| file.read(buf).into_diagnostic(),
         512,
       ),
       Err(err) => {
@@ -131,7 +132,7 @@ fn parse_args(args: Vec<String>) -> Result<HeadFlags> {
       }
       ArgKind::ShortFlag('n') => match iterator.next() {
         Some(ArgKind::Arg(arg)) => {
-          lines = Some(arg.parse::<u64>()?);
+          lines = Some(arg.parse::<u64>().into_diagnostic()?);
         }
         _ => bail!("expected a value following -n"),
       },
@@ -139,7 +140,7 @@ fn parse_args(args: Vec<String>) -> Result<HeadFlags> {
         if flag == "lines" || flag == "lines=" {
           bail!("expected a value for --lines");
         } else if let Some(arg) = flag.strip_prefix("lines=") {
-          lines = Some(arg.parse::<u64>()?);
+          lines = Some(arg.parse::<u64>().into_diagnostic()?);
         } else {
           arg.bail_unsupported()?
         }

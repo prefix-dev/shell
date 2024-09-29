@@ -3,11 +3,12 @@
 use std::path::Path;
 use std::path::PathBuf;
 
-use anyhow::Result;
+use miette::IntoDiagnostic;
+use miette::Result;
 
 /// Similar to `std::fs::canonicalize()` but strips UNC prefixes on Windows.
 pub fn canonicalize_path(path: &Path) -> Result<PathBuf> {
-  let path = path.canonicalize()?;
+  let path = path.canonicalize().into_diagnostic()?;
   #[cfg(windows)]
   return Ok(strip_unc_prefix(path));
   #[cfg(not(windows))]
