@@ -1,11 +1,11 @@
-use std::collections::HashMap;
+use std::path::Path;
 use std::path::PathBuf;
-use std::rc::Rc;
 
-use anyhow::Context;
 use clap::Parser;
 use deno_task_shell::parser::debug_parse;
-use deno_task_shell::{ShellCommand, ShellState};
+use deno_task_shell::ShellState;
+use miette::Context;
+use miette::IntoDiagnostic;
 use rustyline::error::ReadlineError;
 use rustyline::{CompletionType, Config, Editor};
 
@@ -15,28 +15,6 @@ mod execute;
 mod helper;
 
 pub use execute::execute;
-
-fn commands() -> HashMap<String, Rc<dyn ShellCommand>> {
-    HashMap::from([
-        (
-            "ls".to_string(),
-            Rc::new(commands::LsCommand) as Rc<dyn ShellCommand>,
-        ),
-        (
-            "alias".to_string(),
-            Rc::new(commands::AliasCommand) as Rc<dyn ShellCommand>,
-        ),
-        (
-            "unalias".to_string(),
-            Rc::new(commands::AliasCommand) as Rc<dyn ShellCommand>,
-        ),
-        (
-            "source".to_string(),
-            Rc::new(commands::SourceCommand) as Rc<dyn ShellCommand>,
-        ),
-    ])
-}
-
 #[derive(Parser)]
 struct Options {
     /// The path to the file that should be executed
@@ -53,23 +31,36 @@ struct Options {
 fn init_state() -> ShellState {
     let env_vars = std::env::vars().collect();
     let cwd = std::env::current_dir().unwrap();
-    ShellState::new(env_vars, &cwd, commands())
+    ShellState::new(env_vars, &cwd, commands::get_commands())
 }
 
-async fn interactive(state: Option<ShellState>) -> anyhow::Result<()> {
+async fn interactive(state: Option<ShellState>) -> miette::Result<()> {
     let config = Config::builder()
         .history_ignore_space(true)
-        .completion_type(CompletionType::Circular)
+        .completion_type(CompletionType::List)
         .build();
 
-    let mut rl = Editor::with_config(config)?;
+    ctrlc::set_handler(move || {
+        println!("Received Ctrl+C");
+    })
+    .expect("Error setting Ctrl-C handler");
+
+    let mut rl = Editor::with_config(config).into_diagnostic()?;
 
     let helper = helper::ShellPromptHelper::default();
     rl.set_helper(Some(helper));
 
     let mut state = state.unwrap_or_else(init_state);
 
-    let home = dirs::home_dir().context("Couldn't get home directory")?;
+    let home = dirs::home_dir().ok_or(miette::miette!("Couldn't get home directory"))?;
+    let history_file: PathBuf = [home.as_path(), Path::new(".shell_history")]
+        .iter()
+        .collect();
+    if Path::new(history_file.as_path()).exists() {
+        rl.load_history(history_file.as_path())
+            .into_diagnostic()
+            .context("Failed to read the command history")?;
+    }
 
     let mut _prev_exit_code = 0;
     loop {
@@ -79,9 +70,9 @@ async fn interactive(state: Option<ShellState>) -> anyhow::Result<()> {
         // Display the prompt and read a line
         let readline = {
             let cwd = state.cwd().to_string_lossy().to_string();
-            let home_str = home
-                .to_str()
-                .context("Couldn't convert home directory path to UTF-8 string")?;
+            let home_str = home.to_str().ok_or(miette::miette!(
+                "Couldn't convert home directory path to UTF-8 string"
+            ))?;
             if !state.last_command_cd() {
                 state.update_git_branch();
             }
@@ -116,7 +107,7 @@ async fn interactive(state: Option<ShellState>) -> anyhow::Result<()> {
         match readline {
             Ok(line) => {
                 // Add the line to history
-                rl.add_history_entry(line.as_str())?;
+                rl.add_history_entry(line.as_str()).into_diagnostic()?;
 
                 // Process the input (here we just echo it back)
                 let prev_exit_code = execute(&line, &mut state)
@@ -131,10 +122,11 @@ async fn interactive(state: Option<ShellState>) -> anyhow::Result<()> {
                 }
             }
             Err(ReadlineError::Interrupted) => {
+                // We start a new prompt on Ctrl-C, like Bash does
                 println!("CTRL-C");
-                break;
             }
             Err(ReadlineError::Eof) => {
+                // We exit the shell on Ctrl-D, like Bash does
                 println!("CTRL-D");
                 break;
             }
@@ -144,12 +136,15 @@ async fn interactive(state: Option<ShellState>) -> anyhow::Result<()> {
             }
         }
     }
+    rl.save_history(history_file.as_path())
+        .into_diagnostic()
+        .context("Failed to write the command history")?;
 
     Ok(())
 }
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() -> miette::Result<()> {
     let options = Options::parse();
 
     if let Some(file) = options.file {
