@@ -22,7 +22,7 @@ struct Options {
 
     /// Continue in interactive mode after the file has been executed
     #[clap(long)]
-    no_exit: bool,
+    interact: bool,
 
     #[clap(short, long)]
     debug: bool,
@@ -155,7 +155,7 @@ async fn main() -> miette::Result<()> {
             return Ok(());
         }
         execute(&script_text, &mut state).await?;
-        if options.no_exit {
+        if options.interact {
             interactive(Some(state)).await?;
         }
     } else {
