@@ -53,6 +53,8 @@ async fn interactive(state: Option<ShellState>) -> miette::Result<()> {
     let mut state = state.unwrap_or_else(init_state);
 
     let home = dirs::home_dir().ok_or(miette::miette!("Couldn't get home directory"))?;
+
+    // Load .shell_history
     let history_file: PathBuf = [home.as_path(), Path::new(".shell_history")]
         .iter()
         .collect();
@@ -60,6 +62,16 @@ async fn interactive(state: Option<ShellState>) -> miette::Result<()> {
         rl.load_history(history_file.as_path())
             .into_diagnostic()
             .context("Failed to read the command history")?;
+    }
+
+    // Load ~/.shellrc
+    let shellrc_file: PathBuf = [home.as_path(), Path::new(".shellrc")].iter().collect();
+    if Path::new(shellrc_file.as_path()).exists() {
+        let line = "source '".to_owned() + shellrc_file.to_str().unwrap() + "'";
+        let prev_exit_code = execute(&line, &mut state)
+            .await
+            .context("Failed to source ~/.shellrc")?;
+        state.set_last_command_exit_code(prev_exit_code);
     }
 
     let mut _prev_exit_code = 0;
