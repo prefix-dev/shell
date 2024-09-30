@@ -35,6 +35,9 @@ cargo r
 
 # To run a script
 cargo r -- ./scripts/hello_world.sh
+
+# To run a script and continue in interactive mode
+cargo r -- ./scripts/hello_world.sh --interact
 ```
 
 ## License

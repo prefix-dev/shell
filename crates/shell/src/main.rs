@@ -20,6 +20,10 @@ struct Options {
     /// The path to the file that should be executed
     file: Option<PathBuf>,
 
+    /// Continue in interactive mode after the file has been executed
+    #[clap(long)]
+    interact: bool,
+
     #[clap(short, long)]
     debug: bool,
 }
@@ -30,7 +34,7 @@ fn init_state() -> ShellState {
     ShellState::new(env_vars, &cwd, commands::get_commands())
 }
 
-async fn interactive() -> miette::Result<()> {
+async fn interactive(state: Option<ShellState>) -> miette::Result<()> {
     let config = Config::builder()
         .history_ignore_space(true)
         .completion_type(CompletionType::List)
@@ -46,7 +50,7 @@ async fn interactive() -> miette::Result<()> {
     let helper = helper::ShellPromptHelper::default();
     rl.set_helper(Some(helper));
 
-    let mut state = init_state();
+    let mut state = state.unwrap_or_else(init_state);
 
     let home = dirs::home_dir().ok_or(miette::miette!("Couldn't get home directory"))?;
     let history_file: PathBuf = [home.as_path(), Path::new(".shell_history")]
@@ -151,8 +155,11 @@ async fn main() -> miette::Result<()> {
             return Ok(());
         }
         execute(&script_text, &mut state).await?;
+        if options.interact {
+            interactive(Some(state)).await?;
+        }
     } else {
-        interactive().await?;
+        interactive(None).await?;
     }
 
     Ok(())
