@@ -17,13 +17,9 @@ pub use types::ShellPipeReader;
 pub use types::ShellPipeWriter;
 pub use types::ShellState;
 
+pub mod fs_util;
+
 mod command;
 mod commands;
 mod execute;
-mod fs_util;
 mod types;
-
-#[cfg(test)]
-mod test;
-#[cfg(test)]
-mod test_builder;

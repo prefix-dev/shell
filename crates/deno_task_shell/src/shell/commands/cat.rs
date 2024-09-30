@@ -1,11 +1,14 @@
 // Copyright 2018-2024 the Deno authors. MIT license.
 
-use anyhow::Result;
 use futures::future::LocalBoxFuture;
+use miette::IntoDiagnostic;
+use miette::Result;
 use std::fs::File;
+use std::io::IsTerminal;
 use std::io::Read;
 
 use crate::shell::types::ExecuteResult;
+use crate::ShellPipeWriter;
 
 use super::args::parse_arg_kinds;
 use super::args::ArgKind;
@@ -50,11 +53,19 @@ fn execute_cat(mut context: ShellCommandContext) -> Result<ExecuteResult> {
             return Ok(ExecuteResult::for_cancellation());
           }
 
-          let size = file.read(&mut buf)?;
+          let size = file.read(&mut buf).into_diagnostic()?;
           if size == 0 {
             break;
           } else {
             context.stdout.write_all(&buf[..size])?;
+          }
+
+          if let ShellPipeWriter::Stdout = context.stdout {
+            // check if it's interactive
+            if buf[size - 1] != b'\n' && std::io::stdout().is_terminal() {
+              // make sure that we end up on a new line
+              context.stdout.write_all(b"%\n")?;
+            }
           }
         },
         Err(err) => {

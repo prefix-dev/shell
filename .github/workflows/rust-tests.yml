@@ -14,7 +14,10 @@ on:
 
 jobs:
   tests:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -25,7 +28,8 @@ jobs:
           toolchain: stable
           profile: minimal
           override: true
+      
+      - uses: Swatinem/rust-cache@v2
 
       - name: Run tests
-        # TODO: run on whole workspace with "cargo test --workspace --all-targets"
-        run: cargo test --manifest-path crates/shell/Cargo.toml --all-targets
+        run: cargo test --workspace --all-targets

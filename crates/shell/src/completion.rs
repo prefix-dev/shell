@@ -34,6 +34,12 @@ impl ShellCompleter {
     }
 }
 
+impl Default for ShellCompleter {
+    fn default() -> Self {
+        ShellCompleter
+    }
+}
+
 impl Completer for ShellCompleter {
     type Candidate = Pair;
 
@@ -70,7 +76,7 @@ impl Completer for ShellCompleter {
 }
 
 fn extract_word(line: &str, pos: usize) -> (usize, &str) {
-    if line.ends_with(" ") {
+    if line.ends_with(' ') {
         return (pos, "");
     }
     let words: Vec<_> = line[..pos].split_whitespace().collect();
@@ -88,6 +94,9 @@ fn complete_filenames(_is_start: bool, word: &str, matches: &mut Vec<Pair>) {
     // Determine the full directory path to search
     let search_dir = if dir_path.starts_with('/') {
         dir_path.to_string()
+    } else if let Some(stripped) = dir_path.strip_prefix('~') {
+        let home_dir = dirs::home_dir().unwrap();
+        format!("{}{}", home_dir.display(), stripped)
     } else {
         format!("./{}", dir_path)
     };

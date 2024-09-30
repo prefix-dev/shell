@@ -3,45 +3,89 @@
 // Whitespace and comments
 WHITESPACE = _{ " " | "\t" | ("\\" ~ WHITESPACE* ~ NEWLINE) }
 COMMENT = _{ "#" ~ (!NEWLINE ~ ANY)* }
+NUMBER = @{ INT ~ ("." ~ ASCII_DIGIT*)? ~ (^"e" ~ INT)? }
+INT = { ("+" | "-")? ~ ASCII_DIGIT+ }
 
 // Basic tokens
 QUOTED_WORD = { DOUBLE_QUOTED | SINGLE_QUOTED }
 
-UNQUOTED_PENDING_WORD = ${
-    (!(WHITESPACE | OPERATOR | NEWLINE) ~ (
+UNQUOTED_PENDING_WORD = ${ 
+    (TILDE_PREFIX ~ (!(OPERATOR | WHITESPACE | NEWLINE) ~ (
         EXIT_STATUS | 
         UNQUOTED_ESCAPE_CHAR | 
+        "$" ~ ARITHMETIC_EXPRESSION |
         SUB_COMMAND | 
-        ("$" ~ VARIABLE) | 
+        ("$" ~ "{" ~ VARIABLE ~ "}" | "$" ~ VARIABLE) | 
         UNQUOTED_CHAR | 
         QUOTED_WORD
-    )
-)+ }
+    ))*)
+    | 
+    (!(OPERATOR | WHITESPACE | NEWLINE) ~ (
+        EXIT_STATUS | 
+        UNQUOTED_ESCAPE_CHAR | 
+        "$" ~ ARITHMETIC_EXPRESSION |
+        SUB_COMMAND | 
+        ("$" ~ "{" ~ VARIABLE ~ "}" | "$" ~ VARIABLE) | 
+        UNQUOTED_CHAR | 
+        QUOTED_WORD
+    ))+
+}
 
-FILE_NAME_PENDING_WORD = ${ (!(WHITESPACE | OPERATOR | NEWLINE) ~ (UNQUOTED_ESCAPE_CHAR | ("$" ~ VARIABLE) | UNQUOTED_CHAR | QUOTED_WORD))+ }
+TILDE_PREFIX = ${
+    "~" ~ (!(OPERATOR | WHITESPACE | NEWLINE | "/") ~ (
+        (!("\"" | "'" | "$" | "\\" | "/") ~ ANY)
+    ))*
+}
+
+ASSIGNMENT_TILDE_PREFIX = ${
+    "~" ~ (!(OPERATOR | WHITESPACE | NEWLINE | "/" | ":") ~ 
+        (!("\"" | "'" | "$" | "\\" | "/") ~ ANY)
+    )*
+}
+
+FILE_NAME_PENDING_WORD = ${
+    (TILDE_PREFIX ~ (!(WHITESPACE | OPERATOR | NEWLINE) ~ (
+        UNQUOTED_ESCAPE_CHAR |
+        ("$" ~ VARIABLE) |
+        UNQUOTED_CHAR |
+        QUOTED_WORD
+    ))*)
+    |
+    (!(WHITESPACE | OPERATOR | NEWLINE) ~ (
+        UNQUOTED_ESCAPE_CHAR |
+        ("$" ~ VARIABLE) |
+        UNQUOTED_CHAR |
+        QUOTED_WORD
+    ))+
+}
 
 QUOTED_PENDING_WORD = ${ (
     EXIT_STATUS | 
     QUOTED_ESCAPE_CHAR | 
     SUB_COMMAND | 
-    ("$" ~ VARIABLE) |
+    ("$" ~ "{" ~ VARIABLE ~ "}" | "$" ~ VARIABLE) |
     QUOTED_CHAR
 )* }
 
-UNQUOTED_ESCAPE_CHAR = ${ ("\\" ~ "$" | "$" ~ !"(" ~ !VARIABLE) | "\\" ~ (" " | "`" | "\"" | "(" | ")")* }
-QUOTED_ESCAPE_CHAR = ${ "\\" ~ "$" | "$" ~ !"(" ~ !VARIABLE | "\\" ~ ("`" | "\"" | "(" | ")" | "'")* }
+UNQUOTED_ESCAPE_CHAR = ${ ("\\" ~ "$" | "$" ~ !"(" ~  !"{" ~ !VARIABLE) | "\\" ~ (" " | "`" | "\"" | "(" | ")")* }
+QUOTED_ESCAPE_CHAR = ${ "\\" ~ "$" | "$" ~ !"(" ~ !"{" ~ !VARIABLE | "\\" ~ ("`" | "\"" | "(" | ")" | "'")* }
 
-UNQUOTED_CHAR = ${ ("\\" ~ " ") | !("(" | ")" | "{" | "}" | "<" | ">" | "|" | "&" | ";" | "\"" | "'" | "$") ~ ANY }
+UNQUOTED_CHAR = ${ ("\\" ~ " ") | !("]]" | "[[" | "(" | ")" | "<" | ">" | "|" | "&" | ";" | "\"" | "'" | "$") ~ ANY }
 QUOTED_CHAR = ${ !"\"" ~ ANY }
 
-VARIABLE = ${ (ASCII_ALPHANUMERIC | "_")+ }
-SUB_COMMAND = { "$(" ~ complete_command ~ ")" }
+VARIABLE = ${ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+SUB_COMMAND = { "$(" ~ complete_command ~ ")"}
 
 DOUBLE_QUOTED = @{ "\"" ~ QUOTED_PENDING_WORD ~ "\"" }
 SINGLE_QUOTED = @{ "'" ~ (!"'" ~ ANY)* ~ "'" }
 
 NAME = ${ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
-ASSIGNMENT_WORD = { NAME ~ "=" ~ UNQUOTED_PENDING_WORD? }
+ASSIGNMENT_WORD = ${ NAME ~ "=" ~ ASSIGNMENT_VALUE? }
+ASSIGNMENT_VALUE = ${ 
+    ASSIGNMENT_TILDE_PREFIX ~ 
+    ((":" ~ ASSIGNMENT_TILDE_PREFIX) | (!":" ~ UNQUOTED_PENDING_WORD))* |
+    UNQUOTED_PENDING_WORD
+}
 IO_NUMBER = @{ ASCII_DIGIT+ }
 
 // Special tokens
@@ -60,19 +104,18 @@ CLOBBER = { ">|" }
 AMPERSAND = { "&" }
 EXIT_STATUS = ${ "$?" }
 
-
 // Operators
 OPERATOR = _{
     AND_IF | OR_IF | DSEMI | DLESS | DGREAT | LESSAND | GREATAND | LESSGREAT | DLESSDASH | CLOBBER |
-    "(" | ")" | "{" | "}" | ";" | "&" | "|" | "<" | ">"
+    "," |"(" | ")" | "{" | "}" | ";" | "&" | "|" | "<" | ">"
 }
 
 // Reserved words
-If = { "if" }
-Then = { "then" }
+If = _{ "if" }
+Then = _{ "then" }
 Else = { "else" }
 Elif = { "elif" }
-Fi = { "fi" }
+Fi = _{ "fi" }
 Do = { "do" }
 Done = { "done" }
 Case = { "case" }
@@ -102,13 +145,14 @@ pipeline = !{ Bang? ~ pipe_sequence }
 pipe_sequence = !{ command ~ ((StdoutStderr | Stdout) ~ linebreak ~ pipe_sequence)? }
 
 command = !{
-    simple_command |
     compound_command ~ redirect_list? |
+    simple_command |
     function_definition
 }
 
 compound_command = {
     brace_group |
+    ARITHMETIC_EXPRESSION |
     subshell |
     for_clause |
     case_clause |
@@ -117,14 +161,93 @@ compound_command = {
     until_clause
 }
 
-subshell = !{ "(" ~ compound_list ~ ")" }
+ARITHMETIC_EXPRESSION = !{ "((" ~ arithmetic_sequence ~ "))" }
+arithmetic_sequence = !{ arithmetic_expr ~ ("," ~ arithmetic_expr)* }
+arithmetic_expr = { parentheses_expr | variable_assignment | triple_conditional_expr | binary_arithmetic_expr | binary_conditional_expression | unary_arithmetic_expr | VARIABLE | NUMBER }
+parentheses_expr = !{ "(" ~ arithmetic_sequence ~ ")" }
+
+variable_assignment = !{
+    VARIABLE ~ assignment_operator ~ arithmetic_expr
+}
+
+triple_conditional_expr = !{
+    (parentheses_expr | variable_assignment | binary_arithmetic_expr | binary_conditional_expression | unary_arithmetic_expr | VARIABLE | NUMBER) ~
+    "?" ~ (parentheses_expr | variable_assignment | binary_arithmetic_expr | binary_conditional_expression | unary_arithmetic_expr | VARIABLE | NUMBER) ~
+    ":" ~ (parentheses_expr | variable_assignment | binary_arithmetic_expr | binary_conditional_expression | unary_arithmetic_expr | VARIABLE | NUMBER)
+}
+
+binary_arithmetic_expr = _{
+    (parentheses_expr | binary_conditional_expression | unary_arithmetic_expr | variable_assignment | VARIABLE | NUMBER) ~
+    (binary_arithmetic_op ~
+        (parentheses_expr | variable_assignment | binary_conditional_expression | unary_arithmetic_expr | VARIABLE | NUMBER)
+    )+
+}
+
+binary_arithmetic_op = _{
+    add | subtract | power | multiply | divide | modulo | left_shift | right_shift |
+    bitwise_and | bitwise_xor | bitwise_or | logical_and | logical_or
+}
+
+add = { "+" }
+subtract = { "-" }
+multiply = { "*" }
+divide = { "/" }
+modulo = { "%" }
+power = { "**" }
+left_shift = { "<<" }
+right_shift = { ">>" }
+bitwise_and = { "&" }
+bitwise_xor = { "^" }
+bitwise_or = { "|" }
+logical_and = { "&&" }
+logical_or = { "||" }
+
+unary_arithmetic_expr = !{
+    (unary_arithmetic_op | post_arithmetic_op) ~ (parentheses_expr | VARIABLE | NUMBER) |
+    (parentheses_expr | VARIABLE | NUMBER) ~ post_arithmetic_op
+}
+
+unary_arithmetic_op = _{
+    unary_plus | unary_minus | logical_not | bitwise_not
+}
+
+unary_plus = { "+" }
+unary_minus = { "-" }
+logical_not = { "!" }
+bitwise_not = { "~" }
+
+post_arithmetic_op = !{
+    increment | decrement
+}
+
+increment = { "++" }
+decrement = { "--" }
+
+assignment_operator = _{
+    assign | multiply_assign | divide_assign | modulo_assign | add_assign | subtract_assign |
+    left_shift_assign | right_shift_assign | bitwise_and_assign | bitwise_xor_assign | bitwise_or_assign
+}
+
+assign = { "=" }
+multiply_assign = { "*=" }
+divide_assign = { "/=" }
+modulo_assign = { "%=" }
+add_assign = { "+=" }
+subtract_assign = { "-=" }
+left_shift_assign = { "<<=" }
+right_shift_assign = { ">>=" }
+bitwise_and_assign = { "&=" }
+bitwise_xor_assign = { "^=" }
+bitwise_or_assign = { "|=" }
+
+subshell = !{ "(" ~  compound_list ~ ")" }
 compound_list = !{ (newline_list? ~ term ~ separator?)+ }
 term = !{ and_or ~ (separator ~ and_or)* }
 
 for_clause = {
     For ~ name ~ linebreak ~
-    (linebreak ~ In ~ wordlist? ~ sequential_sep)? ~
-    linebreak ~ do_group
+    (In ~ (brace_group | wordlist)? ~ sequential_sep)? ~
+    do_group
 }
 
 case_clause = !{
@@ -155,15 +278,55 @@ pattern = !{
 }
 
 if_clause = !{
-    If ~ compound_list ~
-    Then ~ compound_list ~
-    else_part? ~
-    Fi
+    If ~ conditional_expression ~
+    linebreak ~ Then ~ linebreak ~ complete_command ~ linebreak ~
+    else_part? ~ linebreak ~ Fi
 }
 
 else_part = !{
-    Elif ~ compound_list ~ Then ~ else_part |
-    Else ~ compound_list
+    Elif ~ conditional_expression ~ linebreak ~ Then ~ complete_command ~ linebreak ~ else_part? |
+    Else ~ linebreak ~ complete_command
+}
+
+conditional_expression = !{
+    ("[[" ~ (unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD) ~ "]]" ~ ";"?) |
+    ("[" ~ (unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD) ~ "]" ~ ";"?) | 
+    ("test" ~ (unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD))
+}
+
+unary_conditional_expression = !{
+    file_conditional_op ~ FILE_NAME_PENDING_WORD |
+    variable_conditional_op ~ VARIABLE | 
+    string_conditional_op ~ UNQUOTED_PENDING_WORD
+}
+
+file_conditional_op = !{
+    "-a" | "-b" | "-c" | "-d" | "-e" | "-f" | "-g" | "-h" | "-k" | 
+    "-p" | "-r" | "-s" | "-u" | "-w" | "-x" | "-G" | "-L" | 
+    "-N" | "-O" | "-S"
+}
+
+variable_conditional_op = !{
+    "-v" | "-R"
+}
+
+string_conditional_op = !{
+    "-n" | "-z"
+}
+
+binary_conditional_expression = !{
+    UNQUOTED_PENDING_WORD ~ (
+        binary_bash_conditional_op |
+        binary_posix_conditional_op
+    ) ~ UNQUOTED_PENDING_WORD
+}
+
+binary_bash_conditional_op = !{
+    "==" | "=" | "!=" | "<" | ">"
+}
+
+binary_posix_conditional_op = !{
+    "-eq" | "-ne" | "-lt" | "-le" | "-gt" | "-ge"
 }
 
 while_clause = !{ While ~ compound_list ~ do_group }
@@ -185,7 +348,7 @@ simple_command = !{
 
 cmd_prefix = !{ (io_redirect | ASSIGNMENT_WORD)+ }
 cmd_suffix = !{ (io_redirect | UNQUOTED_PENDING_WORD)+ }
-cmd_name = @{ (RESERVED_WORD | UNQUOTED_PENDING_WORD) }
+cmd_name = @{ !RESERVED_WORD ~ UNQUOTED_PENDING_WORD }
 cmd_word = @{ (ASSIGNMENT_WORD | UNQUOTED_PENDING_WORD) }
 
 redirect_list = !{ io_redirect+ }

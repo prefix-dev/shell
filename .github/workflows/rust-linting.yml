@@ -41,6 +41,8 @@ jobs:
           toolchain: stable
           profile: minimal
           override: true
+      
+      - uses: Swatinem/rust-cache@v2
 
       - name: Run cargo clippy
         run: cargo clippy --all-targets --workspace -- -D warnings
