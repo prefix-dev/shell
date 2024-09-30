@@ -1,6 +1,7 @@
 // Copyright 2018-2024 the Deno authors. MIT license.
 
 use std::borrow::Cow;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Display;
@@ -1099,22 +1100,92 @@ impl FromStr for ArithmeticResult {
   }
 }
 
-pub struct WordEvalResult {
+#[derive(Debug, Clone)]
+pub struct WordPartsResult {
   pub value: Vec<String>,
   pub changes: Vec<EnvChange>,
 }
 
-impl WordEvalResult {
+impl WordPartsResult {
   pub fn new(value: Vec<String>, changes: Vec<EnvChange>) -> Self {
-    WordEvalResult { value, changes }
+    WordPartsResult { value, changes }
   }
 
-  pub fn extend(&mut self, other: WordEvalResult) {
+  pub fn extend(&mut self, other: WordPartsResult) {
     self.value.extend(other.value);
     self.changes.extend(other.changes);
   }
 
   pub fn join(&self, sep: &str) -> String {
     self.value.join(sep)
+  }
+}
+
+impl From<WordPartsResult> for String {
+  fn from(parts: WordPartsResult) -> Self {
+    parts.join(" ")
+  }
+}
+
+#[derive(Debug, Clone)]
+pub struct WordResult {
+  value: String,
+  changes: Vec<EnvChange>,
+}
+
+impl WordResult {
+  pub fn new(value: String, changes: Vec<EnvChange>) -> Self {
+    WordResult { value, changes }
+  }
+
+  pub fn extend(&mut self, other: WordResult) {
+    self.value.push_str(&other.value);
+    self.changes.extend(other.changes);
+  }
+
+  pub fn value(&self) -> &str {
+    &self.value
+  }
+
+  pub fn changes(&self) -> &[EnvChange] {
+    &self.changes
+  }
+}
+
+impl PartialEq for WordResult {
+  fn eq(&self, other: &Self) -> bool {
+    self.value == other.value
+  }
+}
+
+impl Ord for WordResult {
+  fn cmp(&self, other: &Self) -> Ordering {
+    self.value.cmp(&other.value)
+  }
+}
+
+impl PartialOrd for WordResult {
+  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+    Some(self.cmp(other))
+  }
+}
+
+impl Eq for WordResult {}
+
+impl From<String> for WordResult {
+  fn from(value: String) -> Self {
+    WordResult::new(value, Vec::new())
+  }
+}
+
+impl From<WordResult> for String {
+  fn from(result: WordResult) -> Self {
+    result.value
+  }
+}
+
+impl From<WordPartsResult> for WordResult {
+  fn from(parts: WordPartsResult) -> Self {
+    WordResult::new(parts.join(" "), parts.changes)
   }
 }

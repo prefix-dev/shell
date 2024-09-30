@@ -54,7 +54,8 @@ use crate::parser::SimpleCommand;
 use crate::parser::UnaryArithmeticOp;
 use crate::parser::Word;
 use crate::parser::WordPart;
-use crate::shell::types::WordEvalResult;
+use crate::shell::types::WordPartsResult;
+use crate::shell::types::WordResult;
 
 use super::command::execute_unresolved_command_name;
 use super::command::UnresolvedCommandName;
@@ -249,7 +250,7 @@ fn execute_sequence(
         vec![EnvChange::SetShellVar(
           var.name,
           match evaluate_word(var.value, &state, stdin, stderr.clone()).await {
-            Ok(value) => value,
+            Ok(value) => value.into(),
             Err(err) => {
               return err.into_exit_code(&mut stderr);
             }
@@ -901,8 +902,8 @@ async fn evaluate_condition(
         evaluate_word(right, state, stdin.clone(), stderr.clone()).await?;
 
       // transform the string comparison to a numeric comparison if possible
-      if let Ok(left) = left.parse::<i64>() {
-        if let Ok(right) = right.parse::<i64>() {
+      if let Ok(left) = Into::<String>::into(left.clone()).parse::<i64>() {
+        if let Ok(right) = Into::<String>::into(right.clone()).parse::<i64>() {
           return Ok(match op {
             BinaryOp::Equal => left == right,
             BinaryOp::NotEqual => left != right,
@@ -981,7 +982,7 @@ async fn execute_simple_command(
         return err.into_exit_code(&mut stderr);
       }
     };
-    state.apply_env_var(&env_var.name, &value);
+    state.apply_env_var(&env_var.name, value.value());
   }
   let result = execute_command_args(args, state, stdin, stdout, stderr).await;
   match result {
@@ -1065,8 +1066,8 @@ pub async fn evaluate_args(
   state: &ShellState,
   stdin: ShellPipeReader,
   stderr: ShellPipeWriter,
-) -> Result<WordEvalResult, EvaluateWordTextError> {
-  let mut result = WordEvalResult::new(Vec::new(), Vec::new());
+) -> Result<WordPartsResult, EvaluateWordTextError> {
+  let mut result = WordPartsResult::new(Vec::new(), Vec::new());
   for arg in args {
     let parts = evaluate_word_parts(
       arg.into_parts(),
@@ -1085,12 +1086,11 @@ async fn evaluate_word(
   state: &ShellState,
   stdin: ShellPipeReader,
   stderr: ShellPipeWriter,
-) -> Result<String, EvaluateWordTextError> {
-  Ok(
-    evaluate_word_parts(word.into_parts(), state, stdin, stderr)
+) -> Result<WordResult, EvaluateWordTextError> {
+    Ok(evaluate_word_parts(word.into_parts(), state, stdin, stderr)
       .await?
-      .join(" "),
-  )
+      .into()
+    )
 }
 
 #[derive(Debug, Error)]
@@ -1128,7 +1128,7 @@ impl VariableModifier {
     match self {
       VariableModifier::DefaultValue(default_value) => match variable {
         Some(v) => Ok(Some(v.to_string())),
-        None => Ok(Some(evaluate_word(default_value.clone(), state, stdin, stderr).await.into_diagnostic()?)),
+        None => Ok(Some(evaluate_word(default_value.clone(), state, stdin, stderr).await.into_diagnostic()?.into())),
       },
       // VariableModifier::Substring { begin, length } => {
       //   if variable.is_none() {
@@ -1155,7 +1155,7 @@ fn evaluate_word_parts(
   state: &ShellState,
   stdin: ShellPipeReader,
   stderr: ShellPipeWriter,
-) -> LocalBoxFuture<Result<WordEvalResult, EvaluateWordTextError>> {
+) -> LocalBoxFuture<Result<WordPartsResult, EvaluateWordTextError>> {
   #[derive(Debug)]
   enum TextPart {
     Quoted(String),
@@ -1184,7 +1184,7 @@ fn evaluate_word_parts(
     state: &ShellState,
     text_parts: Vec<TextPart>,
     is_quoted: bool,
-  ) -> Result<WordEvalResult, EvaluateWordTextError> {
+  ) -> Result<WordPartsResult, EvaluateWordTextError> {
     if !is_quoted
       && text_parts
         .iter()
@@ -1254,13 +1254,13 @@ fn evaluate_word_parts(
                 })
                 .collect::<Vec<_>>()
             };
-            Ok(WordEvalResult::new(paths, Vec::new()))
+            Ok(WordPartsResult::new(paths, Vec::new()))
           }
         }
         Err(err) => Err(EvaluateWordTextError::InvalidPattern { pattern, err }),
       }
     } else {
-      Ok(WordEvalResult {
+      Ok(WordPartsResult {
         value: vec![text_parts_to_string(text_parts)],
         changes: Vec::new(),
       })
@@ -1273,12 +1273,12 @@ fn evaluate_word_parts(
     state: &ShellState,
     stdin: ShellPipeReader,
     stderr: ShellPipeWriter,
-  ) -> LocalBoxFuture<Result<WordEvalResult, EvaluateWordTextError>> {
+  ) -> LocalBoxFuture<Result<WordPartsResult, EvaluateWordTextError>> {
     // recursive async, so requires boxing
     let mut changes: Vec<EnvChange> = Vec::new();
 
     async move {
-      let mut result = WordEvalResult::new(Vec::new(), Vec::new());
+      let mut result = WordPartsResult::new(Vec::new(), Vec::new());
       let mut current_text = Vec::new();
       for part in parts {
         let evaluation_result_text = match part {
@@ -1289,7 +1289,7 @@ fn evaluate_word_parts(
           WordPart::Variable(name, modifier) => {
             let value = state.get_var(&name).map(|v| v.to_string());
             if let Some(modifier) = modifier {
-              modifier.apply(value.as_ref(), state, stdin, stderr)
+              modifier.apply(value.as_ref(), state, stdin.clone(), stderr.clone()).await?
             } else {
               value
             }
@@ -1305,17 +1305,18 @@ fn evaluate_word_parts(
             .await,
           ),
           WordPart::Quoted(parts) => {
-            let text = evaluate_word_parts_inner(
+            let res = evaluate_word_parts_inner(
               parts,
               true,
               state,
               stdin.clone(),
               stderr.clone(),
             )
-            .await?
-            .join(" ");
-
-            current_text.push(TextPart::Quoted(text));
+            .await?;
+            
+            changes.extend(res.changes);
+          
+            current_text.push(TextPart::Quoted(res.into()));
             continue;
           }
           WordPart::Tilde(tilde_prefix) => {
