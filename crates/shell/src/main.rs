@@ -24,6 +24,10 @@ struct Options {
     #[clap(long)]
     interact: bool,
 
+    /// Do not source ~/.shellrc on startup
+    #[clap(long)]
+    norc: bool,
+
     #[clap(short, long)]
     debug: bool,
 }
@@ -34,7 +38,7 @@ fn init_state() -> ShellState {
     ShellState::new(env_vars, &cwd, commands::get_commands())
 }
 
-async fn interactive(state: Option<ShellState>) -> miette::Result<()> {
+async fn interactive(state: Option<ShellState>, norc: bool) -> miette::Result<()> {
     let config = Config::builder()
         .history_ignore_space(true)
         .completion_type(CompletionType::List)
@@ -66,7 +70,7 @@ async fn interactive(state: Option<ShellState>) -> miette::Result<()> {
 
     // Load ~/.shellrc
     let shellrc_file: PathBuf = [home.as_path(), Path::new(".shellrc")].iter().collect();
-    if Path::new(shellrc_file.as_path()).exists() {
+    if !norc && Path::new(shellrc_file.as_path()).exists() {
         let line = "source '".to_owned() + shellrc_file.to_str().unwrap() + "'";
         let prev_exit_code = execute(&line, &mut state)
             .await
@@ -168,10 +172,10 @@ async fn main() -> miette::Result<()> {
         }
         execute(&script_text, &mut state).await?;
         if options.interact {
-            interactive(Some(state)).await?;
+            interactive(Some(state), options.norc).await?;
         }
     } else {
-        interactive(None).await?;
+        interactive(None, options.norc).await?;
     }
 
     Ok(())
