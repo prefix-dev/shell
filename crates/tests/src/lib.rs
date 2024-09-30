@@ -75,6 +75,12 @@ async fn commands() {
         .await;
 
     TestBuilder::new()
+        .command(r#"FOO=1; echo "$FOO""#)
+        .assert_stdout("1\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
         .command("echo 'a/b'/c")
         .assert_stdout("a/b/c\n")
         .run()
