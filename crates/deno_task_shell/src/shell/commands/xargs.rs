@@ -1,9 +1,10 @@
 // Copyright 2018-2024 the Deno authors. MIT license.
 
-use anyhow::bail;
-use anyhow::Result;
 use futures::future::LocalBoxFuture;
 use futures::FutureExt;
+use miette::bail;
+use miette::IntoDiagnostic;
+use miette::Result;
 
 use crate::shell::types::ExecuteResult;
 use crate::shell::types::ShellPipeReader;
@@ -51,7 +52,7 @@ fn xargs_collect_args(
   let flags = parse_args(cli_args)?;
   let mut buf = Vec::new();
   stdin.pipe_to(&mut buf)?;
-  let text = String::from_utf8(buf)?;
+  let text = String::from_utf8(buf).into_diagnostic()?;
   let mut args = flags.initial_args;
 
   if args.is_empty() {

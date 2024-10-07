@@ -6,9 +6,10 @@ edition = "2021"
 [dependencies]
 deno_task_shell = { path = "../deno_task_shell", features = ["shell"] }
 shell = { path = "../shell" }
-anyhow = "1.0.87"
 futures = "0.3.30"
 tokio = { version = "1.40.0", features = ["full"] }
+dirs = "5.0.1"
+miette = "7.2.0"
 
 [dev-dependencies]
 pretty_assertions = "1.0.0"

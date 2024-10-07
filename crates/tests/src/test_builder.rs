@@ -1,6 +1,6 @@
 // Copyright 2018-2024 the Deno authors. MIT license.
-use anyhow::Context;
 use futures::future::LocalBoxFuture;
+use miette::IntoDiagnostic;
 use pretty_assertions::assert_eq;
 use std::collections::HashMap;
 use std::fs;
@@ -65,6 +65,7 @@ pub struct TestBuilder {
     expected_exit_code: i32,
     expected_stderr: String,
     expected_stdout: String,
+    expected_stderr_contains: String,
     assertions: Vec<TestAssertion>,
     assert_stdout: bool,
     assert_stderr: bool,
@@ -101,9 +102,10 @@ impl TestBuilder {
             expected_exit_code: 0,
             expected_stderr: Default::default(),
             expected_stdout: Default::default(),
+            expected_stderr_contains: Default::default(),
             assertions: Default::default(),
             assert_stdout: true,
-            assert_stderr: true,
+            assert_stderr: false,
         }
     }
 
@@ -125,6 +127,11 @@ impl TestBuilder {
 
     pub fn command(&mut self, command: &str) -> &mut Self {
         self.command = command.to_string();
+        self
+    }
+
+    pub fn script_file(&mut self, path: &str) -> &mut Self {
+        self.command(fs::read_to_string(path).unwrap().as_str());
         self
     }
 
@@ -163,6 +170,15 @@ impl TestBuilder {
 
     pub fn assert_stderr(&mut self, output: &str) -> &mut Self {
         self.expected_stderr.push_str(output);
+        self.assert_stderr = true;
+        self.expected_stderr_contains.clear();
+        self
+    }
+
+    pub fn assert_stderr_contains(&mut self, output: &str) -> &mut Self {
+        self.expected_stderr_contains.push_str(output);
+        self.assert_stderr = false;
+        self.expected_stderr.clear();
         self
     }
 
@@ -176,15 +192,16 @@ impl TestBuilder {
         self
     }
 
-    pub fn check_stderr(&mut self, check_stderr: bool) -> &mut Self {
-        self.assert_stderr = check_stderr;
-        self
-    }
-
     pub fn assert_exists(&mut self, path: &str) -> &mut Self {
         self.ensure_temp_dir();
-        self.assertions
-            .push(TestAssertion::FileExists(path.to_string()));
+        let temp_dir = if let Some(temp_dir) = &self.temp_dir {
+            temp_dir.cwd.display().to_string()
+        } else {
+            "NO_TEMP_DIR".to_string()
+        };
+        self.assertions.push(TestAssertion::FileExists(
+            path.to_string().replace("$TEMP_DIR", &temp_dir),
+        ));
         self
     }
 
@@ -205,6 +222,8 @@ impl TestBuilder {
     }
 
     pub async fn run(&mut self) {
+        std::env::set_var("NO_GRAPHICS", "1");
+
         let list = parse(&self.command).unwrap();
         let cwd = if let Some(temp_dir) = &self.temp_dir {
             temp_dir.cwd.clone()
@@ -218,6 +237,7 @@ impl TestBuilder {
         let (stderr, stderr_handle) = get_output_writer_and_handle();
 
         let local_set = tokio::task::LocalSet::new();
+        self.env_var("TEMP_DIR", &cwd.display().to_string());
         let state = ShellState::new(
             self.env_vars.clone(),
             &cwd,
@@ -231,12 +251,24 @@ impl TestBuilder {
         } else {
             "NO_TEMP_DIR".to_string()
         };
+        let stderr_output = stderr_handle.await.unwrap();
         if self.assert_stderr {
             assert_eq!(
-                stderr_handle.await.unwrap(),
+                stderr_output,
                 self.expected_stderr.replace("$TEMP_DIR", &temp_dir),
                 "\n\nFailed for: {}",
                 self.command
+            );
+        } else if !self.expected_stderr_contains.is_empty() {
+            assert!(
+                stderr_output.contains(
+                    &self
+                        .expected_stderr_contains
+                        .replace("$TEMP_DIR", &temp_dir)
+                ),
+                "\n\nFailed for: {}\nExpected stderr to contain: {}",
+                self.command,
+                self.expected_stderr_contains
             );
         }
         if self.assert_stdout {
@@ -256,8 +288,10 @@ impl TestBuilder {
         for assertion in &self.assertions {
             match assertion {
                 TestAssertion::FileExists(path) => {
+                    let path_to_check = cwd.join(path);
+
                     assert!(
-                        cwd.join(path).exists(),
+                        path_to_check.exists(),
                         "\n\nFailed for: {}\nExpected '{}' to exist.",
                         self.command,
                         path,
@@ -273,7 +307,7 @@ impl TestBuilder {
                 }
                 TestAssertion::FileTextEquals(path, text) => {
                     let actual_text = std::fs::read_to_string(cwd.join(path))
-                        .with_context(|| format!("Error reading {path}"))
+                        .into_diagnostic()
                         .unwrap();
                     assert_eq!(
                         &actual_text, text,

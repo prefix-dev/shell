@@ -15,7 +15,6 @@ shell = ["futures", "glob", "os_pipe", "path-dedot", "tokio", "tokio-util"]
 serialization = ["serde"]
 
 [dependencies]
-anyhow = "1.0.87"
 futures = { version = "0.3.30", optional = true }
 glob = { version = "0.3.1", optional = true }
 path-dedot = { version = "3.1.1", optional = true }
@@ -24,11 +23,11 @@ tokio-util = { version = "0.7.12", optional = true }
 os_pipe = { version = "1.2.1", optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
 thiserror = "1.0.63"
-pest = { git = "https://github.com/pest-parser/pest.git", branch = "master", features = ["miette-error"] }
+pest = { version="2.7.13", features = ["miette-error"] }
 pest_derive = "2.7.12"
 dirs = "5.0.1"
-pest_ascii_tree = { git = "https://github.com/prsabahrami/pest_ascii_tree.git", branch = "master" }
-miette = "7.2.0"
+pest_ascii_tree = "0.1.0"
+miette = { version = "7.2.0", features = ["fancy"] }
 lazy_static = "1.4.0"
 
 [dev-dependencies]

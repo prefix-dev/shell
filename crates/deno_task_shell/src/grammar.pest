@@ -291,13 +291,13 @@ if_clause = !{
 }
 
 else_part = !{
-    Elif ~ conditional_expression ~ Then ~ complete_command ~ linebreak ~ else_part? |
+    Elif ~ conditional_expression ~ linebreak ~ Then ~ complete_command ~ linebreak ~ else_part? |
     Else ~ linebreak ~ complete_command
 }
 
 conditional_expression = !{
-    ("[[" ~ (unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD) ~ "]]") |
-    ("[" ~ (unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD) ~ "]") | 
+    ("[[" ~ (unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD) ~ "]]" ~ ";"?) |
+    ("[" ~ (unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD) ~ "]" ~ ";"?) | 
     ("test" ~ (unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD))
 }
 

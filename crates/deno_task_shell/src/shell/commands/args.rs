@@ -1,7 +1,7 @@
 // Copyright 2018-2024 the Deno authors. MIT license.
 
-use anyhow::bail;
-use anyhow::Result;
+use miette::bail;
+use miette::Result;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ArgKind<'a> {

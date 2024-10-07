@@ -12,9 +12,11 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::str::FromStr;
 
-use anyhow::Error;
-use anyhow::Result;
 use futures::future::LocalBoxFuture;
+use miette::miette;
+use miette::Error;
+use miette::IntoDiagnostic;
+use miette::Result;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
@@ -392,15 +394,19 @@ impl ShellPipeReader {
     loop {
       let mut buffer = [0; 512]; // todo: what is an appropriate buffer size?
       let size = match &mut self {
-        ShellPipeReader::OsPipe(pipe) => pipe.read(&mut buffer)?,
-        ShellPipeReader::StdFile(file) => file.read(&mut buffer)?,
+        ShellPipeReader::OsPipe(pipe) => {
+          pipe.read(&mut buffer).into_diagnostic()?
+        }
+        ShellPipeReader::StdFile(file) => {
+          file.read(&mut buffer).into_diagnostic()?
+        }
       };
       if size == 0 {
         break;
       }
-      writer.write_all(&buffer[0..size])?;
+      writer.write_all(&buffer[0..size]).into_diagnostic()?;
       if flush {
-        writer.flush()?;
+        writer.flush().into_diagnostic()?;
       }
     }
     Ok(())
@@ -437,8 +443,8 @@ impl ShellPipeReader {
 
   pub fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
     match self {
-      ShellPipeReader::OsPipe(pipe) => pipe.read(buf).map_err(|e| e.into()),
-      ShellPipeReader::StdFile(file) => file.read(buf).map_err(|e| e.into()),
+      ShellPipeReader::OsPipe(pipe) => pipe.read(buf).into_diagnostic(),
+      ShellPipeReader::StdFile(file) => file.read(buf).into_diagnostic(),
     }
   }
 }
@@ -502,19 +508,19 @@ impl ShellPipeWriter {
 
   pub fn write_all(&mut self, bytes: &[u8]) -> Result<()> {
     match self {
-      Self::OsPipe(pipe) => pipe.write_all(bytes)?,
-      Self::StdFile(file) => file.write_all(bytes)?,
+      Self::OsPipe(pipe) => pipe.write_all(bytes).into_diagnostic()?,
+      Self::StdFile(file) => file.write_all(bytes).into_diagnostic()?,
       // For both stdout & stderr, we want to flush after each
       // write in order to bypass Rust's internal buffer.
       Self::Stdout => {
         let mut stdout = std::io::stdout().lock();
-        stdout.write_all(bytes)?;
-        stdout.flush()?;
+        stdout.write_all(bytes).into_diagnostic()?;
+        stdout.flush().into_diagnostic()?;
       }
       Self::Stderr => {
         let mut stderr = std::io::stderr().lock();
-        stderr.write_all(bytes)?;
-        stderr.flush()?;
+        stderr.write_all(bytes).into_diagnostic()?;
+        stderr.flush().into_diagnostic()?;
       }
       Self::Null => {}
     }
@@ -600,7 +606,7 @@ impl ArithmeticResult {
               changes: new_changes,
             })
           }
-          _ => Err(anyhow::anyhow!(
+          _ => Err(miette!(
             "Invalid arithmetic result type for post-increment: {}",
             self
           )),
@@ -620,7 +626,7 @@ impl ArithmeticResult {
               changes: new_changes,
             })
           }
-          _ => Err(anyhow::anyhow!(
+          _ => Err(miette!(
             "Invalid arithmetic result type for post-increment: {}",
             self
           )),
@@ -657,7 +663,7 @@ impl ArithmeticResult {
               changes: new_changes,
             })
           }
-          _ => Err(anyhow::anyhow!(
+          _ => Err(miette!(
             "Invalid arithmetic result type for pre-increment: {}",
             self
           )),
@@ -692,7 +698,7 @@ impl ArithmeticResult {
               changes: new_changes,
             })
           }
-          _ => Err(anyhow::anyhow!(
+          _ => Err(miette!(
             "Invalid arithmetic result type for pre-increment: {}",
             self
           )),
@@ -710,14 +716,14 @@ impl ArithmeticResult {
         .checked_add(*rhs)
         .map(ArithmeticValue::Integer)
         .ok_or_else(|| {
-          anyhow::anyhow!("Integer overflow: {} + {}", lhs, rhs)
+          miette::miette!("Integer overflow: {} + {}", lhs, rhs)
         })?,
       (ArithmeticValue::Float(lhs), ArithmeticValue::Float(rhs)) => {
         let sum = lhs + rhs;
         if sum.is_finite() {
           ArithmeticValue::Float(sum)
         } else {
-          return Err(anyhow::anyhow!("Float overflow: {} + {}", lhs, rhs));
+          return Err(miette::miette!("Float overflow: {} + {}", lhs, rhs));
         }
       }
       (ArithmeticValue::Integer(lhs), ArithmeticValue::Float(rhs))
@@ -726,7 +732,7 @@ impl ArithmeticResult {
         if sum.is_finite() {
           ArithmeticValue::Float(sum)
         } else {
-          return Err(anyhow::anyhow!("Float overflow: {} + {}", lhs, rhs));
+          return Err(miette::miette!("Float overflow: {} + {}", lhs, rhs));
         }
       }
     };
@@ -749,14 +755,14 @@ impl ArithmeticResult {
         .checked_sub(*rhs)
         .map(ArithmeticValue::Integer)
         .ok_or_else(|| {
-          anyhow::anyhow!("Integer overflow: {} - {}", lhs, rhs)
+          miette::miette!("Integer overflow: {} - {}", lhs, rhs)
         })?,
       (ArithmeticValue::Float(lhs), ArithmeticValue::Float(rhs)) => {
         let diff = lhs - rhs;
         if diff.is_finite() {
           ArithmeticValue::Float(diff)
         } else {
-          return Err(anyhow::anyhow!("Float overflow: {} - {}", lhs, rhs));
+          return Err(miette::miette!("Float overflow: {} - {}", lhs, rhs));
         }
       }
       (ArithmeticValue::Integer(lhs), ArithmeticValue::Float(rhs)) => {
@@ -764,7 +770,7 @@ impl ArithmeticResult {
         if diff.is_finite() {
           ArithmeticValue::Float(diff)
         } else {
-          return Err(anyhow::anyhow!("Float overflow: {} - {}", lhs, rhs));
+          return Err(miette::miette!("Float overflow: {} - {}", lhs, rhs));
         }
       }
       (ArithmeticValue::Float(lhs), ArithmeticValue::Integer(rhs)) => {
@@ -772,7 +778,7 @@ impl ArithmeticResult {
         if diff.is_finite() {
           ArithmeticValue::Float(diff)
         } else {
-          return Err(anyhow::anyhow!("Float overflow: {} - {}", lhs, rhs));
+          return Err(miette::miette!("Float overflow: {} - {}", lhs, rhs));
         }
       }
     };
@@ -795,14 +801,14 @@ impl ArithmeticResult {
         .checked_mul(*rhs)
         .map(ArithmeticValue::Integer)
         .ok_or_else(|| {
-          anyhow::anyhow!("Integer overflow: {} * {}", lhs, rhs)
+          miette::miette!("Integer overflow: {} * {}", lhs, rhs)
         })?,
       (ArithmeticValue::Float(lhs), ArithmeticValue::Float(rhs)) => {
         let product = lhs * rhs;
         if product.is_finite() {
           ArithmeticValue::Float(product)
         } else {
-          return Err(anyhow::anyhow!("Float overflow: {} * {}", lhs, rhs));
+          return Err(miette::miette!("Float overflow: {} * {}", lhs, rhs));
         }
       }
       (ArithmeticValue::Integer(lhs), ArithmeticValue::Float(rhs))
@@ -811,7 +817,7 @@ impl ArithmeticResult {
         if product.is_finite() {
           ArithmeticValue::Float(product)
         } else {
-          return Err(anyhow::anyhow!("Float overflow: {} * {}", lhs, rhs));
+          return Err(miette::miette!("Float overflow: {} * {}", lhs, rhs));
         }
       }
     };
@@ -832,46 +838,46 @@ impl ArithmeticResult {
     let result = match (&self.value, &other.value) {
       (ArithmeticValue::Integer(lhs), ArithmeticValue::Integer(rhs)) => {
         if *rhs == 0 {
-          return Err(anyhow::anyhow!("Division by zero: {} / {}", lhs, rhs));
+          return Err(miette::miette!("Division by zero: {} / {}", lhs, rhs));
         }
         lhs
           .checked_div(*rhs)
           .map(ArithmeticValue::Integer)
           .ok_or_else(|| {
-            anyhow::anyhow!("Integer overflow: {} / {}", lhs, rhs)
+            miette::miette!("Integer overflow: {} / {}", lhs, rhs)
           })?
       }
       (ArithmeticValue::Float(lhs), ArithmeticValue::Float(rhs)) => {
         if *rhs == 0.0 {
-          return Err(anyhow::anyhow!("Division by zero: {} / {}", lhs, rhs));
+          return Err(miette::miette!("Division by zero: {} / {}", lhs, rhs));
         }
         let quotient = lhs / rhs;
         if quotient.is_finite() {
           ArithmeticValue::Float(quotient)
         } else {
-          return Err(anyhow::anyhow!("Float overflow: {} / {}", lhs, rhs));
+          return Err(miette::miette!("Float overflow: {} / {}", lhs, rhs));
         }
       }
       (ArithmeticValue::Integer(lhs), ArithmeticValue::Float(rhs)) => {
         if *rhs == 0.0 {
-          return Err(anyhow::anyhow!("Division by zero: {} / {}", lhs, rhs));
+          return Err(miette::miette!("Division by zero: {} / {}", lhs, rhs));
         }
         let quotient = *lhs as f64 / rhs;
         if quotient.is_finite() {
           ArithmeticValue::Float(quotient)
         } else {
-          return Err(anyhow::anyhow!("Float overflow: {} / {}", lhs, rhs));
+          return Err(miette::miette!("Float overflow: {} / {}", lhs, rhs));
         }
       }
       (ArithmeticValue::Float(lhs), ArithmeticValue::Integer(rhs)) => {
         if *rhs == 0 {
-          return Err(anyhow::anyhow!("Division by zero: {} / {}", lhs, rhs));
+          return Err(miette::miette!("Division by zero: {} / {}", lhs, rhs));
         }
         let quotient = lhs / *rhs as f64;
         if quotient.is_finite() {
           ArithmeticValue::Float(quotient)
         } else {
-          return Err(anyhow::anyhow!("Float overflow: {} / {}", lhs, rhs));
+          return Err(miette::miette!("Float overflow: {} / {}", lhs, rhs));
         }
       }
     };
@@ -892,46 +898,46 @@ impl ArithmeticResult {
     let result = match (&self.value, &other.value) {
       (ArithmeticValue::Integer(lhs), ArithmeticValue::Integer(rhs)) => {
         if *rhs == 0 {
-          return Err(anyhow::anyhow!("Modulo by zero: {} % {}", lhs, rhs));
+          return Err(miette::miette!("Modulo by zero: {} % {}", lhs, rhs));
         }
         lhs
           .checked_rem(*rhs)
           .map(ArithmeticValue::Integer)
           .ok_or_else(|| {
-            anyhow::anyhow!("Integer overflow: {} % {}", lhs, rhs)
+            miette::miette!("Integer overflow: {} % {}", lhs, rhs)
           })?
       }
       (ArithmeticValue::Float(lhs), ArithmeticValue::Float(rhs)) => {
         if *rhs == 0.0 {
-          return Err(anyhow::anyhow!("Modulo by zero: {} % {}", lhs, rhs));
+          return Err(miette::miette!("Modulo by zero: {} % {}", lhs, rhs));
         }
         let remainder = lhs % rhs;
         if remainder.is_finite() {
           ArithmeticValue::Float(remainder)
         } else {
-          return Err(anyhow::anyhow!("Float overflow: {} % {}", lhs, rhs));
+          return Err(miette::miette!("Float overflow: {} % {}", lhs, rhs));
         }
       }
       (ArithmeticValue::Integer(lhs), ArithmeticValue::Float(rhs)) => {
         if *rhs == 0.0 {
-          return Err(anyhow::anyhow!("Modulo by zero: {} % {}", lhs, rhs));
+          return Err(miette::miette!("Modulo by zero: {} % {}", lhs, rhs));
         }
         let remainder = *lhs as f64 % rhs;
         if remainder.is_finite() {
           ArithmeticValue::Float(remainder)
         } else {
-          return Err(anyhow::anyhow!("Float overflow: {} % {}", lhs, rhs));
+          return Err(miette::miette!("Float overflow: {} % {}", lhs, rhs));
         }
       }
       (ArithmeticValue::Float(lhs), ArithmeticValue::Integer(rhs)) => {
         if *rhs == 0 {
-          return Err(anyhow::anyhow!("Modulo by zero: {} % {}", lhs, rhs));
+          return Err(miette::miette!("Modulo by zero: {} % {}", lhs, rhs));
         }
         let remainder = lhs % *rhs as f64;
         if remainder.is_finite() {
           ArithmeticValue::Float(remainder)
         } else {
-          return Err(anyhow::anyhow!("Float overflow: {} % {}", lhs, rhs));
+          return Err(miette::miette!("Float overflow: {} % {}", lhs, rhs));
         }
       }
     };
@@ -956,14 +962,14 @@ impl ArithmeticResult {
           if result.is_finite() {
             ArithmeticValue::Float(result)
           } else {
-            return Err(anyhow::anyhow!("Float overflow: {} ** {}", lhs, rhs));
+            return Err(miette::miette!("Float overflow: {} ** {}", lhs, rhs));
           }
         } else {
           lhs
             .checked_pow(*rhs as u32)
             .map(ArithmeticValue::Integer)
             .ok_or_else(|| {
-              anyhow::anyhow!("Integer overflow: {} ** {}", lhs, rhs)
+              miette::miette!("Integer overflow: {} ** {}", lhs, rhs)
             })?
         }
       }
@@ -972,7 +978,7 @@ impl ArithmeticResult {
         if result.is_finite() {
           ArithmeticValue::Float(result)
         } else {
-          return Err(anyhow::anyhow!("Float overflow: {} ** {}", lhs, rhs));
+          return Err(miette::miette!("Float overflow: {} ** {}", lhs, rhs));
         }
       }
       (ArithmeticValue::Integer(lhs), ArithmeticValue::Float(rhs)) => {
@@ -980,7 +986,7 @@ impl ArithmeticResult {
         if result.is_finite() {
           ArithmeticValue::Float(result)
         } else {
-          return Err(anyhow::anyhow!("Float overflow: {} ** {}", lhs, rhs));
+          return Err(miette::miette!("Float overflow: {} ** {}", lhs, rhs));
         }
       }
       (ArithmeticValue::Float(lhs), ArithmeticValue::Integer(rhs)) => {
@@ -988,7 +994,7 @@ impl ArithmeticResult {
         if result.is_finite() {
           ArithmeticValue::Float(result)
         } else {
-          return Err(anyhow::anyhow!("Float overflow: {} ** {}", lhs, rhs));
+          return Err(miette::miette!("Float overflow: {} ** {}", lhs, rhs));
         }
       }
     };
@@ -1009,7 +1015,7 @@ impl ArithmeticResult {
     let result = match (&self.value, &other.value) {
       (ArithmeticValue::Integer(lhs), ArithmeticValue::Integer(rhs)) => {
         if *rhs < 0 {
-          return Err(anyhow::anyhow!(
+          return Err(miette::miette!(
             "Negative shift amount: {} << {}",
             lhs,
             rhs
@@ -1019,11 +1025,11 @@ impl ArithmeticResult {
           .checked_shl(*rhs as u32)
           .map(ArithmeticValue::Integer)
           .ok_or_else(|| {
-            anyhow::anyhow!("Integer overflow: {} << {}", lhs, rhs)
+            miette::miette!("Integer overflow: {} << {}", lhs, rhs)
           })?
       }
       _ => {
-        return Err(anyhow::anyhow!(
+        return Err(miette::miette!(
           "Invalid arithmetic result types for left shift: {} << {}",
           self,
           other
@@ -1047,7 +1053,7 @@ impl ArithmeticResult {
     let result = match (&self.value, &other.value) {
       (ArithmeticValue::Integer(lhs), ArithmeticValue::Integer(rhs)) => {
         if *rhs < 0 {
-          return Err(anyhow::anyhow!(
+          return Err(miette::miette!(
             "Negative shift amount: {} >> {}",
             lhs,
             rhs
@@ -1057,11 +1063,11 @@ impl ArithmeticResult {
           .checked_shr(*rhs as u32)
           .map(ArithmeticValue::Integer)
           .ok_or_else(|| {
-            anyhow::anyhow!("Integer underflow: {} >> {}", lhs, rhs)
+            miette::miette!("Integer underflow: {} >> {}", lhs, rhs)
           })?
       }
       _ => {
-        return Err(anyhow::anyhow!(
+        return Err(miette::miette!(
           "Invalid arithmetic result types for right shift: {} >> {}",
           self,
           other
@@ -1087,7 +1093,7 @@ impl ArithmeticResult {
         ArithmeticValue::Integer(lhs & rhs)
       }
       _ => {
-        return Err(anyhow::anyhow!(
+        return Err(miette::miette!(
           "Invalid arithmetic result types for bitwise AND: {} & {}",
           self,
           other
@@ -1113,7 +1119,7 @@ impl ArithmeticResult {
         ArithmeticValue::Integer(lhs | rhs)
       }
       _ => {
-        return Err(anyhow::anyhow!(
+        return Err(miette::miette!(
           "Invalid arithmetic result types for bitwise OR: {} | {}",
           self,
           other
@@ -1139,7 +1145,7 @@ impl ArithmeticResult {
         ArithmeticValue::Integer(lhs ^ rhs)
       }
       _ => {
-        return Err(anyhow::anyhow!(
+        return Err(miette::miette!(
           "Invalid arithmetic result types for bitwise XOR: {} ^ {}",
           self,
           other
