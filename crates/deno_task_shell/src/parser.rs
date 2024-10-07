@@ -1505,8 +1505,11 @@ fn parse_variable_expansion(part: Pair<Rule>) -> Result<WordPart> {
     match modifier.as_rule() {
       Rule::VAR_SUBSTRING => {
         let mut numbers = modifier.into_inner();
-        let begin = numbers.next().and_then(|n| n.as_str().parse::<i64>().ok()).unwrap_or(0);
-        
+        let begin = numbers
+          .next()
+          .and_then(|n| n.as_str().parse::<i64>().ok())
+          .unwrap_or(0);
+
         let length = if let Some(len_word) = numbers.next() {
           Some(len_word.as_str().parse::<i64>().into_diagnostic()?)
         } else {
@@ -1524,11 +1527,15 @@ fn parse_variable_expansion(part: Pair<Rule>) -> Result<WordPart> {
       }
       Rule::VAR_ASSIGN_DEFAULT => {
         let value = modifier.into_inner().next().unwrap();
-        Some(Box::new(VariableModifier::AssignDefault(parse_word(value)?)))
+        Some(Box::new(VariableModifier::AssignDefault(parse_word(
+          value,
+        )?)))
       }
       Rule::VAR_ALTERNATE_VALUE => {
         let value = modifier.into_inner().next().unwrap();
-        Some(Box::new(VariableModifier::AlternateValue(parse_word(value)?)))
+        Some(Box::new(VariableModifier::AlternateValue(parse_word(
+          value,
+        )?)))
       }
       _ => {
         return Err(miette!(

@@ -20,7 +20,6 @@ use miette::Result;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
-use crate::parser::Condition;
 use crate::shell::fs_util;
 
 use super::commands::builtin_commands;
@@ -342,7 +341,9 @@ impl ExecuteResult {
     }
   }
 
-  pub fn into_handles_and_changes(self) -> (Vec<JoinHandle<i32>>, Vec<EnvChange>) {
+  pub fn into_handles_and_changes(
+    self,
+  ) -> (Vec<JoinHandle<i32>>, Vec<EnvChange>) {
     match self {
       ExecuteResult::Exit(_, handles) => (handles, Vec::new()),
       ExecuteResult::Continue(_, changes, handles) => (handles, changes),
@@ -1144,8 +1145,8 @@ impl From<WordPartsResult> for String {
 
 #[derive(Debug, Clone)]
 pub struct WordResult {
-  value: String,
-  changes: Vec<EnvChange>,
+  pub value: String,
+  pub changes: Vec<EnvChange>,
 }
 
 impl WordResult {
@@ -1156,14 +1157,6 @@ impl WordResult {
   pub fn extend(&mut self, other: WordResult) {
     self.value.push_str(&other.value);
     self.changes.extend(other.changes);
-  }
-
-  pub fn value(&self) -> &str {
-    &self.value
-  }
-
-  pub fn changes(&self) -> &[EnvChange] {
-    &self.changes
   }
 }
 
@@ -1221,15 +1214,53 @@ impl ConditionalResult {
   pub fn new(value: bool, changes: Vec<EnvChange>) -> Self {
     ConditionalResult { value, changes }
   }
-
-  pub fn with_changes(mut self, changes: Vec<EnvChange>) -> Self {
-    self.changes = changes;
-    self
-  }
 }
 
 impl From<bool> for ConditionalResult {
   fn from(value: bool) -> Self {
     ConditionalResult::new(value, Vec::new())
+  }
+}
+
+#[derive(Debug, Clone)]
+pub enum TextPart {
+  Quoted(String),
+  Text(String),
+}
+
+impl TextPart {
+  pub fn as_str(&self) -> &str {
+    match self {
+      TextPart::Quoted(text) => text,
+      TextPart::Text(text) => text,
+    }
+  }
+}
+
+#[derive(Debug, Clone)]
+pub struct Text {
+  parts: Vec<TextPart>,
+}
+
+impl Text {
+  pub fn new(parts: Vec<TextPart>) -> Self {
+    Text { parts }
+  }
+
+  pub fn into_parts(self) -> Vec<TextPart> {
+    self.parts
+  }
+}
+
+impl From<String> for Text {
+  fn from(parts: String) -> Self {
+    Text::new(
+      parts
+        .split(' ')
+        .map(|p| p.trim())
+        .filter(|p| !p.is_empty())
+        .map(|p| TextPart::Text(p.to_string()))
+        .collect::<Vec<_>>(),
+    )
   }
 }
