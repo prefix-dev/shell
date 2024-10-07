@@ -202,33 +202,32 @@ bitwise_or = { "|" }
 logical_and = { "&&" }
 logical_or = { "||" }
 
+unary_plus = { "+" }
+unary_minus = { "-" }
+logical_not = { "!" }
+bitwise_not = { "~" }
+increment = { "++" }
+decrement = { "--" }
+
 unary_arithmetic_expr = !{
     unary_pre_arithmetic_expr | unary_post_arithmetic_expr
 }
 
 unary_pre_arithmetic_expr = !{
-    (post_arithmetic_op | pre_arithmetic_op) ~ (parentheses_expr | VARIABLE | NUMBER)
+    pre_arithmetic_op ~ (parentheses_expr | VARIABLE | NUMBER)
 }
 
 unary_post_arithmetic_expr = !{
     (parentheses_expr | VARIABLE | NUMBER) ~ post_arithmetic_op
 }
 
-pre_arithmetic_op= _{
-    unary_plus | unary_minus | logical_not | bitwise_not
+pre_arithmetic_op= !{
+    increment | decrement | unary_plus | unary_minus | logical_not | bitwise_not
 }
-
-unary_plus = { "+" }
-unary_minus = { "-" }
-logical_not = { "!" }
-bitwise_not = { "~" }
 
 post_arithmetic_op = !{
     increment | decrement
 }
-
-increment = { "++" }
-decrement = { "--" }
 
 assignment_operator = _{
     assign | multiply_assign | divide_assign | modulo_assign | add_assign | subtract_assign |

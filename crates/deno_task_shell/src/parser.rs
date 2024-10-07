@@ -1469,9 +1469,9 @@ fn unary_pre_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
       })
     }
     Rule::post_arithmetic_op => {
-      let op = parse_pre_arithmetic_op(first)?;
+      let op = parse_post_arithmetic_op(first)?;
       Ok(ArithmeticPart::UnaryArithmeticExpr {
-        operator: UnaryArithmeticOp::Pre(op),
+        operator: UnaryArithmeticOp::Post(op),
         operand: Box::new(operand),
       })
     }
@@ -1519,12 +1519,12 @@ fn parse_pre_arithmetic_op(pair: Pair<Rule>) -> Result<PreArithmeticOp> {
   match first.as_rule() {
     Rule::increment => Ok(PreArithmeticOp::Increment),
     Rule::decrement => Ok(PreArithmeticOp::Decrement),
-    Rule::add => Ok(PreArithmeticOp::Plus),
-    Rule::subtract => Ok(PreArithmeticOp::Minus),
+    Rule::unary_plus => Ok(PreArithmeticOp::Plus),
+    Rule::unary_minus => Ok(PreArithmeticOp::Minus),
     Rule::logical_not => Ok(PreArithmeticOp::LogicalNot),
     Rule::bitwise_not => Ok(PreArithmeticOp::BitwiseNot),
     _ => Err(miette!(
-      "Unexpected rule in post arithmetic operator: {:?}",
+      "Unexpected rule in pre arithmetic operator: {:?}",
       first.as_rule()
     )),
   }

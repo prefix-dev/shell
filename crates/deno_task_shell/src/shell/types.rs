@@ -636,17 +636,19 @@ impl ArithmeticResult {
         ArithmeticValue::Integer(val) => match operand {
           ArithmeticPart::Variable(name) => {
             let mut new_changes = self.changes.clone();
-            new_changes.push(EnvChange::SetShellVar(
-              name.to_string(),
-              match op_type {
-                PreArithmeticOp::Increment => (*val + 1).to_string(),
-                PreArithmeticOp::Decrement => (*val - 1).to_string(),
-                _ => todo!(
-                  "Unary arithmetic operation not implemented {:?}",
-                  op_type
-                ),
-              },
-            ));
+            if op_type == PreArithmeticOp::Increment
+              || op_type == PreArithmeticOp::Decrement
+            {
+              new_changes.push(EnvChange::SetShellVar(
+                name.to_string(),
+                match op_type {
+                  PreArithmeticOp::Increment => (*val + 1).to_string(),
+                  PreArithmeticOp::Decrement => (*val - 1).to_string(),
+                  _ => Err(miette!("No change to ENV need for: {}", self))?,
+                },
+              ));
+            }
+
             Ok(ArithmeticResult {
               value: match op_type {
                 PreArithmeticOp::Increment => {
@@ -655,10 +657,14 @@ impl ArithmeticResult {
                 PreArithmeticOp::Decrement => {
                   ArithmeticValue::Integer(*val - 1)
                 }
-                _ => todo!(
-                  "Unary arithmetic operation not implemented {:?}",
-                  op_type
-                ),
+                PreArithmeticOp::Plus => ArithmeticValue::Integer((*val).abs()),
+                PreArithmeticOp::Minus => {
+                  ArithmeticValue::Integer(-(*val).abs())
+                }
+                PreArithmeticOp::BitwiseNot => ArithmeticValue::Integer(!*val),
+                PreArithmeticOp::LogicalNot => {
+                  ArithmeticValue::Integer(if *val == 0 { 1 } else { 0 })
+                }
               },
               changes: new_changes,
             })
@@ -671,17 +677,19 @@ impl ArithmeticResult {
         ArithmeticValue::Float(val) => match operand {
           ArithmeticPart::Variable(name) => {
             let mut new_changes = self.changes.clone();
-            new_changes.push(EnvChange::SetShellVar(
-              name.to_string(),
-              match op_type {
-                PreArithmeticOp::Increment => (*val + 1.0).to_string(),
-                PreArithmeticOp::Decrement => (*val - 1.0).to_string(),
-                _ => todo!(
-                  "Unary arithmetic operation not implemented {:?}",
-                  op_type
-                ),
-              },
-            ));
+            if op_type == PreArithmeticOp::Increment
+              || op_type == PreArithmeticOp::Decrement
+            {
+              new_changes.push(EnvChange::SetShellVar(
+                name.to_string(),
+                match op_type {
+                  PreArithmeticOp::Increment => (*val + 1.0).to_string(),
+                  PreArithmeticOp::Decrement => (*val - 1.0).to_string(),
+                  _ => Err(miette!("No change to ENV need for: {}", self))?,
+                },
+              ));
+            }
+
             Ok(ArithmeticResult {
               value: match op_type {
                 PreArithmeticOp::Increment => {
@@ -690,10 +698,14 @@ impl ArithmeticResult {
                 PreArithmeticOp::Decrement => {
                   ArithmeticValue::Float(*val - 1.0)
                 }
-                _ => todo!(
-                  "Unary arithmetic operation not implemented {:?}",
-                  op_type
-                ),
+                PreArithmeticOp::Plus => ArithmeticValue::Float((*val).abs()),
+                PreArithmeticOp::Minus => ArithmeticValue::Float(-(*val).abs()),
+                PreArithmeticOp::BitwiseNot => {
+                  ArithmeticValue::Integer(!(*val as i64))
+                }
+                PreArithmeticOp::LogicalNot => {
+                  ArithmeticValue::Float(if *val == 0.0 { 1.0 } else { 0.0 })
+                }
               },
               changes: new_changes,
             })
