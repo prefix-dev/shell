@@ -20,6 +20,7 @@ use miette::Result;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
+use crate::parser::Condition;
 use crate::shell::fs_util;
 
 use super::commands::builtin_commands;
@@ -332,6 +333,20 @@ impl ExecuteResult {
 
   pub fn into_handles(self) -> Vec<JoinHandle<i32>> {
     self.into_exit_code_and_handles().1
+  }
+
+  pub fn into_changes(self) -> Vec<EnvChange> {
+    match self {
+      ExecuteResult::Exit(_, _) => Vec::new(),
+      ExecuteResult::Continue(_, changes, _) => changes,
+    }
+  }
+
+  pub fn into_handles_and_changes(self) -> (Vec<JoinHandle<i32>>, Vec<EnvChange>) {
+    match self {
+      ExecuteResult::Exit(_, handles) => (handles, Vec::new()),
+      ExecuteResult::Continue(_, changes, handles) => (handles, changes),
+    }
   }
 }
 
@@ -1187,5 +1202,34 @@ impl From<WordResult> for String {
 impl From<WordPartsResult> for WordResult {
   fn from(parts: WordPartsResult) -> Self {
     WordResult::new(parts.join(" "), parts.changes)
+  }
+}
+
+impl From<WordResult> for WordPartsResult {
+  fn from(word: WordResult) -> Self {
+    WordPartsResult::new(vec![word.value], word.changes)
+  }
+}
+
+#[derive(Debug, Clone)]
+pub struct ConditionalResult {
+  pub value: bool,
+  pub changes: Vec<EnvChange>,
+}
+
+impl ConditionalResult {
+  pub fn new(value: bool, changes: Vec<EnvChange>) -> Self {
+    ConditionalResult { value, changes }
+  }
+
+  pub fn with_changes(mut self, changes: Vec<EnvChange>) -> Self {
+    self.changes = changes;
+    self
+  }
+}
+
+impl From<bool> for ConditionalResult {
+  fn from(value: bool) -> Self {
+    ConditionalResult::new(value, Vec::new())
   }
 }
