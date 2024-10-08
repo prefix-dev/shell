@@ -1493,7 +1493,6 @@ fn parse_post_arithmetic_op(pair: Pair<Rule>) -> Result<PostArithmeticOp> {
 }
 
 fn parse_variable_expansion(part: Pair<Rule>) -> Result<WordPart> {
-  println!("{:?}", part);
   let mut inner = part.into_inner();
   let variable = inner
     .next()
@@ -1547,7 +1546,6 @@ fn parse_variable_expansion(part: Pair<Rule>) -> Result<WordPart> {
   } else {
     None
   };
-  println!("PARSED MOD: {:?}", parsed_modifier);
   Ok(WordPart::Variable(variable_name, parsed_modifier))
 }
 

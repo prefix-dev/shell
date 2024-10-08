@@ -107,6 +107,12 @@ async fn commands() {
         .await;
 
     TestBuilder::new().command("unset").run().await;
+
+    TestBuilder::new()
+        .command("a=1 && echo $((a=2, a + 1)) && echo $a")
+        .assert_stdout("3\n2\n")
+        .run()
+        .await;
 }
 
 #[tokio::test]

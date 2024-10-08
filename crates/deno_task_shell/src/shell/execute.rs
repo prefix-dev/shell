@@ -600,7 +600,9 @@ async fn evaluate_arithmetic(
 ) -> Result<ArithmeticResult, Error> {
   let mut result = ArithmeticResult::new(ArithmeticValue::Integer(0));
   for part in &arithmetic.parts {
-    result = Box::pin(evaluate_arithmetic_part(part, state)).await?;
+    let part_result = Box::pin(evaluate_arithmetic_part(part, state)).await?;
+    result.set_value(part_result.value);
+    result.with_changes(part_result.changes);
   }
   Ok(result)
 }
@@ -615,7 +617,7 @@ async fn evaluate_arithmetic_part(
     }
     ArithmeticPart::VariableAssignment { name, op, value } => {
       let val = Box::pin(evaluate_arithmetic_part(value, state)).await?;
-      let applied_value = match op {
+      let mut applied_value = match op {
         AssignmentOp::Assign => val.clone(),
         _ => {
           let var = state
@@ -640,14 +642,11 @@ async fn evaluate_arithmetic_part(
         }
       };
       state.apply_env_var(name, &applied_value.to_string());
-      Ok(
-        applied_value
-          .clone()
-          .with_changes(vec![EnvChange::SetShellVar(
-            name.clone(),
-            applied_value.to_string(),
-          )]),
-      )
+      applied_value.with_changes(vec![EnvChange::SetShellVar(
+        name.clone(),
+        applied_value.to_string(),
+      )]);
+      Ok(applied_value)
     }
     ArithmeticPart::TripleConditionalExpr {
       condition,
@@ -1072,8 +1071,7 @@ async fn execute_simple_command(
       }
     };
     state.apply_env_var(&env_var.name, &word_result.value);
-    let env_changes = word_result.changes;
-    changes.extend(env_changes);
+    changes.extend(word_result.changes);
   }
   let result = execute_command_args(args, state, stdin, stdout, stderr).await;
   match result {
@@ -1358,7 +1356,7 @@ fn evaluate_word_parts(
     stderr: ShellPipeWriter,
   ) -> LocalBoxFuture<Result<WordPartsResult, EvaluateWordTextError>> {
     // recursive async, so requires boxing
-    let mut changes: Vec<EnvChange> = Vec::new();
+    // let mut changes: Vec<EnvChange> = Vec::new();
 
     async move {
       let mut result = WordPartsResult::new(Vec::new(), Vec::new());
@@ -1376,7 +1374,7 @@ fn evaluate_word_parts(
                 .apply(value.as_ref(), state, stdin.clone(), stderr.clone())
                 .await?;
               if let Some(env_changes) = env_changes {
-                changes.extend(env_changes);
+                result.with_changes(env_changes);
               }
               Ok(Some(text))
             } else if let Some(val) = value {
@@ -1410,7 +1408,7 @@ fn evaluate_word_parts(
               value,
               changes: env_changes,
             } = res;
-            changes.extend(env_changes);
+            result.with_changes(env_changes);
             current_text.push(TextPart::Quoted(value.join(" ")));
             continue;
           }
@@ -1432,7 +1430,7 @@ fn evaluate_word_parts(
             let arithmetic_result =
               execute_arithmetic_expression(arithmetic, state).await?;
             current_text.push(TextPart::Text(arithmetic_result.to_string()));
-            changes.extend(arithmetic_result.changes);
+            result.with_changes(arithmetic_result.changes);
             continue;
           }
           WordPart::ExitStatus => {

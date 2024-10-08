@@ -596,6 +596,14 @@ impl ArithmeticResult {
     }
   }
 
+  pub fn with_changes(&mut self, changes: Vec<EnvChange>) {
+    self.changes.extend(changes);
+  }
+
+  pub fn set_value(&mut self, value: ArithmeticValue) {
+    self.value = value;
+  }
+
   pub fn checked_add(
     &self,
     other: &ArithmeticResult,
@@ -1089,11 +1097,6 @@ impl ArithmeticResult {
       changes,
     })
   }
-
-  pub fn with_changes(mut self, changes: Vec<EnvChange>) -> Self {
-    self.changes = changes;
-    self
-  }
 }
 
 impl From<String> for ArithmeticResult {
@@ -1134,6 +1137,10 @@ impl WordPartsResult {
 
   pub fn join(&self, sep: &str) -> String {
     self.value.join(sep)
+  }
+
+  pub fn with_changes(&mut self, changes: Vec<EnvChange>) {
+    self.changes.extend(changes);
   }
 }
 
