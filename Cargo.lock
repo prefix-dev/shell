@@ -100,6 +100,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "arrayvec"
+version = "0.7.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
+
+[[package]]
 name = "ascii_tree"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -197,7 +203,9 @@ checksum = "a21f936df1771bf62b77f047b726c4625ff2e8aa607c01ec06e5a05bd8463401"
 dependencies = [
  "android-tzdata",
  "iana-time-zone",
+ "js-sys",
  "num-traits",
+ "wasm-bindgen",
  "windows-targets 0.52.6",
 ]
 
@@ -304,7 +312,7 @@ dependencies = [
  "os_pipe",
  "parking_lot",
  "path-dedot",
- "pest 2.7.12 (git+https://github.com/pest-parser/pest.git?branch=master)",
+ "pest",
  "pest_ascii_tree",
  "pest_derive",
  "pretty_assertions",
@@ -351,6 +359,18 @@ dependencies = [
  "option-ext",
  "redox_users",
  "windows-sys 0.48.0",
+]
+
+[[package]]
+name = "dtparse"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23fb403c0926d35af2cc54d961bc2696a10d40725c08360ef69db04a4c201fd7"
+dependencies = [
+ "chrono",
+ "lazy_static",
+ "num-traits",
+ "rust_decimal",
 ]
 
 [[package]]
@@ -408,6 +428,18 @@ dependencies = [
  "cfg-if",
  "rustix",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "filetime"
+version = "0.2.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "35c0522e981e68cbfa8c3f978441a5f34b30b96e146b33cd3359176b50fe8586"
+dependencies = [
+ "cfg-if",
+ "libc",
+ "libredox",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -643,6 +675,7 @@ checksum = "c0ff37bd590ca25063e35af745c343cb7a0271906fb7b37e4813e8f79f00268d"
 dependencies = [
  "bitflags",
  "libc",
+ "redox_syscall",
 ]
 
 [[package]]
@@ -898,19 +931,9 @@ dependencies = [
 
 [[package]]
 name = "pest"
-version = "2.7.12"
+version = "2.7.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c73c26c01b8c87956cea613c907c9d6ecffd8d18a2a5908e5de0adfaa185cea"
-dependencies = [
- "memchr",
- "thiserror",
- "ucd-trie",
-]
-
-[[package]]
-name = "pest"
-version = "2.7.12"
-source = "git+https://github.com/pest-parser/pest.git?branch=master#65e5b2b754a4d9bb9b231ab61ef0af437b556fbe"
+checksum = "fdbef9d1d47087a895abd220ed25eb4ad973a5e26f6a4367b038c25e28dfc2d9"
 dependencies = [
  "memchr",
  "miette",
@@ -923,11 +946,12 @@ dependencies = [
 [[package]]
 name = "pest_ascii_tree"
 version = "0.1.0"
-source = "git+https://github.com/prsabahrami/pest_ascii_tree.git?branch=master#65ef51a888730598336b0628c3e42bc5ec2f358b"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4152b393638a9816cd3dedb5aea2fb60ab0b641315aa133cea219c8797e768fc"
 dependencies = [
  "ascii_tree",
  "escape_string",
- "pest 2.7.12 (git+https://github.com/pest-parser/pest.git?branch=master)",
+ "pest",
  "pest_derive",
 ]
 
@@ -937,7 +961,7 @@ version = "2.7.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "664d22978e2815783adbdd2c588b455b1bd625299ce36b2a99881ac9627e6d8d"
 dependencies = [
- "pest 2.7.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pest",
  "pest_generator",
 ]
 
@@ -947,7 +971,7 @@ version = "2.7.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2d5487022d5d33f4c30d91c22afa240ce2a644e87fe08caad974d4eab6badbe"
 dependencies = [
- "pest 2.7.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pest",
  "pest_meta",
  "proc-macro2",
  "quote",
@@ -961,7 +985,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0091754bbd0ea592c4deb3a122ce8ecbb0753b738aa82bc055fcc2eccc8d8174"
 dependencies = [
  "once_cell",
- "pest 2.7.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pest",
  "sha2",
 ]
 
@@ -1075,6 +1099,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a66a03ae7c801facd77a29370b4faec201768915ac14a721ba36f20bc9c209b"
 
 [[package]]
+name = "rust_decimal"
+version = "1.36.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b082d80e3e3cc52b2ed634388d436fe1f4de6af5786cc2de9ba9737527bdf555"
+dependencies = [
+ "arrayvec",
+ "num-traits",
+]
+
+[[package]]
 name = "rustc-demangle"
 version = "0.1.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1186,18 +1220,24 @@ dependencies = [
 name = "shell"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "clap",
  "ctrlc",
  "deno_task_shell",
  "dirs",
+ "dtparse",
+ "filetime",
  "futures",
  "miette",
+ "parse_datetime",
  "rustyline",
  "tokio",
  "uu_date",
  "uu_ls",
+ "uu_touch",
  "uu_uname",
  "which",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -1312,6 +1352,7 @@ name = "tests"
 version = "0.1.0"
 dependencies = [
  "deno_task_shell",
+ "dirs",
  "futures",
  "miette",
  "pretty_assertions",
@@ -1333,18 +1374,18 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "1.0.63"
+version = "1.0.64"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0342370b38b6a11b6cc11d6a805569958d54cfa061a29969c3b5ce2ea405724"
+checksum = "d50af8abc119fb8bb6dbabcfa89656f46f84aa0ac7688088608076ad2b459a84"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "1.0.63"
+version = "1.0.64"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4558b58466b9ad7ca0f102865eccc95938dca1a74a856f2b57b6629050da261"
+checksum = "08904e7672f5eb876eaaf87e0ce17857500934f4981c4a0ab2b4aa98baac7fc3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1466,6 +1507,20 @@ dependencies = [
  "terminal_size",
  "uucore",
  "uutils_term_grid",
+]
+
+[[package]]
+name = "uu_touch"
+version = "0.0.27"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "07698cd67da84b138369eeed24bee77c860b8b22021581a56edd31c4697dd61d"
+dependencies = [
+ "chrono",
+ "clap",
+ "filetime",
+ "parse_datetime",
+ "uucore",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
