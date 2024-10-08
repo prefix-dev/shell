@@ -253,7 +253,7 @@ async fn redirects_input() {
 
     TestBuilder::new()
         .command(r#"cat - <&0"#)
-        .assert_stderr("deno_task_shell: input redirecting file descriptors is not implemented\n")
+        .assert_stderr("shell: input redirecting file descriptors is not implemented\n")
         .assert_exit_code(1)
         .run()
         .await;

@@ -265,6 +265,7 @@ fn execute_sequence(
         Vec::new(),
       ),
       Sequence::BooleanList(list) => {
+        // println!("HEREEEEEEEEEE {:?}", list);
         let mut changes = vec![];
         let first_result = execute_sequence(
           list.current,
@@ -281,6 +282,8 @@ fn execute_sequence(
             (exit_code, async_handles)
           }
         };
+
+        state.apply_changes(&changes);
 
         let next = if list.op.moves_next_for_exit_code(exit_code) {
           Some(list.next)
@@ -383,10 +386,9 @@ async fn resolve_redirect_pipe(
     }
     IoFile::Fd(fd) => match &redirect.op {
       RedirectOp::Input(RedirectOpInput::Redirect) => {
-        let _ = stderr.write_line(&format!(
-          "{:?}",
-          "shell: input redirecting file descriptors is not implemented"
-        ));
+        let _ = stderr.write_line(
+          "shell: input redirecting file descriptors is not implemented",
+        );
         Err(ExecuteResult::from_exit_code(1))
       }
       RedirectOp::Output(_op) => match fd {
@@ -560,8 +562,7 @@ async fn execute_command(
         ExecuteResult::Exit(code, handles) => {
           ExecuteResult::Exit(code, handles)
         }
-        ExecuteResult::Continue(code, env_changes, handles) => {
-          changes.extend(env_changes);
+        ExecuteResult::Continue(code, _, handles) => {
           ExecuteResult::Continue(code, changes, handles)
         }
       }

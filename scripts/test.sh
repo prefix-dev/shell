@@ -1,1 +1,1 @@
-version=$(git describe --tags --dirty)
+(export TEST=1) && echo $TEST
