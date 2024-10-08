@@ -7,8 +7,6 @@ use miette::{Context, IntoDiagnostic};
 pub async fn execute_inner(text: &str, state: ShellState) -> miette::Result<ExecuteResult> {
     let list = deno_task_shell::parser::parse(text);
 
-    println!("list: {:?}", list);
-
     let mut stderr = ShellPipeWriter::stderr();
     let stdout = ShellPipeWriter::stdout();
     let stdin = ShellPipeReader::stdin();

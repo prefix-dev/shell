@@ -265,7 +265,6 @@ fn execute_sequence(
         Vec::new(),
       ),
       Sequence::BooleanList(list) => {
-        // println!("HEREEEEEEEEEE {:?}", list);
         let mut changes = vec![];
         let first_result = execute_sequence(
           list.current,
