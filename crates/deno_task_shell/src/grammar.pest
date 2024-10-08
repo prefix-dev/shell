@@ -65,14 +65,14 @@ ASSIGNMENT_TILDE_PREFIX = ${
 FILE_NAME_PENDING_WORD = ${
     (TILDE_PREFIX ~ (!(WHITESPACE | OPERATOR | NEWLINE) ~ (
         UNQUOTED_ESCAPE_CHAR |
-        ("$" ~ VARIABLE) |
+        VARIABLE_EXPANSION |
         UNQUOTED_CHAR |
         QUOTED_WORD
     ))*)
     |
     (!(WHITESPACE | OPERATOR | NEWLINE) ~ (
         UNQUOTED_ESCAPE_CHAR |
-        ("$" ~ VARIABLE) |
+        VARIABLE_EXPANSION |
         UNQUOTED_CHAR |
         QUOTED_WORD
     ))+

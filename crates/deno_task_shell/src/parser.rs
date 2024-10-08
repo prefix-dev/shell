@@ -1584,8 +1584,9 @@ fn parse_quoted_word(pair: Pair<Rule>) -> Result<WordPart> {
               parse_complete_command(part.into_inner().next().unwrap())?;
             parts.push(WordPart::Command(command));
           }
-          Rule::VARIABLE => {
-            parts.push(WordPart::Variable(part.as_str().to_string()))
+          Rule::VARIABLE_EXPANSION => {
+            let variable_expansion = parse_variable_expansion(part)?;
+            parts.push(variable_expansion);
           }
           Rule::QUOTED_CHAR => {
             if let Some(WordPart::Text(ref mut s)) = parts.last_mut() {
