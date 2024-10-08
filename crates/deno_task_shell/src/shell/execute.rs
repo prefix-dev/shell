@@ -1356,8 +1356,6 @@ fn evaluate_word_parts(
     stderr: ShellPipeWriter,
   ) -> LocalBoxFuture<Result<WordPartsResult, EvaluateWordTextError>> {
     // recursive async, so requires boxing
-    // let mut changes: Vec<EnvChange> = Vec::new();
-
     async move {
       let mut result = WordPartsResult::new(Vec::new(), Vec::new());
       let mut current_text = Vec::new();
