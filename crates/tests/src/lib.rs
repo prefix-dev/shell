@@ -1064,6 +1064,33 @@ async fn touch() {
         .await;
 }
 
+#[tokio::test]
+async fn variable_expansion() {
+    TestBuilder::new()
+        .command("echo ${FOO:-5}")
+        .assert_stdout("5\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"FOO=1 && echo ${FOO:-5}"#)
+        .assert_stdout("1\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"echo ${FOO:-${BAR:-5}}"#)
+        .assert_stdout("5\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("BAR=2 && echo ${FOO:-${BAR:-5}}")
+        .assert_stdout("2\n")
+        .run()
+        .await;
+}
+
 #[cfg(test)]
 fn no_such_file_error_text() -> &'static str {
     if cfg!(windows) {
