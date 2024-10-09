@@ -117,7 +117,10 @@ impl ShellState {
 
   pub fn get_var(&self, name: &str) -> Option<&String> {
     let (original_name, updated_name) = if cfg!(windows) {
-      (Cow::Owned(name.to_string()), Cow::Owned(name.to_uppercase()))
+      (
+        Cow::Owned(name.to_string()),
+        Cow::Owned(name.to_uppercase()),
+      )
     } else {
       (Cow::Borrowed(name), Cow::Borrowed(name))
     };
