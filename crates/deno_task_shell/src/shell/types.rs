@@ -116,15 +116,15 @@ impl ShellState {
   }
 
   pub fn get_var(&self, name: &str) -> Option<&String> {
-    let name = if cfg!(windows) {
-      Cow::Owned(name.to_uppercase())
+    let (original_name, updated_name) = if cfg!(windows) {
+      (Cow::Owned(name.to_string()), Cow::Owned(name.to_uppercase()))
     } else {
-      Cow::Borrowed(name)
+      (Cow::Borrowed(name), Cow::Borrowed(name))
     };
     self
       .env_vars
-      .get(name.as_ref())
-      .or_else(|| self.shell_vars.get(name.as_ref()))
+      .get(updated_name.as_ref())
+      .or_else(|| self.shell_vars.get(original_name.as_ref()))
   }
 
   // Update self.git_branch using self.git_root
@@ -213,7 +213,12 @@ impl ShellState {
       }
       EnvChange::UnsetVar(name) => {
         self.shell_vars.remove(name);
-        self.env_vars.remove(name);
+        if cfg!(windows) {
+          // environment variables are case insensitive on windows
+          self.env_vars.remove(&name.to_uppercase());
+        } else {
+          self.env_vars.remove(name);
+        }
       }
       EnvChange::Cd(new_dir) => {
         self.set_cwd(new_dir);
