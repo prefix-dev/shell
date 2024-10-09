@@ -1091,6 +1091,12 @@ async fn variable_expansion() {
         .run()
         .await;
 
+    TestBuilder::new()
+        .command("echo ${BAR:-THE VALUE CAN CONTAIN SPACES}")
+        .assert_stdout("THE VALUE CAN CONTAIN SPACES\n")
+        .run()
+        .await;
+
     // ASSIGN DEFAULT EXPANSION
     TestBuilder::new()
         .command("echo ${FOO:=5} && echo $FOO")
@@ -1110,6 +1116,49 @@ async fn variable_expansion() {
         .run()
         .await;
 
+    // SUBSTRING VARIABLE EXPANSION
+    TestBuilder::new()
+        .command(r#"FOO=12345 && echo ${FOO:1:3}"#)
+        .assert_stdout("234\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"FOO=12345 && echo ${FOO:1}"#)
+        .assert_stdout("2345\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"FOO=12345 && echo ${FOO:1:-1}"#)
+        .assert_stdout("234\n")
+        .run()
+        .await;
+
+    // ALTERNATE VALUE EXPANSION
+    TestBuilder::new()
+        .command(r#"FOO=1 && echo ${FOO:+5}"#)
+        .assert_stdout("5\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"echo ${FOO:+5}"#)
+        .assert_stdout("\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"FOO=1 && echo ${FOO:+${BAR:+5}}"#)
+        .assert_stdout("\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"FOO=1 && BAR=2 && echo ${FOO:+${BAR:+5}}"#)
+        .assert_stdout("5\n")
+        .run()
+        .await;
 }
 
 #[cfg(test)]

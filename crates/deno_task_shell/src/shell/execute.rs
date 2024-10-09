@@ -1216,43 +1216,67 @@ impl VariableModifier {
     stderr: ShellPipeWriter,
   ) -> Result<(Text, Option<Vec<EnvChange>>), miette::Report> {
     match self {
-      VariableModifier::DefaultValue(default_value) => match state.get_var(name) {
-        Some(v) => Ok((v.clone().into(), None)),
-        None => {
+      VariableModifier::DefaultValue(default_value) => {
+        match state.get_var(name) {
+          Some(v) => Ok((v.clone().into(), None)),
+          None => {
+            let v = evaluate_word(default_value.clone(), state, stdin, stderr)
+              .await
+              .into_diagnostic()?;
+            Ok((v.value.into(), Some(v.changes)))
+          }
+        }
+      }
+      VariableModifier::AssignDefault(default_value) => {
+        match state.get_var(name) {
+          Some(v) => Ok((v.clone().into(), None)),
+          None => {
+            let v = evaluate_word(default_value.clone(), state, stdin, stderr)
+              .await
+              .into_diagnostic()?;
+            state.apply_env_var(name, &v.value);
+            let mut changes = v.changes;
+            changes
+              .push(EnvChange::SetShellVar(name.to_string(), v.value.clone()));
+            Ok((v.value.into(), Some(changes)))
+          }
+        }
+      }
+      VariableModifier::Substring { begin, length } => {
+        if let Some(val) = state.get_var(name) {
+          let chars: Vec<char> = val.chars().collect();
+          let start = usize::try_from(*begin).into_diagnostic()?;
+          let end = match length {
+            Some(len) => {
+              if *len < 0 {
+                let len = usize::try_from(-len).into_diagnostic()?;
+                if chars.len().saturating_sub(len) < start {
+                  return Err(miette::miette!("Invalid length: resulting end index is less than start index"));
+                }
+                chars.len().saturating_sub(len)
+              } else {
+                let len = usize::try_from(*len).into_diagnostic()?;
+                start.saturating_add(len).min(chars.len())
+              }
+            }
+            None => chars.len(),
+          };
+          Ok((chars[start..end].iter().collect(), None))
+        } else {
+          Err(miette::miette!("Undefined variable: {}", name))
+        }
+      }
+      VariableModifier::AlternateValue(default_value) => {
+        let val = state.get_var(name);
+        if val.is_none() || val.unwrap().is_empty() {
+          Ok(("".to_string().into(), None))
+        } else {
           let v = evaluate_word(default_value.clone(), state, stdin, stderr)
             .await
             .into_diagnostic()?;
           Ok((v.value.into(), Some(v.changes)))
         }
-      },
-      VariableModifier::AssignDefault(default_value) => match state.get_var(name) {
-        Some(v) => Ok((v.clone().into(), None)),
-        None => {
-          let v = evaluate_word(default_value.clone(), state, stdin, stderr)
-            .await
-            .into_diagnostic()?;
-          state.apply_env_var(name, &v.value);
-          let mut changes = v.changes;
-          changes.push(EnvChange::SetShellVar(name.to_string(), v.value.clone()));
-          Ok((v.value.into(), Some(changes)))
-        }
-      },
-      // VariableModifier::Substring { begin, length } => {
-      //   if variable.is_none() {
-      //     return Err(miette::miette!("Variable not found"));
-      //   }
-      //   let variable = variable.unwrap();
-      //   let chars: Vec<char> = variable.chars().collect();
-      //   let start = usize::try_from(*begin).unwrap();
-      //   let end = match length {
-      //     Some(len) => {
-      //       (start + usize::try_from(*len).unwrap()).min(chars.len())
-      //     }
-      //     None => chars.len(),
-      //   };
-      //   Ok(Some(chars[start..end].iter().collect()))
-      // },
-      _ => Err(miette::miette!("Unsupported variable modifier")),
+      }
     }
   }
 }
@@ -1385,7 +1409,9 @@ fn evaluate_word_parts(
                 result.with_changes(env_changes);
               }
               Ok(Some(text))
-            } else if let Some(val) = state.get_var(&name).map(|v| v.to_string()) {
+            } else if let Some(val) =
+              state.get_var(&name).map(|v| v.to_string())
+            {
               Ok(Some(val.into()))
             } else {
               Err(miette::miette!("Undefined variable: {}", name))

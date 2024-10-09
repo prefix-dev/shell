@@ -1271,3 +1271,10 @@ impl From<String> for Text {
     )
   }
 }
+
+impl<'a> FromIterator<&'a char> for Text {
+  fn from_iter<I: IntoIterator<Item = &'a char>>(iter: I) -> Self {
+    let parts = iter.into_iter().collect::<String>();
+    Text::new(vec![TextPart::Text(parts)])
+  }
+}

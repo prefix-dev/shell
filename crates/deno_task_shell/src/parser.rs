@@ -1221,15 +1221,11 @@ fn parse_word(pair: Pair<Rule>) -> Result<Word> {
           Rule::UNQUOTED_ESCAPE_CHAR => {
             let mut chars = part.as_str().chars();
             let mut escaped_char = String::new();
-            while let Some(c) = chars.next() {
+            if let Some(c) = chars.next() {
               match c {
                 '\\' => {
                   let next_char = chars.next().unwrap_or('\0');
                   escaped_char.push(next_char);
-                }
-                '$' => {
-                  escaped_char.push(c);
-                  break;
                 }
                 _ => {
                   escaped_char.push(c);
@@ -1316,6 +1312,62 @@ fn parse_word(pair: Pair<Rule>) -> Result<Word> {
           _ => {
             return Err(miette!(
               "Unexpected rule in FILE_NAME_PENDING_WORD: {:?}",
+              part.as_rule()
+            ));
+          }
+        }
+      }
+    }
+    Rule::PARAMETER_PENDING_WORD => {
+      for part in pair.into_inner() {
+        match part.as_rule() {
+          Rule::PARAMETER_ESCAPE_CHAR => {
+            let mut chars = part.as_str().chars();
+            let mut escaped_char = String::new();
+            if let Some(c) = chars.next() {
+              match c {
+                '\\' => {
+                  let next_char = chars.next().unwrap_or('\0');
+                  escaped_char.push(next_char);
+                }
+                _ => {
+                  escaped_char.push(c);
+                  break;
+                }
+              }
+            }
+            if let Some(WordPart::Text(ref mut text)) = parts.last_mut() {
+              text.push_str(&escaped_char);
+            } else {
+              parts.push(WordPart::Text(escaped_char));
+            }
+          }
+          Rule::VARIABLE_EXPANSION => {
+            let variable_expansion = parse_variable_expansion(part)?;
+            parts.push(variable_expansion);
+          }
+          Rule::QUOTED_WORD => {
+            let quoted = parse_quoted_word(part)?;
+            parts.push(quoted);
+          }
+          Rule::TILDE_PREFIX => {
+            let tilde_prefix = parse_tilde_prefix(part)?;
+            parts.push(tilde_prefix);
+          }
+          Rule::ARITHMETIC_EXPRESSION => {
+            let arithmetic_expression = parse_arithmetic_expression(part)?;
+            parts.push(WordPart::Arithmetic(arithmetic_expression));
+          }
+          Rule::QUOTED_CHAR => {
+            if let Some(WordPart::Text(ref mut s)) = parts.last_mut() {
+              s.push_str(part.as_str());
+            } else {
+              parts.push(WordPart::Text(part.as_str().to_string()));
+            }
+          }
+          _ => {
+            return Err(miette!(
+              "Unexpected rule in PARAMETER_PENDING_WORD: {:?}",
               part.as_rule()
             ));
           }
