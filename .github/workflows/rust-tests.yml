@@ -28,6 +28,11 @@ jobs:
           toolchain: stable
           profile: minimal
           override: true
+
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
+        with:
+          limit-access-to-actor: false
       
       - uses: Swatinem/rust-cache@v2
 
