@@ -1173,6 +1173,13 @@ impl WordResult {
     self.value.push_str(&other.value);
     self.changes.extend(other.changes);
   }
+
+  pub fn to_integer(&self) -> Result<i64, Error> {
+    self
+      .value
+      .parse::<i64>()
+      .map_err(|_| miette::miette!("Invalid integer: {}", self.value))
+  }
 }
 
 impl PartialEq for WordResult {

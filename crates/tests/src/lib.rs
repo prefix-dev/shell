@@ -2,6 +2,7 @@
 
 #[cfg(test)]
 mod test_builder;
+
 #[cfg(test)]
 use deno_task_shell::ExecuteResult;
 #[cfg(test)]
@@ -1163,6 +1164,30 @@ async fn variable_expansion() {
     TestBuilder::new()
         .command(r#"FOO=1 && BAR=2 && echo ${FOO:+${BAR:+5}}"#)
         .assert_stdout("5\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("FOO=12345 && echo ${FOO:2:$((2+2))}")
+        .assert_stdout("345\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("FOO=12345 && echo ${FOO: -2:-1}")
+        .assert_stdout("4\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("FOO=12345 && echo ${FOO: -2}")
+        .assert_stdout("45\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("FOO=12345 && echo ${FOO: -4: 2}")
+        .assert_stdout("23\n")
         .run()
         .await;
 }

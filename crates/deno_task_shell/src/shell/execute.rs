@@ -1245,23 +1245,60 @@ impl VariableModifier {
       VariableModifier::Substring { begin, length } => {
         if let Some(val) = state.get_var(name) {
           let chars: Vec<char> = val.chars().collect();
-          let start = usize::try_from(*begin).into_diagnostic()?;
+
+          let mut changes = Vec::new();
+
+          // TODO figure out a way to get rid of cloning stdin and stderr
+          let begin =
+            evaluate_word(begin.clone(), state, stdin.clone(), stderr.clone())
+              .await
+              .into_diagnostic()
+              .and_then(|v| {
+                changes.extend(v.clone().changes); // TODO figure out a way to get rid of cloning here
+                v.to_integer().map_err(|e| {
+                  miette::miette!("Failed to parse start index: {:?}", e)
+                })
+              })?;
+
+          let start = if begin < 0 {
+            chars
+              .len()
+              .saturating_sub(usize::try_from(-begin).into_diagnostic()?)
+          } else {
+            usize::try_from(begin).into_diagnostic()?
+          };
           let end = match length {
             Some(len) => {
-              if *len < 0 {
-                let len = usize::try_from(-len).into_diagnostic()?;
-                if chars.len().saturating_sub(len) < start {
-                  return Err(miette::miette!("Invalid length: resulting end index is less than start index"));
-                }
-                chars.len().saturating_sub(len)
+              let len = evaluate_word(len.clone(), state, stdin, stderr)
+                .await
+                .into_diagnostic()
+                .and_then(|v| {
+                  changes.extend(v.clone().changes); // TODO figure out a way to get rid of cloning here
+                  v.to_integer().map_err(|e| {
+                    miette::miette!("Failed to parse start index: {:?}", e)
+                  })
+                })?;
+
+              if len < 0 {
+                chars
+                  .len()
+                  .saturating_sub(usize::try_from(-len).into_diagnostic()?)
               } else {
-                let len = usize::try_from(*len).into_diagnostic()?;
+                let len = usize::try_from(len).into_diagnostic()?;
                 start.saturating_add(len).min(chars.len())
               }
             }
             None => chars.len(),
           };
-          Ok((chars[start..end].iter().collect(), None))
+          if start > end {
+            Err(miette::miette!(
+              "Invalid substring range: {}..{}",
+              start,
+              end
+            ))
+          } else {
+            Ok((chars[start..end].iter().collect(), Some(changes)))
+          }
         } else {
           Err(miette::miette!("Undefined variable: {}", name))
         }

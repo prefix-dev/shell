@@ -1,7 +1,7 @@
 // Copyright 2018-2024 the Deno authors. MIT license.
 
 use lazy_static::lazy_static;
-use miette::{miette, Context, IntoDiagnostic, Result};
+use miette::{miette, Context, Result};
 use pest::iterators::Pair;
 use pest::pratt_parser::{Assoc, Op, PrattParser};
 use pest::Parser;
@@ -375,8 +375,8 @@ impl Word {
 pub enum VariableModifier {
   #[error("Invalid substring")]
   Substring {
-    begin: i64,
-    length: Option<i64>,
+    begin: Word,
+    length: Option<Word>,
   },
   DefaultValue(Word),
   AssignDefault(Word),
@@ -1556,13 +1556,14 @@ fn parse_variable_expansion(part: Pair<Rule>) -> Result<WordPart> {
     match modifier.as_rule() {
       Rule::VAR_SUBSTRING => {
         let mut numbers = modifier.into_inner();
-        let begin = numbers
-          .next()
-          .and_then(|n| n.as_str().parse::<i64>().ok())
-          .unwrap_or(0);
+        let begin: Word = if let Some(n) = numbers.next() {
+          parse_word(n)?
+        } else {
+          return Err(miette!("Expected a number for substring begin"));
+        };
 
         let length = if let Some(len_word) = numbers.next() {
-          Some(len_word.as_str().parse::<i64>().into_diagnostic()?)
+          Some(parse_word(len_word)?)
         } else {
           None
         };
