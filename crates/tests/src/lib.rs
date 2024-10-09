@@ -113,6 +113,12 @@ async fn commands() {
         .assert_stdout("3\n2\n")
         .run()
         .await;
+
+    TestBuilder::new()
+        .command("a=1 && echo $a")
+        .assert_stdout("1\n")
+        .run()
+        .await;
 }
 
 #[tokio::test]
