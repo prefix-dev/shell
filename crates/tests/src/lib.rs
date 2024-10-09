@@ -1066,6 +1066,7 @@ async fn touch() {
 
 #[tokio::test]
 async fn variable_expansion() {
+    // DEFAULT VALUE EXPANSION
     TestBuilder::new()
         .command("echo ${FOO:-5}")
         .assert_stdout("5\n")
@@ -1089,6 +1090,26 @@ async fn variable_expansion() {
         .assert_stdout("2\n")
         .run()
         .await;
+
+    // ASSIGN DEFAULT EXPANSION
+    TestBuilder::new()
+        .command("echo ${FOO:=5} && echo $FOO")
+        .assert_stdout("5\n5\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"FOO=1 && echo ${FOO:=5} && echo $FOO"#)
+        .assert_stdout("1\n1\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"echo ${FOO:=${BAR:=5}} && echo $FOO && echo $BAR"#)
+        .assert_stdout("5\n5\n5\n")
+        .run()
+        .await;
+
 }
 
 #[cfg(test)]

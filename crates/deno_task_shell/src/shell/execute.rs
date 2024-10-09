@@ -1210,19 +1210,31 @@ impl From<miette::Error> for EvaluateWordTextError {
 impl VariableModifier {
   pub async fn apply(
     &self,
-    variable: Option<&String>,
+    name: &str,
     state: &mut ShellState,
     stdin: ShellPipeReader,
     stderr: ShellPipeWriter,
   ) -> Result<(Text, Option<Vec<EnvChange>>), miette::Report> {
     match self {
-      VariableModifier::DefaultValue(default_value) => match variable {
+      VariableModifier::DefaultValue(default_value) => match state.get_var(name) {
         Some(v) => Ok((v.clone().into(), None)),
         None => {
           let v = evaluate_word(default_value.clone(), state, stdin, stderr)
             .await
             .into_diagnostic()?;
           Ok((v.value.into(), Some(v.changes)))
+        }
+      },
+      VariableModifier::AssignDefault(default_value) => match state.get_var(name) {
+        Some(v) => Ok((v.clone().into(), None)),
+        None => {
+          let v = evaluate_word(default_value.clone(), state, stdin, stderr)
+            .await
+            .into_diagnostic()?;
+          state.apply_env_var(name, &v.value);
+          let mut changes = v.changes;
+          changes.push(EnvChange::SetShellVar(name.to_string(), v.value.clone()));
+          Ok((v.value.into(), Some(changes)))
         }
       },
       // VariableModifier::Substring { begin, length } => {
@@ -1365,16 +1377,15 @@ fn evaluate_word_parts(
             continue;
           }
           WordPart::Variable(name, modifier) => {
-            let value = state.get_var(&name).map(|v| v.to_string());
             if let Some(modifier) = modifier {
               let (text, env_changes) = modifier
-                .apply(value.as_ref(), state, stdin.clone(), stderr.clone())
+                .apply(&name, state, stdin.clone(), stderr.clone())
                 .await?;
               if let Some(env_changes) = env_changes {
                 result.with_changes(env_changes);
               }
               Ok(Some(text))
-            } else if let Some(val) = value {
+            } else if let Some(val) = state.get_var(&name).map(|v| v.to_string()) {
               Ok(Some(val.into()))
             } else {
               Err(miette::miette!("Undefined variable: {}", name))
