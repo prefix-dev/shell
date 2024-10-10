@@ -28,8 +28,9 @@ pub fn execute_unresolved_command_name(
   mut context: ShellCommandContext,
 ) -> FutureExecuteResult {
   async move {
+    let args = context.args.clone();
     let command =
-      match resolve_command(&command_name, &context, &context.args).await {
+      match resolve_command(&command_name, &mut context, &args).await {
         Ok(command_path) => command_path,
         Err(ResolveCommandError::CommandPath(err)) => {
           let _ = context.stderr.write_line(&format!("{}", err));
@@ -108,7 +109,7 @@ impl FailedShebangError {
 
 async fn resolve_command<'a>(
   command_name: &UnresolvedCommandName,
-  context: &ShellCommandContext,
+  context: &mut ShellCommandContext,
   original_args: &'a Vec<String>,
 ) -> Result<ResolvedCommand<'a>, ResolveCommandError> {
   let command_path = match resolve_command_path(
@@ -160,10 +161,10 @@ async fn resolve_command<'a>(
 
 async fn parse_shebang_args(
   text: &str,
-  context: &ShellCommandContext,
+  context: &mut ShellCommandContext,
 ) -> Result<Vec<String>> {
   fn err_unsupported(text: &str) -> Result<Vec<String>> {
-    miette::bail!("unsupported shebang. Please report this as a bug (https://github.com/denoland/deno).\n\nShebang: {}", text)
+    miette::bail!("unsupported shebang. Please report this as a bug (https://github.com/prefix.dev/shell).\n\nShebang: {}", text)
   }
 
   let mut args = crate::parser::parse(text)?;
@@ -204,7 +205,7 @@ async fn parse_shebang_args(
 
   let result = super::execute::evaluate_args(
     cmd.args,
-    &context.state,
+    &mut context.state,
     context.stdin.clone(),
     context.stderr.clone(),
   )

@@ -371,11 +371,29 @@ impl Word {
   serde(rename_all = "camelCase", tag = "kind", content = "value")
 )]
 #[derive(Debug, PartialEq, Eq, Clone, Error)]
+#[error("Invalid variable modifier")]
+pub enum VariableModifier {
+  #[error("Invalid substring")]
+  Substring {
+    begin: Word,
+    length: Option<Word>,
+  },
+  DefaultValue(Word),
+  AssignDefault(Word),
+  AlternateValue(Word),
+}
+
+#[cfg_attr(feature = "serialization", derive(serde::Serialize))]
+#[cfg_attr(
+  feature = "serialization",
+  serde(rename_all = "camelCase", tag = "kind", content = "value")
+)]
+#[derive(Debug, PartialEq, Eq, Clone, Error)]
 pub enum WordPart {
   #[error("Invalid text")]
   Text(String),
   #[error("Invalid variable")]
-  Variable(String),
+  Variable(String, Option<Box<VariableModifier>>),
   #[error("Invalid command")]
   Command(SequentialList),
   #[error("Invalid quoted string")]
@@ -1203,15 +1221,11 @@ fn parse_word(pair: Pair<Rule>) -> Result<Word> {
           Rule::UNQUOTED_ESCAPE_CHAR => {
             let mut chars = part.as_str().chars();
             let mut escaped_char = String::new();
-            while let Some(c) = chars.next() {
+            if let Some(c) = chars.next() {
               match c {
                 '\\' => {
                   let next_char = chars.next().unwrap_or('\0');
                   escaped_char.push(next_char);
-                }
-                '$' => {
-                  escaped_char.push(c);
-                  break;
                 }
                 _ => {
                   escaped_char.push(c);
@@ -1230,8 +1244,9 @@ fn parse_word(pair: Pair<Rule>) -> Result<Word> {
               parse_complete_command(part.into_inner().next().unwrap())?;
             parts.push(WordPart::Command(command));
           }
-          Rule::VARIABLE => {
-            parts.push(WordPart::Variable(part.as_str().to_string()))
+          Rule::VARIABLE_EXPANSION => {
+            let variable_expansion = parse_variable_expansion(part)?;
+            parts.push(variable_expansion);
           }
           Rule::QUOTED_WORD => {
             let quoted = parse_quoted_word(part)?;
@@ -1273,7 +1288,7 @@ fn parse_word(pair: Pair<Rule>) -> Result<Word> {
             }
           }
           Rule::VARIABLE => {
-            parts.push(WordPart::Variable(part.as_str().to_string()))
+            parts.push(WordPart::Variable(part.as_str().to_string(), None))
           }
           Rule::UNQUOTED_CHAR => {
             if let Some(WordPart::Text(ref mut text)) = parts.last_mut() {
@@ -1297,6 +1312,62 @@ fn parse_word(pair: Pair<Rule>) -> Result<Word> {
           _ => {
             return Err(miette!(
               "Unexpected rule in FILE_NAME_PENDING_WORD: {:?}",
+              part.as_rule()
+            ));
+          }
+        }
+      }
+    }
+    Rule::PARAMETER_PENDING_WORD => {
+      for part in pair.into_inner() {
+        match part.as_rule() {
+          Rule::PARAMETER_ESCAPE_CHAR => {
+            let mut chars = part.as_str().chars();
+            let mut escaped_char = String::new();
+            if let Some(c) = chars.next() {
+              match c {
+                '\\' => {
+                  let next_char = chars.next().unwrap_or('\0');
+                  escaped_char.push(next_char);
+                }
+                _ => {
+                  escaped_char.push(c);
+                  break;
+                }
+              }
+            }
+            if let Some(WordPart::Text(ref mut text)) = parts.last_mut() {
+              text.push_str(&escaped_char);
+            } else {
+              parts.push(WordPart::Text(escaped_char));
+            }
+          }
+          Rule::VARIABLE_EXPANSION => {
+            let variable_expansion = parse_variable_expansion(part)?;
+            parts.push(variable_expansion);
+          }
+          Rule::QUOTED_WORD => {
+            let quoted = parse_quoted_word(part)?;
+            parts.push(quoted);
+          }
+          Rule::TILDE_PREFIX => {
+            let tilde_prefix = parse_tilde_prefix(part)?;
+            parts.push(tilde_prefix);
+          }
+          Rule::ARITHMETIC_EXPRESSION => {
+            let arithmetic_expression = parse_arithmetic_expression(part)?;
+            parts.push(WordPart::Arithmetic(arithmetic_expression));
+          }
+          Rule::QUOTED_CHAR => {
+            if let Some(WordPart::Text(ref mut s)) = parts.last_mut() {
+              s.push_str(part.as_str());
+            } else {
+              parts.push(WordPart::Text(part.as_str().to_string()));
+            }
+          }
+          _ => {
+            return Err(miette!(
+              "Unexpected rule in PARAMETER_PENDING_WORD: {:?}",
               part.as_rule()
             ));
           }
@@ -1473,6 +1544,64 @@ fn parse_post_arithmetic_op(pair: Pair<Rule>) -> Result<PostArithmeticOp> {
   }
 }
 
+fn parse_variable_expansion(part: Pair<Rule>) -> Result<WordPart> {
+  let mut inner = part.into_inner();
+  let variable = inner
+    .next()
+    .ok_or_else(|| miette!("Expected variable name"))?;
+  let variable_name = variable.as_str().to_string();
+
+  let modifier = inner.next();
+  let parsed_modifier = if let Some(modifier) = modifier {
+    match modifier.as_rule() {
+      Rule::VAR_SUBSTRING => {
+        let mut numbers = modifier.into_inner();
+        let begin: Word = if let Some(n) = numbers.next() {
+          parse_word(n)?
+        } else {
+          return Err(miette!("Expected a number for substring begin"));
+        };
+
+        let length = if let Some(len_word) = numbers.next() {
+          Some(parse_word(len_word)?)
+        } else {
+          None
+        };
+        Some(Box::new(VariableModifier::Substring { begin, length }))
+      }
+      Rule::VAR_DEFAULT_VALUE => {
+        let value = if let Some(val) = modifier.into_inner().next() {
+          parse_word(val)?
+        } else {
+          Word::new_empty()
+        };
+        Some(Box::new(VariableModifier::DefaultValue(value)))
+      }
+      Rule::VAR_ASSIGN_DEFAULT => {
+        let value = modifier.into_inner().next().unwrap();
+        Some(Box::new(VariableModifier::AssignDefault(parse_word(
+          value,
+        )?)))
+      }
+      Rule::VAR_ALTERNATE_VALUE => {
+        let value = modifier.into_inner().next().unwrap();
+        Some(Box::new(VariableModifier::AlternateValue(parse_word(
+          value,
+        )?)))
+      }
+      _ => {
+        return Err(miette!(
+          "Unexpected rule in variable expansion modifier: {:?}",
+          modifier.as_rule()
+        ));
+      }
+    }
+  } else {
+    None
+  };
+  Ok(WordPart::Variable(variable_name, parsed_modifier))
+}
+
 fn parse_tilde_prefix(pair: Pair<Rule>) -> Result<WordPart> {
   let tilde_prefix_str = pair.as_str();
   let user = if tilde_prefix_str.len() > 1 {
@@ -1506,8 +1635,9 @@ fn parse_quoted_word(pair: Pair<Rule>) -> Result<WordPart> {
               parse_complete_command(part.into_inner().next().unwrap())?;
             parts.push(WordPart::Command(command));
           }
-          Rule::VARIABLE => {
-            parts.push(WordPart::Variable(part.as_str().to_string()))
+          Rule::VARIABLE_EXPANSION => {
+            let variable_expansion = parse_variable_expansion(part)?;
+            parts.push(variable_expansion);
           }
           Rule::QUOTED_CHAR => {
             if let Some(WordPart::Text(ref mut s)) = parts.last_mut() {
@@ -1944,7 +2074,7 @@ mod test {
           env_vars: vec![],
           args: vec![
             Word::new_word("echo"),
-            Word(vec![WordPart::Variable("MY_ENV".to_string())]),
+            Word(vec![WordPart::Variable("MY_ENV".to_string(), None)]),
           ],
         }
         .into(),

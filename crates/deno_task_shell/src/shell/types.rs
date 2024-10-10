@@ -1,6 +1,7 @@
 // Copyright 2018-2024 the Deno authors. MIT license.
 
 use std::borrow::Cow;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Display;
@@ -115,15 +116,18 @@ impl ShellState {
   }
 
   pub fn get_var(&self, name: &str) -> Option<&String> {
-    let name = if cfg!(windows) {
-      Cow::Owned(name.to_uppercase())
+    let (original_name, updated_name) = if cfg!(windows) {
+      (
+        Cow::Owned(name.to_string()),
+        Cow::Owned(name.to_uppercase()),
+      )
     } else {
-      Cow::Borrowed(name)
+      (Cow::Borrowed(name), Cow::Borrowed(name))
     };
     self
       .env_vars
-      .get(name.as_ref())
-      .or_else(|| self.shell_vars.get(name.as_ref()))
+      .get(updated_name.as_ref())
+      .or_else(|| self.shell_vars.get(original_name.as_ref()))
   }
 
   // Update self.git_branch using self.git_root
@@ -212,7 +216,12 @@ impl ShellState {
       }
       EnvChange::UnsetVar(name) => {
         self.shell_vars.remove(name);
-        self.env_vars.remove(name);
+        if cfg!(windows) {
+          // environment variables are case insensitive on windows
+          self.env_vars.remove(&name.to_uppercase());
+        } else {
+          self.env_vars.remove(name);
+        }
       }
       EnvChange::Cd(new_dir) => {
         self.set_cwd(new_dir);
@@ -331,6 +340,22 @@ impl ExecuteResult {
 
   pub fn into_handles(self) -> Vec<JoinHandle<i32>> {
     self.into_exit_code_and_handles().1
+  }
+
+  pub fn into_changes(self) -> Vec<EnvChange> {
+    match self {
+      ExecuteResult::Exit(_, _) => Vec::new(),
+      ExecuteResult::Continue(_, changes, _) => changes,
+    }
+  }
+
+  pub fn into_handles_and_changes(
+    self,
+  ) -> (Vec<JoinHandle<i32>>, Vec<EnvChange>) {
+    match self {
+      ExecuteResult::Exit(_, handles) => (handles, Vec::new()),
+      ExecuteResult::Continue(_, changes, handles) => (handles, changes),
+    }
   }
 }
 
@@ -577,6 +602,14 @@ impl ArithmeticResult {
       ArithmeticValue::Integer(val) => *val == 0,
       ArithmeticValue::Float(val) => *val == 0.0,
     }
+  }
+
+  pub fn with_changes(&mut self, changes: Vec<EnvChange>) {
+    self.changes.extend(changes);
+  }
+
+  pub fn set_value(&mut self, value: ArithmeticValue) {
+    self.value = value;
   }
 
   pub fn checked_add(
@@ -1072,11 +1105,6 @@ impl ArithmeticResult {
       changes,
     })
   }
-
-  pub fn with_changes(mut self, changes: Vec<EnvChange>) -> Self {
-    self.changes = changes;
-    self
-  }
 }
 
 impl From<String> for ArithmeticResult {
@@ -1099,22 +1127,169 @@ impl FromStr for ArithmeticResult {
   }
 }
 
-pub struct WordEvalResult {
+#[derive(Debug, Clone)]
+pub struct WordPartsResult {
   pub value: Vec<String>,
   pub changes: Vec<EnvChange>,
 }
 
-impl WordEvalResult {
+impl WordPartsResult {
   pub fn new(value: Vec<String>, changes: Vec<EnvChange>) -> Self {
-    WordEvalResult { value, changes }
+    WordPartsResult { value, changes }
   }
 
-  pub fn extend(&mut self, other: WordEvalResult) {
+  pub fn extend(&mut self, other: WordPartsResult) {
     self.value.extend(other.value);
     self.changes.extend(other.changes);
   }
 
   pub fn join(&self, sep: &str) -> String {
     self.value.join(sep)
+  }
+
+  pub fn with_changes(&mut self, changes: Vec<EnvChange>) {
+    self.changes.extend(changes);
+  }
+}
+
+impl From<WordPartsResult> for String {
+  fn from(parts: WordPartsResult) -> Self {
+    parts.join(" ")
+  }
+}
+
+#[derive(Debug, Clone)]
+pub struct WordResult {
+  pub value: String,
+  pub changes: Vec<EnvChange>,
+}
+
+impl WordResult {
+  pub fn new(value: String, changes: Vec<EnvChange>) -> Self {
+    WordResult { value, changes }
+  }
+
+  pub fn extend(&mut self, other: WordResult) {
+    self.value.push_str(&other.value);
+    self.changes.extend(other.changes);
+  }
+
+  pub fn to_integer(&self) -> Result<i64, Error> {
+    self
+      .value
+      .parse::<i64>()
+      .map_err(|_| miette::miette!("Invalid integer: {}", self.value))
+  }
+}
+
+impl PartialEq for WordResult {
+  fn eq(&self, other: &Self) -> bool {
+    self.value == other.value
+  }
+}
+
+impl Ord for WordResult {
+  fn cmp(&self, other: &Self) -> Ordering {
+    self.value.cmp(&other.value)
+  }
+}
+
+impl PartialOrd for WordResult {
+  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+    Some(self.cmp(other))
+  }
+}
+
+impl Eq for WordResult {}
+
+impl From<String> for WordResult {
+  fn from(value: String) -> Self {
+    WordResult::new(value, Vec::new())
+  }
+}
+
+impl From<WordResult> for String {
+  fn from(result: WordResult) -> Self {
+    result.value
+  }
+}
+
+impl From<WordPartsResult> for WordResult {
+  fn from(parts: WordPartsResult) -> Self {
+    WordResult::new(parts.join(" "), parts.changes)
+  }
+}
+
+impl From<WordResult> for WordPartsResult {
+  fn from(word: WordResult) -> Self {
+    WordPartsResult::new(vec![word.value], word.changes)
+  }
+}
+
+#[derive(Debug, Clone)]
+pub struct ConditionalResult {
+  pub value: bool,
+  pub changes: Vec<EnvChange>,
+}
+
+impl ConditionalResult {
+  pub fn new(value: bool, changes: Vec<EnvChange>) -> Self {
+    ConditionalResult { value, changes }
+  }
+}
+
+impl From<bool> for ConditionalResult {
+  fn from(value: bool) -> Self {
+    ConditionalResult::new(value, Vec::new())
+  }
+}
+
+#[derive(Debug, Clone)]
+pub enum TextPart {
+  Quoted(String),
+  Text(String),
+}
+
+impl TextPart {
+  pub fn as_str(&self) -> &str {
+    match self {
+      TextPart::Quoted(text) => text,
+      TextPart::Text(text) => text,
+    }
+  }
+}
+
+#[derive(Debug, Clone)]
+pub struct Text {
+  parts: Vec<TextPart>,
+}
+
+impl Text {
+  pub fn new(parts: Vec<TextPart>) -> Self {
+    Text { parts }
+  }
+
+  pub fn into_parts(self) -> Vec<TextPart> {
+    self.parts
+  }
+}
+
+impl From<String> for Text {
+  fn from(parts: String) -> Self {
+    Text::new(
+      parts
+        .split(' ')
+        .map(|p| p.trim())
+        .filter(|p| !p.is_empty())
+        .map(|p| TextPart::Text(p.to_string()))
+        .collect::<Vec<_>>(),
+    )
+  }
+}
+
+impl<'a> FromIterator<&'a char> for Text {
+  fn from_iter<I: IntoIterator<Item = &'a char>>(iter: I) -> Self {
+    let parts = iter.into_iter().collect::<String>();
+    Text::new(vec![TextPart::Text(parts)])
   }
 }

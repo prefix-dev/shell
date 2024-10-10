@@ -7,7 +7,9 @@ use std::rc::Rc;
 use futures::future;
 use futures::future::LocalBoxFuture;
 use futures::FutureExt;
+use miette::miette;
 use miette::Error;
+use miette::IntoDiagnostic;
 use thiserror::Error;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -21,6 +23,7 @@ use crate::parser::IoFile;
 use crate::parser::RedirectOpInput;
 use crate::parser::RedirectOpOutput;
 use crate::parser::UnaryOp;
+use crate::parser::VariableModifier;
 use crate::shell::commands::ShellCommand;
 use crate::shell::commands::ShellCommandContext;
 use crate::shell::types::pipe;
@@ -52,10 +55,14 @@ use crate::parser::SimpleCommand;
 use crate::parser::UnaryArithmeticOp;
 use crate::parser::Word;
 use crate::parser::WordPart;
-use crate::shell::types::WordEvalResult;
+use crate::shell::types::Text;
+use crate::shell::types::TextPart;
+use crate::shell::types::WordPartsResult;
+use crate::shell::types::WordResult;
 
 use super::command::execute_unresolved_command_name;
 use super::command::UnresolvedCommandName;
+use super::types::ConditionalResult;
 use super::types::CANCELLATION_EXIT_CODE;
 
 /// Executes a `SequentialList` of commands in a deno_task_shell environment.
@@ -246,8 +253,10 @@ fn execute_sequence(
         0,
         vec![EnvChange::SetShellVar(
           var.name,
-          match evaluate_word(var.value, &state, stdin, stderr.clone()).await {
-            Ok(value) => value,
+          match evaluate_word(var.value, &mut state, stdin, stderr.clone())
+            .await
+          {
+            Ok(value) => value.into(),
             Err(err) => {
               return err.into_exit_code(&mut stderr);
             }
@@ -268,12 +277,12 @@ fn execute_sequence(
         let (exit_code, mut async_handles) = match first_result {
           ExecuteResult::Exit(_, _) => return first_result,
           ExecuteResult::Continue(exit_code, sub_changes, async_handles) => {
-            state.apply_env_var("?", &exit_code.to_string());
-            state.apply_changes(&sub_changes);
             changes.extend(sub_changes);
             (exit_code, async_handles)
           }
         };
+
+        state.apply_changes(&changes);
 
         let next = if list.op.moves_next_for_exit_code(exit_code) {
           Some(list.next)
@@ -359,8 +368,8 @@ async fn execute_pipeline_inner(
 
 #[derive(Debug)]
 enum RedirectPipe {
-  Input(ShellPipeReader),
-  Output(ShellPipeWriter),
+  Input(ShellPipeReader, Option<Vec<EnvChange>>),
+  Output(ShellPipeWriter, Option<Vec<EnvChange>>),
 }
 
 async fn resolve_redirect_pipe(
@@ -377,16 +386,16 @@ async fn resolve_redirect_pipe(
     IoFile::Fd(fd) => match &redirect.op {
       RedirectOp::Input(RedirectOpInput::Redirect) => {
         let _ = stderr.write_line(
-            "deno_task_shell: input redirecting file descriptors is not implemented",
-          );
+          "shell: input redirecting file descriptors is not implemented",
+        );
         Err(ExecuteResult::from_exit_code(1))
       }
       RedirectOp::Output(_op) => match fd {
-        1 => Ok(RedirectPipe::Output(stdout.clone())),
-        2 => Ok(RedirectPipe::Output(stderr.clone())),
+        1 => Ok(RedirectPipe::Output(stdout.clone(), None)),
+        2 => Ok(RedirectPipe::Output(stderr.clone(), None)),
         _ => {
           let _ = stderr.write_line(
-            "deno_task_shell: output redirecting file descriptors beyond stdout and stderr is not implemented",
+            &format!("{:?}", miette!("shell: output redirecting file descriptors beyond stdout and stderr is not implemented")),
           );
           Err(ExecuteResult::from_exit_code(1))
         }
@@ -422,7 +431,7 @@ async fn resolve_redirect_word_pipe(
 
   let words = evaluate_word_parts(
     word.into_parts(),
-    state,
+    &mut state.clone(),
     stdin.clone(),
     stderr.clone(),
   )
@@ -456,13 +465,19 @@ async fn resolve_redirect_word_pipe(
       let std_file_result =
         std::fs::OpenOptions::new().read(true).open(&output_path);
       handle_std_result(&output_path, std_file_result, stderr).map(|std_file| {
-        RedirectPipe::Input(ShellPipeReader::from_std(std_file))
+        RedirectPipe::Input(
+          ShellPipeReader::from_std(std_file),
+          Some(words.changes),
+        )
       })
     }
     RedirectOp::Output(op) => {
       // cross platform suppress output
       if output_path == "/dev/null" {
-        return Ok(RedirectPipe::Output(ShellPipeWriter::null()));
+        return Ok(RedirectPipe::Output(
+          ShellPipeWriter::null(),
+          Some(words.changes),
+        ));
       }
       let output_path = state.cwd().join(output_path);
       let is_append = *op == RedirectOpOutput::Append;
@@ -473,7 +488,10 @@ async fn resolve_redirect_word_pipe(
         .truncate(!is_append)
         .open(&output_path);
       handle_std_result(&output_path, std_file_result, stderr).map(|std_file| {
-        RedirectPipe::Output(ShellPipeWriter::from_std(std_file))
+        RedirectPipe::Output(
+          ShellPipeWriter::from_std(std_file),
+          Some(words.changes),
+        )
       })
     }
   }
@@ -481,12 +499,14 @@ async fn resolve_redirect_word_pipe(
 
 async fn execute_command(
   command: Command,
-  state: ShellState,
+  mut state: ShellState,
   stdin: ShellPipeReader,
   stdout: ShellPipeWriter,
   mut stderr: ShellPipeWriter,
 ) -> ExecuteResult {
-  let (stdin, stdout, mut stderr) = if let Some(redirect) = &command.redirect {
+  let (stdin, stdout, mut stderr, changes) = if let Some(redirect) =
+    &command.redirect
+  {
     let pipe = match resolve_redirect_pipe(
       redirect,
       &state,
@@ -500,46 +520,66 @@ async fn execute_command(
       Err(value) => return value,
     };
     match pipe {
-      RedirectPipe::Input(pipe) => match redirect.maybe_fd {
+      RedirectPipe::Input(pipe, changes) => match redirect.maybe_fd {
         Some(_) => {
           let _ = stderr.write_line(
             "input redirects with file descriptors are not supported",
           );
           return ExecuteResult::from_exit_code(1);
         }
-        None => (pipe, stdout, stderr),
+        None => (pipe, stdout, stderr, changes),
       },
-      RedirectPipe::Output(pipe) => match redirect.maybe_fd {
-        Some(RedirectFd::Fd(2)) => (stdin, stdout, pipe),
-        Some(RedirectFd::Fd(1)) | None => (stdin, pipe, stderr),
+      RedirectPipe::Output(pipe, changes) => match redirect.maybe_fd {
+        Some(RedirectFd::Fd(2)) => (stdin, stdout, pipe, changes),
+        Some(RedirectFd::Fd(1)) | None => (stdin, pipe, stderr, changes),
         Some(RedirectFd::Fd(_)) => {
           let _ = stderr.write_line(
             "only redirecting to stdout (1) and stderr (2) is supported",
           );
           return ExecuteResult::from_exit_code(1);
         }
-        Some(RedirectFd::StdoutStderr) => (stdin, pipe.clone(), pipe),
+        Some(RedirectFd::StdoutStderr) => (stdin, pipe.clone(), pipe, changes),
       },
     }
   } else {
-    (stdin, stdout, stderr)
+    (stdin, stdout, stderr, None)
+  };
+  let mut changes = if let Some(changes) = changes {
+    state.apply_changes(&changes);
+    changes
+  } else {
+    Vec::new()
   };
   match command.inner {
     CommandInner::Simple(command) => {
-      execute_simple_command(command, state, stdin, stdout, stderr).await
+      // This can change the state, so we need to pass it by mutable reference
+      execute_simple_command(command, &mut state, stdin, stdout, stderr).await
     }
     CommandInner::Subshell(list) => {
-      execute_subshell(list, state, stdin, stdout, stderr).await
+      // Here the state can be changed but we can not pass by reference
+      match execute_subshell(list, state, stdin, stdout, stderr).await {
+        ExecuteResult::Exit(code, handles) => {
+          ExecuteResult::Exit(code, handles)
+        }
+        ExecuteResult::Continue(code, _, handles) => {
+          ExecuteResult::Continue(code, changes, handles)
+        }
+      }
     }
     CommandInner::If(if_clause) => {
-      execute_if_clause(if_clause, state, stdin, stdout, stderr).await
+      // The state can be changed
+      execute_if_clause(if_clause, &mut state, stdin, stdout, stderr).await
     }
     CommandInner::ArithmeticExpression(arithmetic) => {
-      match execute_arithmetic_expression(arithmetic, state).await {
-        Ok(result) => ExecuteResult::Continue(0, result.changes, Vec::new()),
+      // The state can be changed
+      match execute_arithmetic_expression(arithmetic, &mut state).await {
+        Ok(result) => {
+          changes.extend(result.changes);
+          ExecuteResult::Continue(0, changes, Vec::new())
+        }
         Err(e) => {
           let _ = stderr.write_line(&e.to_string());
-          ExecuteResult::Continue(2, Vec::new(), Vec::new())
+          ExecuteResult::Continue(2, changes, Vec::new())
         }
       }
     }
@@ -548,9 +588,9 @@ async fn execute_command(
 
 async fn execute_arithmetic_expression(
   arithmetic: Arithmetic,
-  mut state: ShellState,
+  state: &mut ShellState,
 ) -> Result<ArithmeticResult, Error> {
-  evaluate_arithmetic(&arithmetic, &mut state).await
+  evaluate_arithmetic(&arithmetic, state).await
 }
 
 async fn evaluate_arithmetic(
@@ -559,7 +599,9 @@ async fn evaluate_arithmetic(
 ) -> Result<ArithmeticResult, Error> {
   let mut result = ArithmeticResult::new(ArithmeticValue::Integer(0));
   for part in &arithmetic.parts {
-    result = Box::pin(evaluate_arithmetic_part(part, state)).await?;
+    let part_result = Box::pin(evaluate_arithmetic_part(part, state)).await?;
+    result.set_value(part_result.value);
+    result.with_changes(part_result.changes);
   }
   Ok(result)
 }
@@ -574,7 +616,7 @@ async fn evaluate_arithmetic_part(
     }
     ArithmeticPart::VariableAssignment { name, op, value } => {
       let val = Box::pin(evaluate_arithmetic_part(value, state)).await?;
-      let applied_value = match op {
+      let mut applied_value = match op {
         AssignmentOp::Assign => val.clone(),
         _ => {
           let var = state
@@ -599,14 +641,11 @@ async fn evaluate_arithmetic_part(
         }
       };
       state.apply_env_var(name, &applied_value.to_string());
-      Ok(
-        applied_value
-          .clone()
-          .with_changes(vec![EnvChange::SetShellVar(
-            name.clone(),
-            applied_value.to_string(),
-          )]),
-      )
+      applied_value.with_changes(vec![EnvChange::SetShellVar(
+        name.clone(),
+        applied_value.to_string(),
+      )]);
+      Ok(applied_value)
     }
     ArithmeticPart::TripleConditionalExpr {
       condition,
@@ -783,15 +822,24 @@ async fn execute_pipe_sequence(
   let mut results = futures::future::join_all(wait_tasks).await;
   output_handle.await.unwrap();
   let last_result = results.pop().unwrap();
-  let all_handles = results.into_iter().flat_map(|r| r.into_handles());
+
+  let (all_handles, changes): (Vec<_>, Vec<_>) = results
+    .into_iter()
+    .map(|r| (r.into_handles_and_changes()))
+    .unzip();
+  let all_handles: Vec<JoinHandle<i32>> =
+    all_handles.into_iter().flatten().collect();
+  let mut changes: Vec<EnvChange> = changes.into_iter().flatten().collect();
+
   match last_result {
     ExecuteResult::Exit(code, mut handles) => {
       handles.extend(all_handles);
-      ExecuteResult::Continue(code, Vec::new(), handles)
+      ExecuteResult::Continue(code, changes, handles)
     }
-    ExecuteResult::Continue(code, _, mut handles) => {
+    ExecuteResult::Continue(code, env_changes, mut handles) => {
       handles.extend(all_handles);
-      ExecuteResult::Continue(code, Vec::new(), handles)
+      changes.extend(env_changes);
+      ExecuteResult::Continue(code, changes, handles)
     }
   }
 }
@@ -819,16 +867,16 @@ async fn execute_subshell(
       // sub shells do not cause an exit
       ExecuteResult::Continue(code, Vec::new(), handles)
     }
-    ExecuteResult::Continue(code, _env_changes, handles) => {
+    ExecuteResult::Continue(code, env_changes, handles) => {
       // env changes are not propagated
-      ExecuteResult::Continue(code, Vec::new(), handles)
+      ExecuteResult::Continue(code, env_changes, handles)
     }
   }
 }
 
 async fn execute_if_clause(
   if_clause: IfClause,
-  state: ShellState,
+  state: &mut ShellState,
   stdin: ShellPipeReader,
   stdout: ShellPipeWriter,
   mut stderr: ShellPipeWriter,
@@ -836,48 +884,77 @@ async fn execute_if_clause(
   let mut current_condition = if_clause.condition;
   let mut current_body = if_clause.then_body;
   let mut current_else = if_clause.else_part;
+  let mut changes = Vec::new();
 
   loop {
     let condition_result = evaluate_condition(
       current_condition,
-      &state,
+      state,
       stdin.clone(),
       stderr.clone(),
     )
     .await;
     match condition_result {
-      Ok(true) => {
-        return execute_sequential_list(
+      Ok(ConditionalResult {
+        value: true,
+        changes: env_changes,
+      }) => {
+        changes.extend(env_changes);
+        let exec_result = execute_sequential_list(
           current_body,
-          state,
+          state.clone(),
           stdin,
           stdout,
           stderr,
           AsyncCommandBehavior::Yield,
         )
         .await;
+        match exec_result {
+          ExecuteResult::Exit(code, handles) => {
+            return ExecuteResult::Exit(code, handles);
+          }
+          ExecuteResult::Continue(code, env_changes, handles) => {
+            changes.extend(env_changes);
+            return ExecuteResult::Continue(code, changes, handles);
+          }
+        }
       }
-      Ok(false) => match current_else {
-        Some(ElsePart::Elif(elif_clause)) => {
-          current_condition = elif_clause.condition;
-          current_body = elif_clause.then_body;
-          current_else = elif_clause.else_part;
+      Ok(ConditionalResult {
+        value: false,
+        changes: env_changes,
+      }) => {
+        changes.extend(env_changes);
+        match current_else {
+          Some(ElsePart::Elif(elif_clause)) => {
+            current_condition = elif_clause.condition;
+            current_body = elif_clause.then_body;
+            current_else = elif_clause.else_part;
+          }
+          Some(ElsePart::Else(else_body)) => {
+            let exec_result = execute_sequential_list(
+              else_body,
+              state.clone(),
+              stdin,
+              stdout,
+              stderr,
+              AsyncCommandBehavior::Yield,
+            )
+            .await;
+            match exec_result {
+              ExecuteResult::Exit(code, handles) => {
+                return ExecuteResult::Exit(code, handles);
+              }
+              ExecuteResult::Continue(code, env_changes, handles) => {
+                changes.extend(env_changes);
+                return ExecuteResult::Continue(code, changes, handles);
+              }
+            }
+          }
+          None => {
+            return ExecuteResult::Continue(0, changes, Vec::new());
+          }
         }
-        Some(ElsePart::Else(else_body)) => {
-          return execute_sequential_list(
-            else_body,
-            state,
-            stdin,
-            stdout,
-            stderr,
-            AsyncCommandBehavior::Yield,
-          )
-          .await;
-        }
-        None => {
-          return ExecuteResult::Continue(0, Vec::new(), Vec::new());
-        }
-      },
+      }
       Err(err) => {
         return err.into_exit_code(&mut stderr);
       }
@@ -887,39 +964,51 @@ async fn execute_if_clause(
 
 async fn evaluate_condition(
   condition: Condition,
-  state: &ShellState,
+  state: &mut ShellState,
   stdin: ShellPipeReader,
   stderr: ShellPipeWriter,
-) -> Result<bool, EvaluateWordTextError> {
+) -> Result<ConditionalResult, EvaluateWordTextError> {
+  let mut changes = Vec::new();
   match condition.condition_inner {
     ConditionInner::Binary { left, op, right } => {
       let left =
         evaluate_word(left, state, stdin.clone(), stderr.clone()).await?;
+      state.apply_changes(&left.changes);
+      changes.extend(left.clone().changes);
+
       let right =
         evaluate_word(right, state, stdin.clone(), stderr.clone()).await?;
+      state.apply_changes(&right.changes);
+      changes.extend(right.clone().changes);
 
       // transform the string comparison to a numeric comparison if possible
-      if let Ok(left) = left.parse::<i64>() {
-        if let Ok(right) = right.parse::<i64>() {
-          return Ok(match op {
-            BinaryOp::Equal => left == right,
-            BinaryOp::NotEqual => left != right,
-            BinaryOp::LessThan => left < right,
-            BinaryOp::LessThanOrEqual => left <= right,
-            BinaryOp::GreaterThan => left > right,
-            BinaryOp::GreaterThanOrEqual => left >= right,
-          });
+      if let Ok(left) = Into::<String>::into(left.clone()).parse::<i64>() {
+        if let Ok(right) = Into::<String>::into(right.clone()).parse::<i64>() {
+          return Ok(
+            match op {
+              BinaryOp::Equal => left == right,
+              BinaryOp::NotEqual => left != right,
+              BinaryOp::LessThan => left < right,
+              BinaryOp::LessThanOrEqual => left <= right,
+              BinaryOp::GreaterThan => left > right,
+              BinaryOp::GreaterThanOrEqual => left >= right,
+            }
+            .into(),
+          );
         }
       }
 
-      match op {
-        BinaryOp::Equal => Ok(left == right),
-        BinaryOp::NotEqual => Ok(left != right),
-        BinaryOp::LessThan => Ok(left < right),
-        BinaryOp::LessThanOrEqual => Ok(left <= right),
-        BinaryOp::GreaterThan => Ok(left > right),
-        BinaryOp::GreaterThanOrEqual => Ok(left >= right),
-      }
+      Ok(
+        match op {
+          BinaryOp::Equal => left == right,
+          BinaryOp::NotEqual => left != right,
+          BinaryOp::LessThan => left < right,
+          BinaryOp::LessThanOrEqual => left <= right,
+          BinaryOp::GreaterThan => left > right,
+          BinaryOp::GreaterThanOrEqual => left >= right,
+        }
+        .into(),
+      )
     }
     ConditionInner::Unary { op, right } => {
       let _right =
@@ -956,14 +1045,14 @@ async fn evaluate_condition(
 
 async fn execute_simple_command(
   command: SimpleCommand,
-  state: ShellState,
+  state: &mut ShellState,
   stdin: ShellPipeReader,
   stdout: ShellPipeWriter,
   mut stderr: ShellPipeWriter,
 ) -> ExecuteResult {
   let args =
-    evaluate_args(command.args, &state, stdin.clone(), stderr.clone()).await;
-  let (args, changes) = match args {
+    evaluate_args(command.args, state, stdin.clone(), stderr.clone()).await;
+  let (args, mut changes) = match args {
     Ok(args) => (args.value, args.changes),
     Err(err) => {
       return err.into_exit_code(&mut stderr);
@@ -971,23 +1060,24 @@ async fn execute_simple_command(
   };
   let mut state = state.clone();
   for env_var in command.env_vars {
-    let value =
-      evaluate_word(env_var.value, &state, stdin.clone(), stderr.clone()).await;
-    let value = match value {
-      Ok(value) => value,
+    let word_result =
+      evaluate_word(env_var.value, &mut state, stdin.clone(), stderr.clone())
+        .await;
+    let word_result = match word_result {
+      Ok(word_result) => word_result,
       Err(err) => {
         return err.into_exit_code(&mut stderr);
       }
     };
-    state.apply_env_var(&env_var.name, &value);
+    state.apply_env_var(&env_var.name, &word_result.value);
+    changes.extend(word_result.changes);
   }
   let result = execute_command_args(args, state, stdin, stdout, stderr).await;
   match result {
     ExecuteResult::Exit(code, handles) => ExecuteResult::Exit(code, handles),
     ExecuteResult::Continue(code, env_changes, handles) => {
-      let mut combined_changes = env_changes.clone();
-      combined_changes.extend(changes);
-      ExecuteResult::Continue(code, combined_changes, handles)
+      changes.extend(env_changes);
+      ExecuteResult::Continue(code, changes, handles)
     }
   }
 }
@@ -1060,11 +1150,11 @@ fn execute_command_args(
 
 pub async fn evaluate_args(
   args: Vec<Word>,
-  state: &ShellState,
+  state: &mut ShellState,
   stdin: ShellPipeReader,
   stderr: ShellPipeWriter,
-) -> Result<WordEvalResult, EvaluateWordTextError> {
-  let mut result = WordEvalResult::new(Vec::new(), Vec::new());
+) -> Result<WordPartsResult, EvaluateWordTextError> {
+  let mut result = WordPartsResult::new(Vec::new(), Vec::new());
   for arg in args {
     let parts = evaluate_word_parts(
       arg.into_parts(),
@@ -1080,14 +1170,14 @@ pub async fn evaluate_args(
 
 async fn evaluate_word(
   word: Word,
-  state: &ShellState,
+  state: &mut ShellState,
   stdin: ShellPipeReader,
   stderr: ShellPipeWriter,
-) -> Result<String, EvaluateWordTextError> {
+) -> Result<WordResult, EvaluateWordTextError> {
   Ok(
     evaluate_word_parts(word.into_parts(), state, stdin, stderr)
       .await?
-      .join(" "),
+      .into(),
   )
 }
 
@@ -1117,27 +1207,123 @@ impl From<miette::Error> for EvaluateWordTextError {
   }
 }
 
-fn evaluate_word_parts(
-  parts: Vec<WordPart>,
-  state: &ShellState,
-  stdin: ShellPipeReader,
-  stderr: ShellPipeWriter,
-) -> LocalBoxFuture<Result<WordEvalResult, EvaluateWordTextError>> {
-  #[derive(Debug)]
-  enum TextPart {
-    Quoted(String),
-    Text(String),
-  }
+impl VariableModifier {
+  pub async fn apply(
+    &self,
+    name: &str,
+    state: &mut ShellState,
+    stdin: ShellPipeReader,
+    stderr: ShellPipeWriter,
+  ) -> Result<(Text, Option<Vec<EnvChange>>), miette::Report> {
+    match self {
+      VariableModifier::DefaultValue(default_value) => {
+        match state.get_var(name) {
+          Some(v) => Ok((v.clone().into(), None)),
+          None => {
+            let v = evaluate_word(default_value.clone(), state, stdin, stderr)
+              .await
+              .into_diagnostic()?;
+            Ok((v.value.into(), Some(v.changes)))
+          }
+        }
+      }
+      VariableModifier::AssignDefault(default_value) => {
+        match state.get_var(name) {
+          Some(v) => Ok((v.clone().into(), None)),
+          None => {
+            let v = evaluate_word(default_value.clone(), state, stdin, stderr)
+              .await
+              .into_diagnostic()?;
+            state.apply_env_var(name, &v.value);
+            let mut changes = v.changes;
+            changes
+              .push(EnvChange::SetShellVar(name.to_string(), v.value.clone()));
+            Ok((v.value.into(), Some(changes)))
+          }
+        }
+      }
+      VariableModifier::Substring { begin, length } => {
+        if let Some(val) = state.get_var(name) {
+          let chars: Vec<char> = val.chars().collect();
 
-  impl TextPart {
-    pub fn as_str(&self) -> &str {
-      match self {
-        TextPart::Quoted(text) => text,
-        TextPart::Text(text) => text,
+          let mut changes = Vec::new();
+
+          // TODO figure out a way to get rid of cloning stdin and stderr
+          let begin =
+            evaluate_word(begin.clone(), state, stdin.clone(), stderr.clone())
+              .await
+              .into_diagnostic()
+              .and_then(|v| {
+                changes.extend(v.clone().changes); // TODO figure out a way to get rid of cloning here
+                v.to_integer().map_err(|e| {
+                  miette::miette!("Failed to parse start index: {:?}", e)
+                })
+              })?;
+
+          let start = if begin < 0 {
+            chars
+              .len()
+              .saturating_sub(usize::try_from(-begin).into_diagnostic()?)
+          } else {
+            usize::try_from(begin).into_diagnostic()?
+          };
+          let end = match length {
+            Some(len) => {
+              let len = evaluate_word(len.clone(), state, stdin, stderr)
+                .await
+                .into_diagnostic()
+                .and_then(|v| {
+                  changes.extend(v.clone().changes); // TODO figure out a way to get rid of cloning here
+                  v.to_integer().map_err(|e| {
+                    miette::miette!("Failed to parse start index: {:?}", e)
+                  })
+                })?;
+
+              if len < 0 {
+                chars
+                  .len()
+                  .saturating_sub(usize::try_from(-len).into_diagnostic()?)
+              } else {
+                let len = usize::try_from(len).into_diagnostic()?;
+                start.saturating_add(len).min(chars.len())
+              }
+            }
+            None => chars.len(),
+          };
+          if start > end {
+            Err(miette::miette!(
+              "Invalid substring range: {}..{}",
+              start,
+              end
+            ))
+          } else {
+            Ok((chars[start..end].iter().collect(), Some(changes)))
+          }
+        } else {
+          Err(miette::miette!("Undefined variable: {}", name))
+        }
+      }
+      VariableModifier::AlternateValue(default_value) => {
+        let val = state.get_var(name);
+        if val.is_none() || val.unwrap().is_empty() {
+          Ok(("".to_string().into(), None))
+        } else {
+          let v = evaluate_word(default_value.clone(), state, stdin, stderr)
+            .await
+            .into_diagnostic()?;
+          Ok((v.value.into(), Some(v.changes)))
+        }
       }
     }
   }
+}
 
+fn evaluate_word_parts(
+  parts: Vec<WordPart>,
+  state: &mut ShellState,
+  stdin: ShellPipeReader,
+  stderr: ShellPipeWriter,
+) -> LocalBoxFuture<Result<WordPartsResult, EvaluateWordTextError>> {
   fn text_parts_to_string(parts: Vec<TextPart>) -> String {
     let mut result =
       String::with_capacity(parts.iter().map(|p| p.as_str().len()).sum());
@@ -1151,7 +1337,7 @@ fn evaluate_word_parts(
     state: &ShellState,
     text_parts: Vec<TextPart>,
     is_quoted: bool,
-  ) -> Result<WordEvalResult, EvaluateWordTextError> {
+  ) -> Result<WordPartsResult, EvaluateWordTextError> {
     if !is_quoted
       && text_parts
         .iter()
@@ -1221,13 +1407,13 @@ fn evaluate_word_parts(
                 })
                 .collect::<Vec<_>>()
             };
-            Ok(WordEvalResult::new(paths, Vec::new()))
+            Ok(WordPartsResult::new(paths, Vec::new()))
           }
         }
         Err(err) => Err(EvaluateWordTextError::InvalidPattern { pattern, err }),
       }
     } else {
-      Ok(WordEvalResult {
+      Ok(WordPartsResult {
         value: vec![text_parts_to_string(text_parts)],
         changes: Vec::new(),
       })
@@ -1237,47 +1423,64 @@ fn evaluate_word_parts(
   fn evaluate_word_parts_inner(
     parts: Vec<WordPart>,
     is_quoted: bool,
-    state: &ShellState,
+    state: &mut ShellState,
     stdin: ShellPipeReader,
     stderr: ShellPipeWriter,
-  ) -> LocalBoxFuture<Result<WordEvalResult, EvaluateWordTextError>> {
+  ) -> LocalBoxFuture<Result<WordPartsResult, EvaluateWordTextError>> {
     // recursive async, so requires boxing
-    let mut changes: Vec<EnvChange> = Vec::new();
-
     async move {
-      let mut result = WordEvalResult::new(Vec::new(), Vec::new());
+      let mut result = WordPartsResult::new(Vec::new(), Vec::new());
       let mut current_text = Vec::new();
       for part in parts {
-        let evaluation_result_text = match part {
+        let evaluation_result_text: Result<Option<Text>, Error> = match part {
           WordPart::Text(text) => {
             current_text.push(TextPart::Text(text));
-            None
+            continue;
           }
-          WordPart::Variable(name) => {
-            state.get_var(&name).map(|v| v.to_string())
+          WordPart::Variable(name, modifier) => {
+            if let Some(modifier) = modifier {
+              let (text, env_changes) = modifier
+                .apply(&name, state, stdin.clone(), stderr.clone())
+                .await?;
+              if let Some(env_changes) = env_changes {
+                result.with_changes(env_changes);
+              }
+              Ok(Some(text))
+            } else if let Some(val) =
+              state.get_var(&name).map(|v| v.to_string())
+            {
+              Ok(Some(val.into()))
+            } else {
+              Err(miette::miette!("Undefined variable: {}", name))
+            }
           }
-          WordPart::Command(list) => Some(
-            evaluate_command_substitution(
+          WordPart::Command(list) => {
+            let cmd = evaluate_command_substitution(
               list,
               // contain cancellation to the command substitution
               &state.with_child_token(),
               stdin.clone(),
               stderr.clone(),
             )
-            .await,
-          ),
+            .await;
+            Ok(Some(cmd.into()))
+          }
           WordPart::Quoted(parts) => {
-            let text = evaluate_word_parts_inner(
+            let res = evaluate_word_parts_inner(
               parts,
               true,
               state,
               stdin.clone(),
               stderr.clone(),
             )
-            .await?
-            .join(" ");
+            .await?;
 
-            current_text.push(TextPart::Quoted(text));
+            let WordPartsResult {
+              value,
+              changes: env_changes,
+            } = res;
+            result.with_changes(env_changes);
+            current_text.push(TextPart::Quoted(value.join(" ")));
             continue;
           }
           WordPart::Tilde(tilde_prefix) => {
@@ -1287,16 +1490,18 @@ fn evaluate_word_parts(
                 .display()
                 .to_string();
               current_text.push(TextPart::Text(home_str));
+              continue;
             } else {
-              todo!("tilde expansion with user name is not supported");
+              Err(miette::miette!(
+                "Tilde expansion with username is not supported."
+              ))
             }
-            continue;
           }
           WordPart::Arithmetic(arithmetic) => {
             let arithmetic_result =
-              execute_arithmetic_expression(arithmetic, state.clone()).await?;
+              execute_arithmetic_expression(arithmetic, state).await?;
             current_text.push(TextPart::Text(arithmetic_result.to_string()));
-            changes.extend(arithmetic_result.changes);
+            result.with_changes(arithmetic_result.changes);
             continue;
           }
           WordPart::ExitStatus => {
@@ -1306,16 +1511,8 @@ fn evaluate_word_parts(
           }
         };
 
-        // This text needs to be turned into a vector of strings.
-        // For now we do a very basic string split on whitespace, but in the future
-        // we should continue to improve this functionality.
-        if let Some(text) = evaluation_result_text {
-          let mut parts = text
-            .split(' ')
-            .map(|p| p.trim())
-            .filter(|p| !p.is_empty())
-            .map(|p| TextPart::Text(p.to_string()))
-            .collect::<Vec<_>>();
+        if let Ok(Some(text)) = evaluation_result_text {
+          let mut parts = text.into_parts();
 
           if !parts.is_empty() {
             // append the first part to the current text
