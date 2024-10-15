@@ -12,47 +12,23 @@ use thiserror::Error;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
-use crate::parser::AssignmentOp;
-use crate::parser::BinaryOp;
-use crate::parser::Condition;
-use crate::parser::ConditionInner;
-use crate::parser::ElsePart;
-use crate::parser::IoFile;
-use crate::parser::RedirectOpInput;
-use crate::parser::RedirectOpOutput;
-use crate::parser::UnaryOp;
-use crate::shell::commands::ShellCommand;
-use crate::shell::commands::ShellCommandContext;
-use crate::shell::types::pipe;
-use crate::shell::types::ArithmeticResult;
-use crate::shell::types::ArithmeticValue;
-use crate::shell::types::EnvChange;
-use crate::shell::types::ExecuteResult;
-use crate::shell::types::FutureExecuteResult;
-use crate::shell::types::ShellPipeReader;
-use crate::shell::types::ShellPipeWriter;
-use crate::shell::types::ShellState;
+use crate::parser::{
+  AssignmentOp, BinaryOp, Condition, ConditionInner, ElsePart, IoFile,
+  RedirectOpInput, RedirectOpOutput, UnaryArithmeticOp, UnaryOp,
+};
+use crate::shell::commands::{ShellCommand, ShellCommandContext};
+use crate::shell::types::{
+  pipe, ArithmeticResult, ArithmeticValue, EnvChange, ExecuteResult,
+  FutureExecuteResult, ShellPipeReader, ShellPipeWriter, ShellState,
+  WordEvalResult,
+};
 
-use crate::parser::Arithmetic;
-use crate::parser::ArithmeticPart;
-use crate::parser::BinaryArithmeticOp;
-use crate::parser::Command;
-use crate::parser::CommandInner;
-use crate::parser::IfClause;
-use crate::parser::PipeSequence;
-use crate::parser::PipeSequenceOperator;
-use crate::parser::Pipeline;
-use crate::parser::PipelineInner;
-use crate::parser::Redirect;
-use crate::parser::RedirectFd;
-use crate::parser::RedirectOp;
-use crate::parser::Sequence;
-use crate::parser::SequentialList;
-use crate::parser::SimpleCommand;
-use crate::parser::UnaryArithmeticOp;
-use crate::parser::Word;
-use crate::parser::WordPart;
-use crate::shell::types::WordEvalResult;
+use crate::parser::{
+  Arithmetic, ArithmeticPart, BinaryArithmeticOp, Command, CommandInner,
+  IfClause, PipeSequence, PipeSequenceOperator, Pipeline, PipelineInner,
+  Redirect, RedirectFd, RedirectOp, Sequence, SequentialList, SimpleCommand,
+  Word, WordPart,
+};
 
 use super::command::execute_unresolved_command_name;
 use super::command::UnresolvedCommandName;
@@ -598,7 +574,10 @@ async fn evaluate_arithmetic_part(
           }?
         }
       };
-      state.apply_env_var(name, &applied_value.to_string());
+      state.apply_change(&EnvChange::SetShellVar(
+        (&name).to_string(),
+        applied_value.value.to_string(),
+      ));
       Ok(
         applied_value
           .clone()
@@ -640,11 +619,7 @@ async fn evaluate_arithmetic_part(
     }
     ArithmeticPart::UnaryArithmeticExpr { operator, operand } => {
       let val = Box::pin(evaluate_arithmetic_part(operand, state)).await?;
-      apply_unary_op(*operator, val)
-    }
-    ArithmeticPart::PostArithmeticExpr { operand, .. } => {
-      let val = Box::pin(evaluate_arithmetic_part(operand, state)).await?;
-      Ok(val)
+      apply_unary_op(state, *operator, val, operand)
     }
     ArithmeticPart::Variable(name) => state
       .get_var(name)
@@ -728,19 +703,15 @@ fn apply_conditional_binary_op(
 }
 
 fn apply_unary_op(
+  state: &mut ShellState,
   op: UnaryArithmeticOp,
   val: ArithmeticResult,
+  operand: &ArithmeticPart,
 ) -> Result<ArithmeticResult, Error> {
-  match op {
-    UnaryArithmeticOp::Plus => Ok(val),
-    UnaryArithmeticOp::Minus => val.checked_neg(),
-    UnaryArithmeticOp::LogicalNot => Ok(if val.is_zero() {
-      ArithmeticResult::new(ArithmeticValue::Integer(1))
-    } else {
-      ArithmeticResult::new(ArithmeticValue::Integer(0))
-    }),
-    UnaryArithmeticOp::BitwiseNot => val.checked_not(),
-  }
+  let result = val.unary_op(operand, op)?;
+  let result_clone = result.clone();
+  state.apply_changes(&result_clone.changes);
+  Ok(result)
 }
 
 async fn execute_pipe_sequence(
@@ -1349,6 +1320,7 @@ fn evaluate_word_parts(
       if !current_text.is_empty() {
         result.extend(evaluate_word_text(state, current_text, is_quoted)?);
       }
+      result.with_changes(changes);
       Ok(result)
     }
     .boxed_local()
