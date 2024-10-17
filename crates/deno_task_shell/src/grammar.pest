@@ -15,7 +15,7 @@ UNQUOTED_PENDING_WORD = ${
         UNQUOTED_ESCAPE_CHAR | 
         "$" ~ ARITHMETIC_EXPRESSION |
         SUB_COMMAND | 
-        ("$" ~ "{" ~ VARIABLE ~ "}" | "$" ~ VARIABLE) | 
+        VARIABLE_EXPANSION | 
         UNQUOTED_CHAR | 
         QUOTED_WORD
     ))*)
@@ -25,11 +25,85 @@ UNQUOTED_PENDING_WORD = ${
         UNQUOTED_ESCAPE_CHAR | 
         "$" ~ ARITHMETIC_EXPRESSION |
         SUB_COMMAND | 
-        ("$" ~ "{" ~ VARIABLE ~ "}" | "$" ~ VARIABLE) | 
+        VARIABLE_EXPANSION | 
         UNQUOTED_CHAR | 
         QUOTED_WORD
     ))+
 }
+
+QUOTED_PENDING_WORD = ${ (
+    EXIT_STATUS | 
+    QUOTED_ESCAPE_CHAR | 
+    "$" ~ ARITHMETIC_EXPRESSION |
+    SUB_COMMAND | 
+    VARIABLE_EXPANSION |
+    QUOTED_CHAR
+)* }
+
+PARAMETER_PENDING_WORD = ${ 
+    TILDE_PREFIX  ~ ( !"}" ~ !":" ~ (
+        EXIT_STATUS | 
+        PARAMETER_ESCAPE_CHAR | 
+        "$" ~ ARITHMETIC_EXPRESSION |
+        SUB_COMMAND | 
+        VARIABLE_EXPANSION |
+        QUOTED_WORD | 
+        QUOTED_CHAR
+    ))* | 
+    ( !"}" ~ !":" ~ (
+        EXIT_STATUS | 
+        PARAMETER_ESCAPE_CHAR | 
+        "$" ~ ARITHMETIC_EXPRESSION |
+        SUB_COMMAND | 
+        VARIABLE_EXPANSION |
+        QUOTED_WORD | 
+        QUOTED_CHAR
+    ))+
+ }
+
+FILE_NAME_PENDING_WORD = ${
+    (TILDE_PREFIX ~ (!(WHITESPACE | OPERATOR | NEWLINE) ~ (
+        UNQUOTED_ESCAPE_CHAR |
+        VARIABLE_EXPANSION |
+        UNQUOTED_CHAR |
+        QUOTED_WORD
+    ))*)
+    |
+    (!(WHITESPACE | OPERATOR | NEWLINE) ~ (
+        UNQUOTED_ESCAPE_CHAR |
+        VARIABLE_EXPANSION |
+        UNQUOTED_CHAR |
+        QUOTED_WORD
+    ))+
+}
+
+UNQUOTED_ESCAPE_CHAR = ${ ("\\" ~ "$" | "$" ~ !"(" ~  !"{" ~ !VARIABLE) | "\\" ~ (" " | "`" | "\"" | "(" | ")") }
+QUOTED_ESCAPE_CHAR = ${ "\\" ~ "$" | "$" ~ !"(" ~ !"{" ~ !VARIABLE | "\\" ~ ("`" | "\"" | "(" | ")" | "'") }
+PARAMETER_ESCAPE_CHAR = ${ "\\" ~ "$" | "$" ~ !"(" ~ !"{" ~ !VARIABLE | "\\" ~ "}" }
+
+UNQUOTED_CHAR = ${ ("\\" ~ " ") | !("]]" | "[[" | "(" | ")" | "<" | ">" | "|" | "&" | ";" | "\"" | "'" | "$") ~ ANY }
+QUOTED_CHAR = ${ !"\"" ~ ANY }
+
+VARIABLE_EXPANSION = ${
+    "$" ~ (
+        "{" ~ VARIABLE ~ VARIABLE_MODIFIER? ~ "}" |
+        VARIABLE
+    )
+}
+
+VARIABLE = ${ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+
+VARIABLE_MODIFIER = _{
+    VAR_DEFAULT_VALUE |
+    VAR_ASSIGN_DEFAULT |
+    VAR_ALTERNATE_VALUE |
+    VAR_SUBSTRING
+}
+
+VAR_DEFAULT_VALUE = !{ ":-" ~ PARAMETER_PENDING_WORD? }
+VAR_ASSIGN_DEFAULT = !{ ":=" ~ PARAMETER_PENDING_WORD }
+VAR_ALTERNATE_VALUE = !{ ":+" ~ PARAMETER_PENDING_WORD }
+VAR_SUBSTRING = !{ ":" ~ PARAMETER_PENDING_WORD ~ (":" ~ PARAMETER_PENDING_WORD)? } 
 
 TILDE_PREFIX = ${
     "~" ~ (!(OPERATOR | WHITESPACE | NEWLINE | "/") ~ (
@@ -43,37 +117,6 @@ ASSIGNMENT_TILDE_PREFIX = ${
     )*
 }
 
-FILE_NAME_PENDING_WORD = ${
-    (TILDE_PREFIX ~ (!(WHITESPACE | OPERATOR | NEWLINE) ~ (
-        UNQUOTED_ESCAPE_CHAR |
-        ("$" ~ VARIABLE) |
-        UNQUOTED_CHAR |
-        QUOTED_WORD
-    ))*)
-    |
-    (!(WHITESPACE | OPERATOR | NEWLINE) ~ (
-        UNQUOTED_ESCAPE_CHAR |
-        ("$" ~ VARIABLE) |
-        UNQUOTED_CHAR |
-        QUOTED_WORD
-    ))+
-}
-
-QUOTED_PENDING_WORD = ${ (
-    EXIT_STATUS | 
-    QUOTED_ESCAPE_CHAR | 
-    SUB_COMMAND | 
-    ("$" ~ "{" ~ VARIABLE ~ "}" | "$" ~ VARIABLE) |
-    QUOTED_CHAR
-)* }
-
-UNQUOTED_ESCAPE_CHAR = ${ ("\\" ~ "$" | "$" ~ !"(" ~  !"{" ~ !VARIABLE) | "\\" ~ (" " | "`" | "\"" | "(" | ")")* }
-QUOTED_ESCAPE_CHAR = ${ "\\" ~ "$" | "$" ~ !"(" ~ !"{" ~ !VARIABLE | "\\" ~ ("`" | "\"" | "(" | ")" | "'")* }
-
-UNQUOTED_CHAR = ${ ("\\" ~ " ") | !("]]" | "[[" | "(" | ")" | "<" | ">" | "|" | "&" | ";" | "\"" | "'" | "$") ~ ANY }
-QUOTED_CHAR = ${ !"\"" ~ ANY }
-
-VARIABLE = ${ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 SUB_COMMAND = { "$(" ~ complete_command ~ ")"}
 
 DOUBLE_QUOTED = @{ "\"" ~ QUOTED_PENDING_WORD ~ "\"" }
