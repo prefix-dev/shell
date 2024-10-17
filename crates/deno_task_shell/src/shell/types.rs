@@ -628,7 +628,7 @@ impl ArithmeticResult {
         if sum.is_finite() {
           ArithmeticValue::Float(sum)
         } else {
-          return Err(miette::miette!("Float overflow: {} + {}", lhs, rhs));
+          miette::bail!("Float overflow: {} + {}", lhs, rhs);
         }
       }
       (ArithmeticValue::Integer(lhs), ArithmeticValue::Float(rhs))
@@ -637,7 +637,7 @@ impl ArithmeticResult {
         if sum.is_finite() {
           ArithmeticValue::Float(sum)
         } else {
-          return Err(miette::miette!("Float overflow: {} + {}", lhs, rhs));
+          miette::bail!("Float overflow: {} + {}", lhs, rhs);
         }
       }
     };
@@ -667,7 +667,7 @@ impl ArithmeticResult {
         if diff.is_finite() {
           ArithmeticValue::Float(diff)
         } else {
-          return Err(miette::miette!("Float overflow: {} - {}", lhs, rhs));
+          miette::bail!("Float overflow: {} - {}", lhs, rhs);
         }
       }
       (ArithmeticValue::Integer(lhs), ArithmeticValue::Float(rhs)) => {
@@ -675,7 +675,7 @@ impl ArithmeticResult {
         if diff.is_finite() {
           ArithmeticValue::Float(diff)
         } else {
-          return Err(miette::miette!("Float overflow: {} - {}", lhs, rhs));
+          miette::bail!("Float overflow: {} - {}", lhs, rhs);
         }
       }
       (ArithmeticValue::Float(lhs), ArithmeticValue::Integer(rhs)) => {
@@ -683,7 +683,7 @@ impl ArithmeticResult {
         if diff.is_finite() {
           ArithmeticValue::Float(diff)
         } else {
-          return Err(miette::miette!("Float overflow: {} - {}", lhs, rhs));
+          miette::bail!("Float overflow: {} - {}", lhs, rhs);
         }
       }
     };
@@ -713,7 +713,7 @@ impl ArithmeticResult {
         if product.is_finite() {
           ArithmeticValue::Float(product)
         } else {
-          return Err(miette::miette!("Float overflow: {} * {}", lhs, rhs));
+          miette::bail!("Float overflow: {} * {}", lhs, rhs);
         }
       }
       (ArithmeticValue::Integer(lhs), ArithmeticValue::Float(rhs))
@@ -722,7 +722,7 @@ impl ArithmeticResult {
         if product.is_finite() {
           ArithmeticValue::Float(product)
         } else {
-          return Err(miette::miette!("Float overflow: {} * {}", lhs, rhs));
+          miette::bail!("Float overflow: {} * {}", lhs, rhs);
         }
       }
     };
@@ -743,7 +743,7 @@ impl ArithmeticResult {
     let result = match (&self.value, &other.value) {
       (ArithmeticValue::Integer(lhs), ArithmeticValue::Integer(rhs)) => {
         if *rhs == 0 {
-          return Err(miette::miette!("Division by zero: {} / {}", lhs, rhs));
+          miette::bail!("Division by zero: {} / {}", lhs, rhs);
         }
         lhs
           .checked_div(*rhs)
@@ -754,35 +754,35 @@ impl ArithmeticResult {
       }
       (ArithmeticValue::Float(lhs), ArithmeticValue::Float(rhs)) => {
         if *rhs == 0.0 {
-          return Err(miette::miette!("Division by zero: {} / {}", lhs, rhs));
+          miette::bail!("Division by zero: {} / {}", lhs, rhs);
         }
         let quotient = lhs / rhs;
         if quotient.is_finite() {
           ArithmeticValue::Float(quotient)
         } else {
-          return Err(miette::miette!("Float overflow: {} / {}", lhs, rhs));
+          miette::bail!("Float overflow: {} / {}", lhs, rhs);
         }
       }
       (ArithmeticValue::Integer(lhs), ArithmeticValue::Float(rhs)) => {
         if *rhs == 0.0 {
-          return Err(miette::miette!("Division by zero: {} / {}", lhs, rhs));
+          miette::bail!("Division by zero: {} / {}", lhs, rhs);
         }
         let quotient = *lhs as f64 / rhs;
         if quotient.is_finite() {
           ArithmeticValue::Float(quotient)
         } else {
-          return Err(miette::miette!("Float overflow: {} / {}", lhs, rhs));
+          miette::bail!("Float overflow: {} / {}", lhs, rhs);
         }
       }
       (ArithmeticValue::Float(lhs), ArithmeticValue::Integer(rhs)) => {
         if *rhs == 0 {
-          return Err(miette::miette!("Division by zero: {} / {}", lhs, rhs));
+          miette::bail!("Division by zero: {} / {}", lhs, rhs);
         }
         let quotient = lhs / *rhs as f64;
         if quotient.is_finite() {
           ArithmeticValue::Float(quotient)
         } else {
-          return Err(miette::miette!("Float overflow: {} / {}", lhs, rhs));
+          miette::bail!("Float overflow: {} / {}", lhs, rhs);
         }
       }
     };
@@ -803,7 +803,7 @@ impl ArithmeticResult {
     let result = match (&self.value, &other.value) {
       (ArithmeticValue::Integer(lhs), ArithmeticValue::Integer(rhs)) => {
         if *rhs == 0 {
-          return Err(miette::miette!("Modulo by zero: {} % {}", lhs, rhs));
+          miette::bail!("Modulo by zero: {} % {}", lhs, rhs);
         }
         lhs
           .checked_rem(*rhs)
@@ -814,35 +814,35 @@ impl ArithmeticResult {
       }
       (ArithmeticValue::Float(lhs), ArithmeticValue::Float(rhs)) => {
         if *rhs == 0.0 {
-          return Err(miette::miette!("Modulo by zero: {} % {}", lhs, rhs));
+          miette::bail!("Modulo by zero: {} % {}", lhs, rhs);
         }
         let remainder = lhs % rhs;
         if remainder.is_finite() {
           ArithmeticValue::Float(remainder)
         } else {
-          return Err(miette::miette!("Float overflow: {} % {}", lhs, rhs));
+          miette::bail!("Float overflow: {} % {}", lhs, rhs);
         }
       }
       (ArithmeticValue::Integer(lhs), ArithmeticValue::Float(rhs)) => {
         if *rhs == 0.0 {
-          return Err(miette::miette!("Modulo by zero: {} % {}", lhs, rhs));
+          miette::bail!("Modulo by zero: {} % {}", lhs, rhs);
         }
         let remainder = *lhs as f64 % rhs;
         if remainder.is_finite() {
           ArithmeticValue::Float(remainder)
         } else {
-          return Err(miette::miette!("Float overflow: {} % {}", lhs, rhs));
+          miette::bail!("Float overflow: {} % {}", lhs, rhs);
         }
       }
       (ArithmeticValue::Float(lhs), ArithmeticValue::Integer(rhs)) => {
         if *rhs == 0 {
-          return Err(miette::miette!("Modulo by zero: {} % {}", lhs, rhs));
+          miette::bail!("Modulo by zero: {} % {}", lhs, rhs);
         }
         let remainder = lhs % *rhs as f64;
         if remainder.is_finite() {
           ArithmeticValue::Float(remainder)
         } else {
-          return Err(miette::miette!("Float overflow: {} % {}", lhs, rhs));
+          miette::bail!("Float overflow: {} % {}", lhs, rhs);
         }
       }
     };
@@ -867,7 +867,7 @@ impl ArithmeticResult {
           if result.is_finite() {
             ArithmeticValue::Float(result)
           } else {
-            return Err(miette::miette!("Float overflow: {} ** {}", lhs, rhs));
+            miette::bail!("Float overflow: {} ** {}", lhs, rhs);
           }
         } else {
           lhs
@@ -883,7 +883,7 @@ impl ArithmeticResult {
         if result.is_finite() {
           ArithmeticValue::Float(result)
         } else {
-          return Err(miette::miette!("Float overflow: {} ** {}", lhs, rhs));
+          miette::bail!("Float overflow: {} ** {}", lhs, rhs);
         }
       }
       (ArithmeticValue::Integer(lhs), ArithmeticValue::Float(rhs)) => {
@@ -891,7 +891,7 @@ impl ArithmeticResult {
         if result.is_finite() {
           ArithmeticValue::Float(result)
         } else {
-          return Err(miette::miette!("Float overflow: {} ** {}", lhs, rhs));
+          miette::bail!("Float overflow: {} ** {}", lhs, rhs);
         }
       }
       (ArithmeticValue::Float(lhs), ArithmeticValue::Integer(rhs)) => {
@@ -899,7 +899,7 @@ impl ArithmeticResult {
         if result.is_finite() {
           ArithmeticValue::Float(result)
         } else {
-          return Err(miette::miette!("Float overflow: {} ** {}", lhs, rhs));
+          miette::bail!("Float overflow: {} ** {}", lhs, rhs);
         }
       }
     };
@@ -924,7 +924,7 @@ impl ArithmeticResult {
         if result.is_finite() {
           ArithmeticValue::Float(result)
         } else {
-          return Err(miette::miette!("Float overflow: -{}", val));
+          miette::bail!("Float overflow: -{}", val);
         }
       }
     };
