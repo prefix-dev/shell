@@ -2,6 +2,7 @@
 
 #[cfg(test)]
 mod test_builder;
+
 #[cfg(test)]
 use deno_task_shell::ExecuteResult;
 #[cfg(test)]
@@ -107,6 +108,18 @@ async fn commands() {
         .await;
 
     TestBuilder::new().command("unset").run().await;
+
+    TestBuilder::new()
+        .command("a=1 && echo $((a=2, a + 1)) && echo $a")
+        .assert_stdout("3\n2\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("a=1 && echo $a")
+        .assert_stdout("1\n")
+        .run()
+        .await;
 }
 
 #[tokio::test]
@@ -266,7 +279,7 @@ async fn redirects_input() {
 
     TestBuilder::new()
         .command(r#"cat - <&0"#)
-        .assert_stderr("deno_task_shell: input redirecting file descriptors is not implemented\n")
+        .assert_stderr("shell: input redirecting file descriptors is not implemented\n")
         .assert_exit_code(1)
         .run()
         .await;
@@ -1054,6 +1067,241 @@ async fn touch() {
         .assert_exists("existing.txt")
         .assert_exists("nonexistent.txt")
         .assert_exists("another_existing.txt")
+        .run()
+        .await;
+}
+
+#[tokio::test]
+async fn variable_expansion() {
+    // DEFAULT VALUE EXPANSION
+    TestBuilder::new()
+        .command("echo ${FOO:-5}")
+        .assert_stdout("5\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"echo "${FOO:-5}""#)
+        .assert_stdout("5\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"FOO=1 && echo ${FOO:-5}"#)
+        .assert_stdout("1\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"FOO=1 && echo "${FOO:-5}""#)
+        .assert_stdout("1\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"echo ${FOO:-${BAR:-5}}"#)
+        .assert_stdout("5\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"echo "${FOO:-${BAR:-5}}""#)
+        .assert_stdout("5\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("BAR=2 && echo ${FOO:-${BAR:-5}}")
+        .assert_stdout("2\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"BAR=2 && echo "${FOO:-${BAR:-5}}""#)
+        .assert_stdout("2\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("echo ${BAR:-THE VALUE CAN CONTAIN SPACES}")
+        .assert_stdout("THE VALUE CAN CONTAIN SPACES\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"echo "${BAR:-THE VALUE CAN CONTAIN SPACES}""#)
+        .assert_stdout("THE VALUE CAN CONTAIN SPACES\n")
+        .run()
+        .await;
+
+    // ASSIGN DEFAULT EXPANSION
+    TestBuilder::new()
+        .command("echo ${FOO:=5} && echo $FOO")
+        .assert_stdout("5\n5\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"echo "${FOO:=5}" && echo "$FOO""#)
+        .assert_stdout("5\n5\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"FOO=1 && echo ${FOO:=5} && echo $FOO"#)
+        .assert_stdout("1\n1\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"FOO=1 && echo "${FOO:=5}" && echo "$FOO""#)
+        .assert_stdout("1\n1\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"echo ${FOO:=${BAR:=5}} && echo $FOO && echo $BAR"#)
+        .assert_stdout("5\n5\n5\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"echo "${FOO:=${BAR:=5}}" && echo "$FOO" && echo "$BAR""#)
+        .assert_stdout("5\n5\n5\n")
+        .run()
+        .await;
+
+    // SUBSTRING VARIABLE EXPANSION
+    TestBuilder::new()
+        .command(r#"FOO=12345 && echo ${FOO:1:3}"#)
+        .assert_stdout("234\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"FOO=12345 && echo "${FOO:1:3}""#)
+        .assert_stdout("234\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"FOO=12345 && echo ${FOO:1}"#)
+        .assert_stdout("2345\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"FOO=12345 && echo "${FOO:1}""#)
+        .assert_stdout("2345\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"FOO=12345 && echo ${FOO:1:-1}"#)
+        .assert_stdout("234\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"FOO=12345 && echo "${FOO:1:-1}""#)
+        .assert_stdout("234\n")
+        .run()
+        .await;
+
+    // ALTERNATE VALUE EXPANSION
+    TestBuilder::new()
+        .command(r#"FOO=1 && echo ${FOO:+5}"#)
+        .assert_stdout("5\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"FOO=1 && echo "${FOO:+5}""#)
+        .assert_stdout("5\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"echo ${FOO:+5}"#)
+        .assert_stdout("\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"echo "${FOO:+5}""#)
+        .assert_stdout("\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"FOO=1 && echo ${FOO:+${BAR:+5}}"#)
+        .assert_stdout("\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"FOO=1 && echo "${FOO:+${BAR:+5}}""#)
+        .assert_stdout("\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"FOO=1 && BAR=2 && echo ${FOO:+${BAR:+5}}"#)
+        .assert_stdout("5\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"FOO=1 && BAR=2 && echo "${FOO:+${BAR:+5}}""#)
+        .assert_stdout("5\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("FOO=12345 && echo ${FOO:2:$((2+2))}")
+        .assert_stdout("345\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"FOO=12345 && echo "${FOO:2:$((2+2))}""#)
+        .assert_stdout("345\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("FOO=12345 && echo ${FOO: -2:-1}")
+        .assert_stdout("4\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"FOO=12345 && echo "${FOO: -2:-1}""#)
+        .assert_stdout("4\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("FOO=12345 && echo ${FOO: -2}")
+        .assert_stdout("45\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"FOO=12345 && echo "${FOO: -2}""#)
+        .assert_stdout("45\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("FOO=12345 && echo ${FOO: -4: 2}")
+        .assert_stdout("23\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"FOO=12345 && echo "${FOO: -4: 2}""#)
+        .assert_stdout("23\n")
         .run()
         .await;
 }
