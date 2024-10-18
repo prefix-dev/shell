@@ -1081,7 +1081,19 @@ async fn variable_expansion() {
         .await;
 
     TestBuilder::new()
+        .command(r#"echo "${FOO:-5}""#)
+        .assert_stdout("5\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
         .command(r#"FOO=1 && echo ${FOO:-5}"#)
+        .assert_stdout("1\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"FOO=1 && echo "${FOO:-5}""#)
         .assert_stdout("1\n")
         .run()
         .await;
@@ -1093,13 +1105,31 @@ async fn variable_expansion() {
         .await;
 
     TestBuilder::new()
+        .command(r#"echo "${FOO:-${BAR:-5}}""#)
+        .assert_stdout("5\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
         .command("BAR=2 && echo ${FOO:-${BAR:-5}}")
         .assert_stdout("2\n")
         .run()
         .await;
 
     TestBuilder::new()
+        .command(r#"BAR=2 && echo "${FOO:-${BAR:-5}}""#)
+        .assert_stdout("2\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
         .command("echo ${BAR:-THE VALUE CAN CONTAIN SPACES}")
+        .assert_stdout("THE VALUE CAN CONTAIN SPACES\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"echo "${BAR:-THE VALUE CAN CONTAIN SPACES}""#)
         .assert_stdout("THE VALUE CAN CONTAIN SPACES\n")
         .run()
         .await;
@@ -1112,13 +1142,31 @@ async fn variable_expansion() {
         .await;
 
     TestBuilder::new()
+        .command(r#"echo "${FOO:=5}" && echo "$FOO""#)
+        .assert_stdout("5\n5\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
         .command(r#"FOO=1 && echo ${FOO:=5} && echo $FOO"#)
         .assert_stdout("1\n1\n")
         .run()
         .await;
 
     TestBuilder::new()
+        .command(r#"FOO=1 && echo "${FOO:=5}" && echo "$FOO""#)
+        .assert_stdout("1\n1\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
         .command(r#"echo ${FOO:=${BAR:=5}} && echo $FOO && echo $BAR"#)
+        .assert_stdout("5\n5\n5\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"echo "${FOO:=${BAR:=5}}" && echo "$FOO" && echo "$BAR""#)
         .assert_stdout("5\n5\n5\n")
         .run()
         .await;
@@ -1131,13 +1179,31 @@ async fn variable_expansion() {
         .await;
 
     TestBuilder::new()
+        .command(r#"FOO=12345 && echo "${FOO:1:3}""#)
+        .assert_stdout("234\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
         .command(r#"FOO=12345 && echo ${FOO:1}"#)
         .assert_stdout("2345\n")
         .run()
         .await;
 
     TestBuilder::new()
+        .command(r#"FOO=12345 && echo "${FOO:1}""#)
+        .assert_stdout("2345\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
         .command(r#"FOO=12345 && echo ${FOO:1:-1}"#)
+        .assert_stdout("234\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"FOO=12345 && echo "${FOO:1:-1}""#)
         .assert_stdout("234\n")
         .run()
         .await;
@@ -1150,7 +1216,19 @@ async fn variable_expansion() {
         .await;
 
     TestBuilder::new()
+        .command(r#"FOO=1 && echo "${FOO:+5}""#)
+        .assert_stdout("5\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
         .command(r#"echo ${FOO:+5}"#)
+        .assert_stdout("\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"echo "${FOO:+5}""#)
         .assert_stdout("\n")
         .run()
         .await;
@@ -1162,7 +1240,19 @@ async fn variable_expansion() {
         .await;
 
     TestBuilder::new()
+        .command(r#"FOO=1 && echo "${FOO:+${BAR:+5}}""#)
+        .assert_stdout("\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
         .command(r#"FOO=1 && BAR=2 && echo ${FOO:+${BAR:+5}}"#)
+        .assert_stdout("5\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"FOO=1 && BAR=2 && echo "${FOO:+${BAR:+5}}""#)
         .assert_stdout("5\n")
         .run()
         .await;
@@ -1174,7 +1264,19 @@ async fn variable_expansion() {
         .await;
 
     TestBuilder::new()
+        .command(r#"FOO=12345 && echo "${FOO:2:$((2+2))}""#)
+        .assert_stdout("345\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
         .command("FOO=12345 && echo ${FOO: -2:-1}")
+        .assert_stdout("4\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"FOO=12345 && echo "${FOO: -2:-1}""#)
         .assert_stdout("4\n")
         .run()
         .await;
@@ -1186,7 +1288,19 @@ async fn variable_expansion() {
         .await;
 
     TestBuilder::new()
+        .command(r#"FOO=12345 && echo "${FOO: -2}""#)
+        .assert_stdout("45\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
         .command("FOO=12345 && echo ${FOO: -4: 2}")
+        .assert_stdout("23\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"FOO=12345 && echo "${FOO: -4: 2}""#)
         .assert_stdout("23\n")
         .run()
         .await;
