@@ -178,7 +178,7 @@ fn parse_args(args: Vec<String>) -> Result<XargsFlags> {
               }
               ArgKind::MinusShortFlag(f) => initial_args.push(format!("-{f}")),
               ArgKind::LongFlag(f) => initial_args.push(format!("--{f}")),
-              _ => continue
+              _ => continue,
             }
           }
         }

@@ -108,7 +108,9 @@ fn parse_args(args: Vec<String>) -> Result<RmFlags> {
       ArgKind::Arg(path) => {
         result.paths.push(path.to_string());
       }
-      ArgKind::LongFlag(_) | ArgKind::MinusShortFlag(_) | ArgKind::PlusShortFlag(_) => arg.bail_unsupported()?,
+      ArgKind::LongFlag(_)
+      | ArgKind::MinusShortFlag(_)
+      | ArgKind::PlusShortFlag(_) => arg.bail_unsupported()?,
     }
   }
 

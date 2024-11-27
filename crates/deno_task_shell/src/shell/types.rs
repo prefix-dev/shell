@@ -205,7 +205,10 @@ impl ShellState {
   }
 
   pub fn exit_on_error(&mut self) -> bool {
-    matches!(self.shell_options.get(&ShellOptions::ExitOnError), Some(true))
+    matches!(
+      self.shell_options.get(&ShellOptions::ExitOnError),
+      Some(true)
+    )
   }
 
   pub fn apply_changes(&mut self, changes: &[EnvChange]) {
@@ -323,7 +326,7 @@ pub enum EnvChange {
   /// Set the current working directory to the new Path
   Cd(PathBuf),
   /// `set -ex`
-  SetShellOptions(ShellOptions, bool)
+  SetShellOptions(ShellOptions, bool),
 }
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Debug, PartialOrd)]
@@ -343,7 +346,7 @@ pub const CANCELLATION_EXIT_CODE: i32 = 130;
 #[derive(Debug)]
 pub enum ExecuteResult {
   Exit(i32, Vec<JoinHandle<i32>>),
-  Continue(i32, Vec<EnvChange>, Vec<JoinHandle<i32>>)
+  Continue(i32, Vec<EnvChange>, Vec<JoinHandle<i32>>),
 }
 
 impl ExecuteResult {
