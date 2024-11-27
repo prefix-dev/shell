@@ -47,6 +47,8 @@ pub struct ShellState {
   git_branch: String, // Contents of `$git_root/.git/HEAD`
   last_command_cd: bool, // Was last command a `cd` (thus git_branch is current)?
   last_command_exit_code: i32, // Exit code of the last command
+  // The shell options to be modified using `set` command
+  shell_options: HashMap<ShellOptions, bool>,
 }
 
 impl ShellState {
@@ -70,6 +72,7 @@ impl ShellState {
       git_branch: String::new(),
       last_command_cd: false,
       last_command_exit_code: 0,
+      shell_options: HashMap::new(),
     };
     // ensure the data is normalized
     for (name, value) in env_vars {
@@ -197,6 +200,14 @@ impl ShellState {
     };
   }
 
+  pub fn set_shell_option(&mut self, option: ShellOptions, value: bool) {
+    self.shell_options.insert(option, value);
+  }
+
+  pub fn exit_on_error(&mut self) -> bool {
+    matches!(self.shell_options.get(&ShellOptions::ExitOnError), Some(true))
+  }
+
   pub fn apply_changes(&mut self, changes: &[EnvChange]) {
     self.last_command_cd = false;
     for change in changes {
@@ -235,6 +246,9 @@ impl ShellState {
       }
       EnvChange::UnAliasCommand(alias) => {
         self.alias.remove(alias);
+      }
+      EnvChange::SetShellOptions(option, value) => {
+        self.set_shell_option(*option, *value);
       }
     }
   }
@@ -308,6 +322,16 @@ pub enum EnvChange {
   UnsetVar(String),
   /// Set the current working directory to the new Path
   Cd(PathBuf),
+  /// `set -ex`
+  SetShellOptions(ShellOptions, bool)
+}
+
+#[derive(Clone, Copy, Hash, PartialEq, Eq, Debug, PartialOrd)]
+pub enum ShellOptions {
+  /// If set, the shell will exit on the first error argument `-e`
+  ExitOnError,
+  /// If set, the shell print a trace of simple commands when they are invoked `-x`
+  PrintTrace,
 }
 
 pub type FutureExecuteResult = LocalBoxFuture<'static, ExecuteResult>;
@@ -319,7 +343,7 @@ pub const CANCELLATION_EXIT_CODE: i32 = 130;
 #[derive(Debug)]
 pub enum ExecuteResult {
   Exit(i32, Vec<JoinHandle<i32>>),
-  Continue(i32, Vec<EnvChange>, Vec<JoinHandle<i32>>),
+  Continue(i32, Vec<EnvChange>, Vec<JoinHandle<i32>>)
 }
 
 impl ExecuteResult {

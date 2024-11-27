@@ -23,6 +23,9 @@ use futures::future::LocalBoxFuture;
 
 pub use executable::ExecutableCommand;
 
+pub use args::parse_arg_kinds;
+pub use args::ArgKind;
+
 use super::types::ExecuteResult;
 use super::types::FutureExecuteResult;
 use super::types::ShellPipeReader;

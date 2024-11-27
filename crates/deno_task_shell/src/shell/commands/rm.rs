@@ -95,20 +95,20 @@ fn parse_args(args: Vec<String>) -> Result<RmFlags> {
   for arg in parse_arg_kinds(&args) {
     match arg {
       ArgKind::LongFlag("recursive")
-      | ArgKind::ShortFlag('r')
-      | ArgKind::ShortFlag('R') => {
+      | ArgKind::MinusShortFlag('r')
+      | ArgKind::MinusShortFlag('R') => {
         result.recursive = true;
       }
-      ArgKind::LongFlag("dir") | ArgKind::ShortFlag('d') => {
+      ArgKind::LongFlag("dir") | ArgKind::MinusShortFlag('d') => {
         result.dir = true;
       }
-      ArgKind::LongFlag("force") | ArgKind::ShortFlag('f') => {
+      ArgKind::LongFlag("force") | ArgKind::MinusShortFlag('f') => {
         result.force = true;
       }
       ArgKind::Arg(path) => {
         result.paths.push(path.to_string());
       }
-      ArgKind::LongFlag(_) | ArgKind::ShortFlag(_) => arg.bail_unsupported()?,
+      ArgKind::LongFlag(_) | ArgKind::MinusShortFlag(_) | ArgKind::PlusShortFlag(_) => arg.bail_unsupported()?,
     }
   }
 

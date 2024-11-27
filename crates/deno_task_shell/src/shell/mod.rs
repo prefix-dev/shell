@@ -16,6 +16,10 @@ pub use types::FutureExecuteResult;
 pub use types::ShellPipeReader;
 pub use types::ShellPipeWriter;
 pub use types::ShellState;
+pub use types::ShellOptions;
+
+pub use commands::parse_arg_kinds;
+pub use commands::ArgKind;
 
 pub mod fs_util;
 

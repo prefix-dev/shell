@@ -130,7 +130,7 @@ fn parse_args(args: Vec<String>) -> Result<HeadFlags> {
         // TODO: support multiple files
         bail!("only one file is supported for now");
       }
-      ArgKind::ShortFlag('n') => match iterator.next() {
+      ArgKind::MinusShortFlag('n') => match iterator.next() {
         Some(ArgKind::Arg(arg)) => {
           lines = Some(arg.parse::<u64>().into_diagnostic()?);
         }

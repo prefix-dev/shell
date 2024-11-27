@@ -176,8 +176,9 @@ fn parse_args(args: Vec<String>) -> Result<XargsFlags> {
               ArgKind::Arg(arg) => {
                 initial_args.push(arg.to_string());
               }
-              ArgKind::ShortFlag(f) => initial_args.push(format!("-{f}")),
+              ArgKind::MinusShortFlag(f) => initial_args.push(format!("-{f}")),
               ArgKind::LongFlag(f) => initial_args.push(format!("--{f}")),
+              _ => continue
             }
           }
         }
@@ -185,7 +186,7 @@ fn parse_args(args: Vec<String>) -> Result<XargsFlags> {
       ArgKind::LongFlag("null") => {
         is_null_delimited = true;
       }
-      ArgKind::ShortFlag('d') => match iterator.next() {
+      ArgKind::MinusShortFlag('d') => match iterator.next() {
         Some(ArgKind::Arg(arg)) => {
           delimiter = Some(parse_delimiter(arg)?);
         }

@@ -5,7 +5,8 @@ use miette::Result;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ArgKind<'a> {
-  ShortFlag(char),
+  PlusShortFlag(char),
+  MinusShortFlag(char),
   LongFlag(&'a str),
   Arg(&'a str),
 }
@@ -19,8 +20,11 @@ impl<'a> ArgKind<'a> {
       ArgKind::LongFlag(name) => {
         bail!("unsupported flag: --{}", name)
       }
-      ArgKind::ShortFlag(name) => {
+      ArgKind::MinusShortFlag(name) => {
         bail!("unsupported flag: -{}", name)
+      }
+      ArgKind::PlusShortFlag(name) => {
+        bail!("unsupported flag: +{}", name)
       }
     }
   }
@@ -43,7 +47,15 @@ pub fn parse_arg_kinds(flags: &[String]) -> Vec<ArgKind> {
         result.push(ArgKind::Arg(arg));
       } else {
         for c in flags.chars() {
-          result.push(ArgKind::ShortFlag(c));
+          result.push(ArgKind::MinusShortFlag(c));
+        }
+      }
+    } else if let Some(flags) = arg.strip_prefix('+') {
+      if flags.parse::<f64>().is_ok() {
+        result.push(ArgKind::Arg(arg));
+      } else {
+        for c in flags.chars() {
+          result.push(ArgKind::PlusShortFlag(c));
         }
       }
     } else {
@@ -76,9 +88,9 @@ mod test {
     assert_eq!(
       args,
       vec![
-        ArgKind::ShortFlag('f'),
-        ArgKind::ShortFlag('a'),
-        ArgKind::ShortFlag('b'),
+        ArgKind::MinusShortFlag('f'),
+        ArgKind::MinusShortFlag('a'),
+        ArgKind::MinusShortFlag('b'),
         ArgKind::LongFlag("force"),
         ArgKind::Arg("testing"),
         ArgKind::Arg("other"),

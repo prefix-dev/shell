@@ -150,8 +150,8 @@ fn parse_cp_args(cwd: &Path, args: Vec<String>) -> Result<CpFlags> {
         paths.push(arg);
       }
       ArgKind::LongFlag("recursive")
-      | ArgKind::ShortFlag('r')
-      | ArgKind::ShortFlag('R') => {
+      | ArgKind::MinusShortFlag('r')
+      | ArgKind::MinusShortFlag('R') => {
         recursive = true;
       }
       _ => arg.bail_unsupported()?,

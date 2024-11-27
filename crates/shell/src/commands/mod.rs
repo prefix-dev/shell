@@ -11,11 +11,13 @@ pub mod date;
 pub mod touch;
 pub mod uname;
 pub mod which;
+pub mod set;
 
 pub use date::DateCommand;
 pub use touch::TouchCommand;
 pub use uname::UnameCommand;
 pub use which::WhichCommand;
+pub use set::SetCommand;
 
 pub struct LsCommand;
 
@@ -56,6 +58,10 @@ pub fn get_commands() -> HashMap<String, Rc<dyn ShellCommand>> {
             "date".to_string(),
             Rc::new(DateCommand) as Rc<dyn ShellCommand>,
         ),
+        (
+            "set".to_string(),
+            Rc::new(SetCommand) as Rc<dyn ShellCommand>
+        )
     ])
 }
 

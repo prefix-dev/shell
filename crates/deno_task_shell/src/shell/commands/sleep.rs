@@ -86,7 +86,7 @@ fn parse_args(args: Vec<String>) -> Result<u64> {
           bail!("error parsing argument '{}' to number: {}", arg, err);
         }
       },
-      ArgKind::LongFlag(_) | ArgKind::ShortFlag(_) => arg.bail_unsupported()?,
+      ArgKind::LongFlag(_) | ArgKind::MinusShortFlag(_) | ArgKind::PlusShortFlag(_) => arg.bail_unsupported()?,
     }
   }
   if !had_value {

@@ -193,6 +193,9 @@ pub fn execute_sequential_list(
             async_handles.extend(handles);
             // use the final sequential item's exit code
             final_exit_code = exit_code;
+            if state.exit_on_error() && exit_code != 0 {
+              break;
+            }
           }
         }
       }
