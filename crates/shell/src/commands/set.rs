@@ -35,6 +35,12 @@ fn execute_set(args: Vec<String>) -> Result<(i32, Vec<EnvChange>)> {
             ArgKind::PlusShortFlag('e') => {
                 env_changes.push(EnvChange::SetShellOptions(ShellOptions::ExitOnError, false));
             }
+            ArgKind::MinusShortFlag('x') => {
+                env_changes.push(EnvChange::SetShellOptions(ShellOptions::PrintTrace, true));
+            }
+            ArgKind::PlusShortFlag('x') => {
+                env_changes.push(EnvChange::SetShellOptions(ShellOptions::PrintTrace, false));
+            }
             _ => bail!(format!("Unsupported argument: {:?}", arg)),
         }
     }
@@ -59,5 +65,19 @@ async fn test_exit_on_error() {
         )
     );
 
-    assert!(execute_set(vec!["-x".to_string()]).is_err());
+    assert_eq!(
+        execute_set(vec!["-x".to_string()]).unwrap(),
+        (
+            0,
+            vec![EnvChange::SetShellOptions(ShellOptions::PrintTrace, true)]
+        )
+    );
+
+    assert_eq!(
+        execute_set(vec!["+x".to_string()]).unwrap(),
+        (
+            0,
+            vec![EnvChange::SetShellOptions(ShellOptions::PrintTrace, false)]
+        )
+    );
 }

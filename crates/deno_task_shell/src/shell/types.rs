@@ -215,6 +215,13 @@ impl ShellState {
     )
   }
 
+  pub fn print_trace(&self) -> bool {
+    matches!(
+      self.shell_options.get(&ShellOptions::PrintTrace),
+      Some(true)
+    )
+  }
+
   pub fn apply_changes(&mut self, changes: &[EnvChange]) {
     self.last_command_cd = false;
     for change in changes {

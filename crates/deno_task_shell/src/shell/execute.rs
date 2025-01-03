@@ -1055,12 +1055,18 @@ async fn execute_simple_command(
 ) -> ExecuteResult {
   let args =
     evaluate_args(command.args, state, stdin.clone(), stderr.clone()).await;
+
   let (args, mut changes) = match args {
     Ok(args) => (args.value, args.changes),
     Err(err) => {
       return err.into_exit_code(&mut stderr);
     }
   };
+
+  if state.print_trace() {
+    let _ = stderr.write_line(&format!("+ {:}", args.join(" ")));
+  }
+
   let mut state = state.clone();
   for env_var in command.env_vars {
     let word_result =
