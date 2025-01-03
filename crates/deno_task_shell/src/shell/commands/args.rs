@@ -11,7 +11,7 @@ pub enum ArgKind<'a> {
   Arg(&'a str),
 }
 
-impl<'a> ArgKind<'a> {
+impl ArgKind<'_> {
   pub fn bail_unsupported(&self) -> Result<()> {
     match self {
       ArgKind::Arg(arg) => {

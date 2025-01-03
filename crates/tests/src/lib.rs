@@ -1306,6 +1306,66 @@ async fn variable_expansion() {
         .await;
 }
 
+#[tokio::test]
+async fn test_set() {
+    TestBuilder::new()
+        .command(
+            r#"
+        set -e
+        FOO=1 && echo $FOO
+        cat no_existent.txt
+        echo "This should not be printed"
+        "#,
+        )
+        .assert_exit_code(1)
+        .assert_stdout("1\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(
+            r#"
+        set +e
+        FOO=1 && echo $FOO
+        cat no_existent.txt
+        echo "This should be printed"
+        "#,
+        )
+        .assert_exit_code(0)
+        .assert_stdout("1\nThis should be printed\n")
+        .run()
+        .await;
+
+    TestBuilder::new() // set -e should be set by default
+        .command(
+            r#"
+        FOO=1 && echo $FOO
+        cat no_existent.txt
+        echo "This should not be printed"
+        "#,
+        )
+        .assert_exit_code(1)
+        .assert_stdout("1\n")
+        .run()
+        .await;
+
+    TestBuilder::new() // set -e behavior in if statements
+        .command(
+            r#"
+        set -e
+        if [[ $(cat nonexistent.txt) ]]; then
+            echo "This should not be printed"
+        else
+            echo "This should be printed"
+        fi
+        "#,
+        )
+        .assert_exit_code(1)
+        .assert_stderr("This should be printed\n")
+        .run()
+        .await;
+}
+
 #[cfg(test)]
 fn no_such_file_error_text() -> &'static str {
     if cfg!(windows) {

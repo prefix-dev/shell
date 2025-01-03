@@ -40,3 +40,22 @@ fn execute_set(args: Vec<String>) -> Result<(i32, Vec<EnvChange>)> {
     }
     Ok((0, env_changes))
 }
+
+#[tokio::test]
+async fn test_exit_on_error() {
+    assert_eq!(
+        execute_set(vec!["-e".to_string()]).unwrap(),
+        (
+            0,
+            vec![EnvChange::SetShellOptions(ShellOptions::ExitOnError, true)]
+        )
+    );
+
+    assert_eq!(
+        execute_set(vec!["+e".to_string()]).unwrap(),
+        (
+            0,
+            vec![EnvChange::SetShellOptions(ShellOptions::ExitOnError, false)]
+        )
+    );
+}

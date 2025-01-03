@@ -72,7 +72,11 @@ impl ShellState {
       git_branch: String::new(),
       last_command_cd: false,
       last_command_exit_code: 0,
-      shell_options: HashMap::new(),
+      shell_options: {
+        let mut map = HashMap::new();
+        map.insert(ShellOptions::ExitOnError, true);
+        map
+      },
     };
     // ensure the data is normalized
     for (name, value) in env_vars {
