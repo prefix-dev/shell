@@ -1308,6 +1308,8 @@ async fn variable_expansion() {
 
 #[tokio::test]
 async fn test_set() {
+    let no_such_file_error_text = no_such_file_error_text();
+
     TestBuilder::new()
         .command(
             r#"
@@ -1359,7 +1361,7 @@ async fn test_set() {
         )
         .assert_exit_code(0)
         .assert_stdout("hi\nThis should be printed\nThis should also be printed\n")
-        .assert_stderr("cat: nonexistent.txt: No such file or directory (os error 2)\n")
+        .assert_stderr(&format!("cat: nonexistent.txt: {no_such_file_error_text}\n"))
         .run()
         .await;
 
@@ -1373,7 +1375,7 @@ async fn test_set() {
         )
         .assert_exit_code(0)
         .assert_stdout("hi\nThis should be printed\nThis should also be printed\n")
-        .assert_stderr("cat: nonexistent.txt: No such file or directory (os error 2)\n")
+        .assert_stderr(&format!("cat: nonexistent.txt: {no_such_file_error_text}\n"))
         .run()
         .await;
 
@@ -1390,7 +1392,7 @@ async fn test_set() {
         )
         .assert_exit_code(1)
         .assert_stdout("This should be printed\n")
-        .assert_stderr("cat: no_existent.txt: No such file or directory (os error 2)\ncat: no_existent.txt: No such file or directory (os error 2)\n")
+        .assert_stderr(&format!("cat: no_existent.txt: {no_such_file_error_text}\ncat: no_existent.txt: {no_such_file_error_text}\n"))
         .run()
         .await;
 }
