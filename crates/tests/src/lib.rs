@@ -1361,7 +1361,9 @@ async fn test_set() {
         )
         .assert_exit_code(0)
         .assert_stdout("hi\nThis should be printed\nThis should also be printed\n")
-        .assert_stderr(&format!("cat: nonexistent.txt: {no_such_file_error_text}\n"))
+        .assert_stderr(&format!(
+            "cat: nonexistent.txt: {no_such_file_error_text}\n"
+        ))
         .run()
         .await;
 
@@ -1375,7 +1377,9 @@ async fn test_set() {
         )
         .assert_exit_code(0)
         .assert_stdout("hi\nThis should be printed\nThis should also be printed\n")
-        .assert_stderr(&format!("cat: nonexistent.txt: {no_such_file_error_text}\n"))
+        .assert_stderr(&format!(
+            "cat: nonexistent.txt: {no_such_file_error_text}\n"
+        ))
         .run()
         .await;
 
