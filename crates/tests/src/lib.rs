@@ -223,7 +223,7 @@ async fn command_substitution() {
         .run()
         .await;
     TestBuilder::new()
-        .command("$(sleep 0.1 && echo 1 && exit 5 &) ; echo 2")
+        .command("set +e\n$(sleep 0.1 && echo 1 && exit 5 &) ; echo 2")
         .assert_stdout("2\n")
         .assert_stderr("1: command not found\n")
         .run()
