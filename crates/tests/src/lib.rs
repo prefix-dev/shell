@@ -1349,19 +1349,48 @@ async fn test_set() {
         .run()
         .await;
 
-    TestBuilder::new() // set -e behavior in if statements
+    TestBuilder::new() // set -e behavior in pipelines
         .command(
             r#"
         set -e
-        if [[ $(cat nonexistent.txt) ]]; then
-            echo "This should not be printed"
-        else
-            echo "This should be printed"
-        fi
+        echo "hi" && cat nonexistent.txt || echo "This should be printed"
+        echo "This should also be printed"
+        "#,
+        )
+        .assert_exit_code(0)
+        .assert_stdout("hi\nThis should be printed\nThis should also be printed\n")
+        .assert_stderr("cat: nonexistent.txt: No such file or directory (os error 2)\n")
+        .run()
+        .await;
+    
+    TestBuilder::new() // set -e behavior with subshells
+        .command(
+            r#"
+        set -e
+        (echo "hi" && cat nonexistent.txt) || echo "This should be printed"
+        echo "This should also be printed"
+        "#,
+        )
+        .assert_exit_code(0)
+        .assert_stdout("hi\nThis should be printed\nThis should also be printed\n")
+        .assert_stderr("cat: nonexistent.txt: No such file or directory (os error 2)\n")
+        .run()
+        .await;
+
+    TestBuilder::new() // updating shell's state in a command
+        .command(
+            r#"
+        set +e
+        cat no_existent.txt
+        echo "This should be printed"
+        set -e
+        cat no_existent.txt
+        echo "This should not be printed"
         "#,
         )
         .assert_exit_code(1)
-        .assert_stderr("This should be printed\n")
+        .assert_stdout("This should be printed\n")
+        .assert_stderr("cat: no_existent.txt: No such file or directory (os error 2)\ncat: no_existent.txt: No such file or directory (os error 2)\n")
         .run()
         .await;
 }
