@@ -1362,7 +1362,7 @@ async fn test_set() {
         .assert_stderr("cat: nonexistent.txt: No such file or directory (os error 2)\n")
         .run()
         .await;
-    
+
     TestBuilder::new() // set -e behavior with subshells
         .command(
             r#"
