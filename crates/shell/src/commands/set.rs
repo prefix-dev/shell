@@ -58,4 +58,6 @@ async fn test_exit_on_error() {
             vec![EnvChange::SetShellOptions(ShellOptions::ExitOnError, false)]
         )
     );
+
+    assert!(execute_set(vec!["-x".to_string()]).is_err());
 }
