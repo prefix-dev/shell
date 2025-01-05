@@ -1399,6 +1399,65 @@ async fn test_set() {
         .assert_stderr(&format!("cat: no_existent.txt: {no_such_file_error_text}\ncat: no_existent.txt: {no_such_file_error_text}\n"))
         .run()
         .await;
+
+    // Tests for set -x
+    TestBuilder::new()
+        .command(
+            r#"
+        set -x
+        echo "hi"
+        "#,
+        )
+        .assert_stdout("+ echo hi\nhi\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(
+            r#"
+        set -x
+        echo "hi" && echo "This should be printed" || echo "This should not be printed"
+        "#,
+        )
+        .assert_stdout("+ echo hi\nhi\n+ echo This should be printed\nThis should be printed\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(
+            r#"
+        set -x
+        FOO=1
+        echo $FOO
+        "#,
+        )
+        .assert_stdout("+ FOO=1\n+ echo 1\n1\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(
+            r#"
+        set -x
+        FOO=1
+        echo $FOO
+        set +x
+        echo "This should be printed"
+        "#,
+        )
+        .assert_stdout("+ FOO=1\n+ echo 1\n1\n+ set +x\nThis should be printed\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(
+            r#"set -x
+            echo $((10 + 20))
+        "#,
+        )
+        .assert_stdout("+ echo 30\n30\n")
+        .run()
+        .await;
 }
 
 #[cfg(test)]

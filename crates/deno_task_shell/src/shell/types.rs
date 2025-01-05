@@ -1240,6 +1240,12 @@ impl PartialOrd for WordResult {
 
 impl Eq for WordResult {}
 
+impl Display for WordResult {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "{}", self.value)
+  }
+}
+
 impl From<String> for WordResult {
   fn from(value: String) -> Self {
     WordResult::new(value, Vec::new())

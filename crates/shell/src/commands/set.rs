@@ -80,4 +80,6 @@ async fn test_exit_on_error() {
             vec![EnvChange::SetShellOptions(ShellOptions::PrintTrace, false)]
         )
     );
+
+    assert!(execute_set(vec!["-t".to_string()]).is_err());
 }
