@@ -54,10 +54,10 @@ fn parse_args(args: Vec<String>) -> Result<PwdFlags> {
   let mut logical = false;
   for arg in parse_arg_kinds(&args) {
     match arg {
-      ArgKind::MinusShortFlag('L') => {
+      ArgKind::ShortFlag('L') => {
         logical = true;
       }
-      ArgKind::MinusShortFlag('P') => {
+      ArgKind::ShortFlag('P') => {
         // ignore, this is the default
       }
       ArgKind::Arg(_) => {

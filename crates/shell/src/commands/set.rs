@@ -1,4 +1,4 @@
-// Copyright 2018-2024 the Deno authors. MIT license.
+// Copyright 2018-2024 the Shell authors. MIT license.
 
 use futures::future::LocalBoxFuture;
 use miette::bail;
@@ -29,16 +29,16 @@ fn execute_set(args: Vec<String>) -> Result<(i32, Vec<EnvChange>)> {
     let mut env_changes = Vec::new();
     for arg in args {
         match arg {
-            ArgKind::MinusShortFlag('e') => {
+            ArgKind::ShortFlag('e') => {
                 env_changes.push(EnvChange::SetShellOptions(ShellOptions::ExitOnError, true));
             }
-            ArgKind::PlusShortFlag('e') => {
+            ArgKind::PlusFlag('e') => {
                 env_changes.push(EnvChange::SetShellOptions(ShellOptions::ExitOnError, false));
             }
-            ArgKind::MinusShortFlag('x') => {
+            ArgKind::ShortFlag('x') => {
                 env_changes.push(EnvChange::SetShellOptions(ShellOptions::PrintTrace, true));
             }
-            ArgKind::PlusShortFlag('x') => {
+            ArgKind::PlusFlag('x') => {
                 env_changes.push(EnvChange::SetShellOptions(ShellOptions::PrintTrace, false));
             }
             _ => bail!(format!("Unsupported argument: {:?}", arg)),

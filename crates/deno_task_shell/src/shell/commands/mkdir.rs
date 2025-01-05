@@ -75,15 +75,15 @@ fn parse_args(args: Vec<String>) -> Result<MkdirFlags> {
 
   for arg in parse_arg_kinds(&args) {
     match arg {
-      ArgKind::LongFlag("parents") | ArgKind::MinusShortFlag('p') => {
+      ArgKind::LongFlag("parents") | ArgKind::ShortFlag('p') => {
         result.parents = true;
       }
       ArgKind::Arg(path) => {
         result.paths.push(path.to_string());
       }
       ArgKind::LongFlag(_)
-      | ArgKind::MinusShortFlag(_)
-      | ArgKind::PlusShortFlag(_) => arg.bail_unsupported()?,
+      | ArgKind::ShortFlag(_)
+      | ArgKind::PlusFlag(_) => arg.bail_unsupported()?,
     }
   }
 

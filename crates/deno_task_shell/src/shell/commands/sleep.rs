@@ -87,8 +87,8 @@ fn parse_args(args: Vec<String>) -> Result<u64> {
         }
       },
       ArgKind::LongFlag(_)
-      | ArgKind::MinusShortFlag(_)
-      | ArgKind::PlusShortFlag(_) => arg.bail_unsupported()?,
+      | ArgKind::ShortFlag(_)
+      | ArgKind::PlusFlag(_) => arg.bail_unsupported()?,
     }
   }
   if !had_value {
