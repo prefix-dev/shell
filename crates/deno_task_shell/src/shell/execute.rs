@@ -1063,10 +1063,6 @@ async fn execute_simple_command(
     }
   };
 
-  if state.print_trace() {
-    let _ = stderr.write_line(&format!("+ {:}", args.join(" ")));
-  }
-
   let mut state = state.clone();
   for env_var in command.env_vars {
     let word_result =
@@ -1080,7 +1076,16 @@ async fn execute_simple_command(
     };
     state.apply_env_var(&env_var.name, &word_result.value);
     changes.extend(word_result.changes);
+
+    if state.print_trace() {
+      let _ = stderr.write_line(&format!("+ {:}={:}", env_var.name, word_result.value));
+    }
   }
+
+  if state.print_trace() {
+    let _ = stderr.write_line(&format!("+ {:}", args.join(" ")));
+  }
+
   let result = execute_command_args(args, state, stdin, stdout, stderr).await;
   match result {
     ExecuteResult::Exit(code, handles) => ExecuteResult::Exit(code, handles),
