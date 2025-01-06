@@ -15,14 +15,14 @@ shell = ["futures", "glob", "os_pipe", "path-dedot", "tokio", "tokio-util"]
 serialization = ["serde"]
 
 [dependencies]
-futures = { version = "0.3.30", optional = true }
+futures = { version = "0.3.31", optional = true }
 glob = { version = "0.3.1", optional = true }
 path-dedot = { version = "3.1.1", optional = true }
 tokio = { version = "1", features = ["fs", "io-std", "io-util", "macros", "process", "rt-multi-thread", "sync", "time"], optional = true }
 tokio-util = { version = "0.7.12", optional = true }
 os_pipe = { version = "1.2.1", optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
-thiserror = "1.0.63"
+thiserror = "2.0.3"
 pest = { version="2.7.13", features = ["miette-error"] }
 pest_derive = "2.7.12"
 dirs = "5.0.1"

@@ -5,12 +5,13 @@ use miette::Result;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ArgKind<'a> {
+  PlusFlag(char),
   ShortFlag(char),
   LongFlag(&'a str),
   Arg(&'a str),
 }
 
-impl<'a> ArgKind<'a> {
+impl ArgKind<'_> {
   pub fn bail_unsupported(&self) -> Result<()> {
     match self {
       ArgKind::Arg(arg) => {
@@ -21,6 +22,9 @@ impl<'a> ArgKind<'a> {
       }
       ArgKind::ShortFlag(name) => {
         bail!("unsupported flag: -{}", name)
+      }
+      ArgKind::PlusFlag(name) => {
+        bail!("unsupported flag: +{}", name)
       }
     }
   }
@@ -44,6 +48,14 @@ pub fn parse_arg_kinds(flags: &[String]) -> Vec<ArgKind> {
       } else {
         for c in flags.chars() {
           result.push(ArgKind::ShortFlag(c));
+        }
+      }
+    } else if let Some(flags) = arg.strip_prefix('+') {
+      if flags.parse::<f64>().is_ok() {
+        result.push(ArgKind::Arg(arg));
+      } else {
+        for c in flags.chars() {
+          result.push(ArgKind::PlusFlag(c));
         }
       }
     } else {

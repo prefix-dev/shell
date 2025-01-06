@@ -193,6 +193,9 @@ pub fn execute_sequential_list(
             async_handles.extend(handles);
             // use the final sequential item's exit code
             final_exit_code = exit_code;
+            if state.exit_on_error() && exit_code != 0 {
+              break;
+            }
           }
         }
       }
@@ -243,27 +246,33 @@ fn execute_sequence(
   sequence: Sequence,
   mut state: ShellState,
   stdin: ShellPipeReader,
-  stdout: ShellPipeWriter,
+  mut stdout: ShellPipeWriter,
   mut stderr: ShellPipeWriter,
 ) -> FutureExecuteResult {
   // requires boxed async because of recursive async
   async move {
     match sequence {
-      Sequence::ShellVar(var) => ExecuteResult::Continue(
-        0,
-        vec![EnvChange::SetShellVar(
-          var.name,
+      Sequence::ShellVar(var) => {
+        let value =
           match evaluate_word(var.value, &mut state, stdin, stderr.clone())
             .await
           {
-            Ok(value) => value.into(),
+            Ok(value) => value,
             Err(err) => {
               return err.into_exit_code(&mut stderr);
             }
-          },
-        )],
-        Vec::new(),
-      ),
+          };
+
+        if state.print_trace() {
+          let _ = stdout.write_line(&format!("+ {}={}", var.name, value));
+        }
+
+        ExecuteResult::Continue(
+          0,
+          vec![EnvChange::SetShellVar(var.name, value.into())],
+          Vec::new(),
+        )
+      }
       Sequence::BooleanList(list) => {
         let mut changes = vec![];
         let first_result = execute_sequence(
@@ -1047,17 +1056,19 @@ async fn execute_simple_command(
   command: SimpleCommand,
   state: &mut ShellState,
   stdin: ShellPipeReader,
-  stdout: ShellPipeWriter,
+  mut stdout: ShellPipeWriter,
   mut stderr: ShellPipeWriter,
 ) -> ExecuteResult {
   let args =
     evaluate_args(command.args, state, stdin.clone(), stderr.clone()).await;
+
   let (args, mut changes) = match args {
     Ok(args) => (args.value, args.changes),
     Err(err) => {
       return err.into_exit_code(&mut stderr);
     }
   };
+
   let mut state = state.clone();
   for env_var in command.env_vars {
     let word_result =
@@ -1071,7 +1082,17 @@ async fn execute_simple_command(
     };
     state.apply_env_var(&env_var.name, &word_result.value);
     changes.extend(word_result.changes);
+
+    if state.print_trace() {
+      let _ = stdout
+        .write_line(&format!("+ {:}={:}", env_var.name, word_result.value));
+    }
   }
+
+  if state.print_trace() {
+    let _ = stdout.write_line(&format!("+ {:}", args.join(" ")));
+  }
+
   let result = execute_command_args(args, state, stdin, stdout, stderr).await;
   match result {
     ExecuteResult::Exit(code, handles) => ExecuteResult::Exit(code, handles),

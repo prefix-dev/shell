@@ -153,10 +153,10 @@ async fn resolve_command<'a>(
     }
   }
 
-  return Ok(ResolvedCommand {
+  Ok(ResolvedCommand {
     command_name: CommandName::Resolved(command_path),
     args: Cow::Borrowed(original_args),
-  });
+  })
 }
 
 async fn parse_shebang_args(

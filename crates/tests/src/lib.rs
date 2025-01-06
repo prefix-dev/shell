@@ -223,7 +223,7 @@ async fn command_substitution() {
         .run()
         .await;
     TestBuilder::new()
-        .command("$(sleep 0.1 && echo 1 && exit 5 &) ; echo 2")
+        .command("set +e\n$(sleep 0.1 && echo 1 && exit 5 &) ; echo 2")
         .assert_stdout("2\n")
         .assert_stderr("1: command not found\n")
         .run()
@@ -1302,6 +1302,160 @@ async fn variable_expansion() {
     TestBuilder::new()
         .command(r#"FOO=12345 && echo "${FOO: -4: 2}""#)
         .assert_stdout("23\n")
+        .run()
+        .await;
+}
+
+#[tokio::test]
+async fn test_set() {
+    let no_such_file_error_text = no_such_file_error_text();
+
+    TestBuilder::new()
+        .command(
+            r#"
+        set -e
+        FOO=1 && echo $FOO
+        cat no_existent.txt
+        echo "This should not be printed"
+        "#,
+        )
+        .assert_exit_code(1)
+        .assert_stdout("1\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(
+            r#"
+        set +e
+        FOO=1 && echo $FOO
+        cat no_existent.txt
+        echo "This should be printed"
+        "#,
+        )
+        .assert_exit_code(0)
+        .assert_stdout("1\nThis should be printed\n")
+        .run()
+        .await;
+
+    TestBuilder::new() // set -e should be set by default
+        .command(
+            r#"
+        FOO=1 && echo $FOO
+        cat no_existent.txt
+        echo "This should not be printed"
+        "#,
+        )
+        .assert_exit_code(1)
+        .assert_stdout("1\n")
+        .run()
+        .await;
+
+    TestBuilder::new() // set -e behavior in pipelines
+        .command(
+            r#"
+        set -e
+        echo "hi" && cat nonexistent.txt || echo "This should be printed"
+        echo "This should also be printed"
+        "#,
+        )
+        .assert_exit_code(0)
+        .assert_stdout("hi\nThis should be printed\nThis should also be printed\n")
+        .assert_stderr(&format!(
+            "cat: nonexistent.txt: {no_such_file_error_text}\n"
+        ))
+        .run()
+        .await;
+
+    TestBuilder::new() // set -e behavior with subshells
+        .command(
+            r#"
+        set -e
+        (echo "hi" && cat nonexistent.txt) || echo "This should be printed"
+        echo "This should also be printed"
+        "#,
+        )
+        .assert_exit_code(0)
+        .assert_stdout("hi\nThis should be printed\nThis should also be printed\n")
+        .assert_stderr(&format!(
+            "cat: nonexistent.txt: {no_such_file_error_text}\n"
+        ))
+        .run()
+        .await;
+
+    TestBuilder::new() // updating shell's state in a command
+        .command(
+            r#"
+        set +e
+        cat no_existent.txt
+        echo "This should be printed"
+        set -e
+        cat no_existent.txt
+        echo "This should not be printed"
+        "#,
+        )
+        .assert_exit_code(1)
+        .assert_stdout("This should be printed\n")
+        .assert_stderr(&format!("cat: no_existent.txt: {no_such_file_error_text}\ncat: no_existent.txt: {no_such_file_error_text}\n"))
+        .run()
+        .await;
+
+    // Tests for set -x
+    TestBuilder::new()
+        .command(
+            r#"
+        set -x
+        echo "hi"
+        "#,
+        )
+        .assert_stdout("+ echo hi\nhi\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(
+            r#"
+        set -x
+        echo "hi" && echo "This should be printed" || echo "This should not be printed"
+        "#,
+        )
+        .assert_stdout("+ echo hi\nhi\n+ echo This should be printed\nThis should be printed\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(
+            r#"
+        set -x
+        FOO=1
+        echo $FOO
+        "#,
+        )
+        .assert_stdout("+ FOO=1\n+ echo 1\n1\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(
+            r#"
+        set -x
+        FOO=1
+        echo $FOO
+        set +x
+        echo "This should be printed"
+        "#,
+        )
+        .assert_stdout("+ FOO=1\n+ echo 1\n1\n+ set +x\nThis should be printed\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(
+            r#"set -x
+            echo $((10 + 20))
+        "#,
+        )
+        .assert_stdout("+ echo 30\n30\n")
         .run()
         .await;
 }

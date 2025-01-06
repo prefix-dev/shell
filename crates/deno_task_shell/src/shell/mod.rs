@@ -13,9 +13,13 @@ pub use types::pipe;
 pub use types::EnvChange;
 pub use types::ExecuteResult;
 pub use types::FutureExecuteResult;
+pub use types::ShellOptions;
 pub use types::ShellPipeReader;
 pub use types::ShellPipeWriter;
 pub use types::ShellState;
+
+pub use commands::parse_arg_kinds;
+pub use commands::ArgKind;
 
 pub mod fs_util;
 
