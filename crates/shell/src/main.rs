@@ -115,7 +115,7 @@ async fn interactive(state: Option<ShellState>, norc: bool) -> miette::Result<()
             };
 
             let prompt = format!("{}{git_branch}$ ", display_cwd);
-            let color_prompt = format!("\x1b[34m{}\x1b[31m{git_branch}\x1b[0m$ ", display_cwd);
+            let color_prompt = format!("\x1b[34m{}\x1b[32m{git_branch}\x1b[0m$ ", display_cwd);
             rl.helper_mut().unwrap().colored_prompt = color_prompt;
             rl.readline(&prompt)
         };
