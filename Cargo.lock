@@ -1231,6 +1231,7 @@ dependencies = [
  "miette",
  "parse_datetime",
  "rustyline",
+ "serde_json",
  "tokio",
  "uu_date",
  "uu_ls",
