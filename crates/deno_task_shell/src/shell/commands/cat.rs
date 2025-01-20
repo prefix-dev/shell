@@ -47,6 +47,7 @@ fn execute_cat(mut context: ShellCommandContext) -> Result<ExecuteResult> {
     } else {
       // buffered to prevent reading an entire file
       // in memory
+      let mut new_line = true;
       match File::open(context.state.cwd().join(&path)) {
         Ok(mut file) => loop {
           if context.state.token().is_cancelled() {
@@ -55,17 +56,17 @@ fn execute_cat(mut context: ShellCommandContext) -> Result<ExecuteResult> {
 
           let size = file.read(&mut buf).into_diagnostic()?;
           if size == 0 {
+            if let ShellPipeWriter::Stdout = context.stdout {
+              // check if it's interactive
+              if !new_line && std::io::stdout().is_terminal() {
+                // make sure that we end up on a new line
+                context.stdout.write_all(b"%\n")?;
+              }
+            }
             break;
           } else {
             context.stdout.write_all(&buf[..size])?;
-          }
-
-          if let ShellPipeWriter::Stdout = context.stdout {
-            // check if it's interactive
-            if buf[size - 1] != b'\n' && std::io::stdout().is_terminal() {
-              // make sure that we end up on a new line
-              context.stdout.write_all(b"%\n")?;
-            }
+            new_line = buf[size - 1] == b'\n';
           }
         },
         Err(err) => {
