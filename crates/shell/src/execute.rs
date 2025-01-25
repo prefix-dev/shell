@@ -4,7 +4,11 @@ use deno_task_shell::{
 };
 use miette::{Context, IntoDiagnostic};
 
-pub async fn execute_inner(text: &str, filename: String, state: ShellState) -> miette::Result<ExecuteResult> {
+pub async fn execute_inner(
+    text: &str,
+    filename: String,
+    state: ShellState,
+) -> miette::Result<ExecuteResult> {
     let list = deno_task_shell::parser::parse(text);
 
     let mut stderr = ShellPipeWriter::stderr();

@@ -72,9 +72,13 @@ async fn interactive(state: Option<ShellState>, norc: bool) -> miette::Result<()
     let shellrc_file: PathBuf = [home.as_path(), Path::new(".shellrc")].iter().collect();
     if !norc && Path::new(shellrc_file.as_path()).exists() {
         let line = "source '".to_owned() + shellrc_file.to_str().unwrap() + "'";
-        let prev_exit_code = execute(&line, shellrc_file.as_path().display().to_string(), &mut state)
-            .await
-            .context("Failed to source ~/.shellrc")?;
+        let prev_exit_code = execute(
+            &line,
+            shellrc_file.as_path().display().to_string(),
+            &mut state,
+        )
+        .await
+        .context("Failed to source ~/.shellrc")?;
         state.set_last_command_exit_code(prev_exit_code);
     }
 
