@@ -74,7 +74,7 @@ async fn interactive(state: Option<ShellState>, norc: bool) -> miette::Result<()
         let line = "source '".to_owned() + shellrc_file.to_str().unwrap() + "'";
         let prev_exit_code = execute(
             &line,
-            shellrc_file.as_path().display().to_string(),
+            Some(shellrc_file.as_path().display().to_string()),
             &mut state,
         )
         .await
@@ -130,7 +130,7 @@ async fn interactive(state: Option<ShellState>, norc: bool) -> miette::Result<()
                 rl.add_history_entry(line.as_str()).into_diagnostic()?;
 
                 // Process the input (here we just echo it back)
-                let prev_exit_code = execute(&line, "Interactive".to_string(), &mut state)
+                let prev_exit_code = execute(&line, None, &mut state)
                     .await
                     .context("Failed to execute")?;
                 state.set_last_command_exit_code(prev_exit_code);
@@ -174,7 +174,7 @@ async fn main() -> miette::Result<()> {
             debug_parse(&script_text);
             return Ok(());
         }
-        let exit_code = execute(&script_text, file.display().to_string(), &mut state).await?;
+        let exit_code = execute(&script_text, Some(file.display().to_string()), &mut state).await?;
         if options.interact {
             interactive(Some(state), options.norc).await?;
         }

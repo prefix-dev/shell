@@ -6,7 +6,7 @@ use miette::{Context, IntoDiagnostic};
 
 pub async fn execute_inner(
     text: &str,
-    filename: String,
+    filename: Option<String>,
     state: ShellState,
 ) -> miette::Result<ExecuteResult> {
     let list = deno_task_shell::parser::parse(text);
@@ -16,7 +16,9 @@ pub async fn execute_inner(
     let stdin = ShellPipeReader::stdin();
 
     if let Err(e) = list {
-        stderr.write_all(format!("Filename: {:?}\n", filename).as_bytes())?;
+        if let Some(filename) = &filename {
+            stderr.write_all(format!("Filename: {:?}\n", filename).as_bytes())?;
+        }
         stderr.write_all(format!("Syntax error: {:?}", e).as_bytes())?;
         return Ok(ExecuteResult::Exit(1, vec![]));
     }
@@ -35,7 +37,11 @@ pub async fn execute_inner(
     Ok(result)
 }
 
-pub async fn execute(text: &str, filename: String, state: &mut ShellState) -> miette::Result<i32> {
+pub async fn execute(
+    text: &str,
+    filename: Option<String>,
+    state: &mut ShellState,
+) -> miette::Result<i32> {
     let result = execute_inner(text, filename, state.clone()).await?;
 
     match result {
