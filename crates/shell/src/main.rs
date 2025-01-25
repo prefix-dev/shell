@@ -170,10 +170,11 @@ async fn main() -> miette::Result<()> {
             debug_parse(&script_text);
             return Ok(());
         }
-        execute(&script_text, &mut state).await?;
+        let exit_code = execute(&script_text, &mut state).await?;
         if options.interact {
             interactive(Some(state), options.norc).await?;
         }
+        std::process::exit(exit_code); // Exit with the correct code
     } else {
         interactive(None, options.norc).await?;
     }

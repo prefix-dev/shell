@@ -42,6 +42,6 @@ pub async fn execute(text: &str, state: &mut ShellState) -> miette::Result<i32> 
                 .context("Failed to set CWD")?;
             Ok(exit_code)
         }
-        ExecuteResult::Exit(_, _) => Ok(0),
+        ExecuteResult::Exit(exit_code, _) => Ok(exit_code),
     }
 }
