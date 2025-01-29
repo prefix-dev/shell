@@ -129,7 +129,7 @@ impl ShellCommand for SourceCommand {
             Ok(content) => {
                 let state = context.state.clone();
                 async move {
-                    execute::execute_inner(&content, state)
+                    execute::execute_inner(&content, Some(script_file.display().to_string()), state)
                         .await
                         .unwrap_or_else(|e| {
                             eprintln!("Could not source script: {:?}", script_file);
