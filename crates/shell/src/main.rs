@@ -186,10 +186,13 @@ async fn main() -> miette::Result<()> {
 
     if options.file.is_some() || options.command.is_some() {
         let script_text;
+        let filename: Option<String>;
         if options.file.is_some() {
-            script_text = std::fs::read_to_string(options.file.unwrap()).unwrap();
+            script_text = std::fs::read_to_string(options.file.clone().unwrap()).unwrap();
+            filename = Some(options.file.unwrap().display().to_string());
         } else if options.command.is_some() {
             script_text = options.command.unwrap();
+            filename = None;
         } else {
             panic!();
         }
@@ -198,7 +201,7 @@ async fn main() -> miette::Result<()> {
             debug_parse(&script_text);
             return Ok(());
         }
-        let exit_code = execute(&script_text, Some(file.display().to_string()), &mut state).await?;
+        let exit_code = execute(&script_text, filename, &mut state).await?;
         if options.interact {
             interactive(Some(state), options.norc).await?;
         }
