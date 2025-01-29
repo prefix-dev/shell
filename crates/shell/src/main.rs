@@ -125,10 +125,10 @@ async fn interactive(state: Option<ShellState>, norc: bool) -> miette::Result<()
                     .replace("{git_branch}", git_branch)
             }
 
-            let prompt = replace_placeholders(&ps1, &display_cwd, &git_branch);
+            let prompt = replace_placeholders(ps1, &display_cwd, &git_branch);
             display_cwd = format!("\x1b[34m{display_cwd}\x1b[0m");
             git_branch = format!("\x1b[32m{git_branch}\x1b[0m");
-            let color_prompt = replace_placeholders(&ps1, &display_cwd, &git_branch);
+            let color_prompt = replace_placeholders(ps1, &display_cwd, &git_branch);
             rl.helper_mut().unwrap().colored_prompt = color_prompt;
             rl.readline(&prompt)
         };
