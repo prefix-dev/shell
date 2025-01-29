@@ -35,6 +35,7 @@ use crate::shell::types::FutureExecuteResult;
 use crate::shell::types::ShellPipeReader;
 use crate::shell::types::ShellPipeWriter;
 use crate::shell::types::ShellState;
+use crate::shell::types::TextPart::Text as OtherText;
 
 use crate::parser::Arithmetic;
 use crate::parser::ArithmeticPart;
@@ -1470,7 +1471,11 @@ fn evaluate_word_parts(
             } else if let Some(val) =
               state.get_var(&name).map(|v| v.to_string())
             {
-              Ok(Some(val.into()))
+              let mut t: Text = val.clone().into();
+              if val.ends_with(' ') {
+                t.parts.push(OtherText(" ".to_string()));
+              }
+              Ok(Some(t))
             } else {
               Err(miette::miette!("Undefined variable: {}", name))
             }
