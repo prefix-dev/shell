@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -37,7 +38,9 @@ struct Options {
 }
 
 fn init_state() -> ShellState {
-    let env_vars = std::env::vars().collect();
+    let mut env_vars: HashMap<String, String> = std::env::vars().collect();
+    let default_ps1 = "{display_cwd}{git_branch}$ ";
+    env_vars.insert("PS1".to_string(), default_ps1.to_string());
     let cwd = std::env::current_dir().unwrap();
     ShellState::new(env_vars, &cwd, commands::get_commands())
 }
@@ -112,14 +115,24 @@ async fn interactive(state: Option<ShellState>, norc: bool) -> miette::Result<()
                 git_branch = "(".to_owned() + &git_branch + ")";
             }
 
-            let display_cwd = if let Some(stripped) = cwd.strip_prefix(home_str) {
+            let mut display_cwd = if let Some(stripped) = cwd.strip_prefix(home_str) {
                 format!("~{}", stripped.replace('\\', "/"))
             } else {
                 cwd.to_string()
             };
 
-            let prompt = format!("{}{git_branch}$ ", display_cwd);
-            let color_prompt = format!("\x1b[34m{}\x1b[32m{git_branch}\x1b[0m$ ", display_cwd);
+            // Read the PS1 environment variable
+            let ps1 = state.env_vars().get("PS1").map_or("", |v| v);
+
+            fn replace_placeholders(ps1: &str, display_cwd: &str, git_branch: &str) -> String {
+                ps1.replace("{display_cwd}", display_cwd)
+                    .replace("{git_branch}", git_branch)
+            }
+
+            let prompt = replace_placeholders(ps1, &display_cwd, &git_branch);
+            display_cwd = format!("\x1b[34m{display_cwd}\x1b[0m");
+            git_branch = format!("\x1b[32m{git_branch}\x1b[0m");
+            let color_prompt = replace_placeholders(ps1, &display_cwd, &git_branch);
             rl.helper_mut().unwrap().colored_prompt = color_prompt;
             rl.readline(&prompt)
         };
