@@ -28,6 +28,10 @@ struct Options {
     #[clap(long)]
     norc: bool,
 
+    /// Execute a command
+    #[clap(short)]
+    command: Option<String>,
+
     #[clap(short, long)]
     debug: bool,
 }
@@ -163,8 +167,15 @@ async fn interactive(state: Option<ShellState>, norc: bool) -> miette::Result<()
 async fn main() -> miette::Result<()> {
     let options = Options::parse();
 
-    if let Some(file) = options.file {
-        let script_text = std::fs::read_to_string(&file).unwrap();
+    if options.file.is_some() || options.command.is_some() {
+        let script_text;
+        if options.file.is_some() {
+            script_text = std::fs::read_to_string(options.file.unwrap()).unwrap();
+        } else if options.command.is_some() {
+            script_text = options.command.unwrap();
+        } else {
+            panic!();
+        }
         let mut state = init_state();
         if options.debug {
             debug_parse(&script_text);
