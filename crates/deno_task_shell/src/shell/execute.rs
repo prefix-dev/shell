@@ -1471,10 +1471,8 @@ fn evaluate_word_parts(
             } else if let Some(val) =
               state.get_var(&name).map(|v| v.to_string())
             {
-              let mut t: Text = val.clone().into();
-              if val.ends_with(' ') {
-                t.parts.push(OtherText(" ".to_string()));
-              }
+              let mut t: Text = Text::new([].to_vec());
+              t.parts.push(OtherText(val.clone().to_string()));
               Ok(Some(t))
             } else {
               Err(miette::miette!("Undefined variable: {}", name))
