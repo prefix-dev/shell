@@ -56,6 +56,7 @@ async fn interactive(state: Option<ShellState>, norc: bool) -> miette::Result<()
     })
     .expect("Error setting Ctrl-C handler");
 
+    let h = ShellCompleter::new();
     let mut rl = Editor::with_config(config).into_diagnostic()?;
 
     let helper = helper::ShellPromptHelper::default();
