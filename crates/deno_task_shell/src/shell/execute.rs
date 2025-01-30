@@ -1240,7 +1240,10 @@ impl VariableModifier {
     match self {
       VariableModifier::DefaultValue(default_value) => {
         match state.get_var(name) {
-          Some(v) => Ok((v.clone().into(), None)),
+          Some(v) => {
+            let t: Text = Text::new([OtherText(v.clone().to_string())].to_vec());
+            Ok((t, None))
+          },
           None => {
             let v = evaluate_word(default_value.clone(), state, stdin, stderr)
               .await
