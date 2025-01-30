@@ -58,6 +58,12 @@ async fn commands() {
         .await;
 
     TestBuilder::new()
+        .command(r#"TEST="1  2 " ; echo "${TEST:-}""#)
+        .assert_stdout("1  2 \n")
+        .run()
+        .await;
+
+    TestBuilder::new()
         .command(r#""echo" "1""#)
         .assert_stdout("1\n")
         .run()
