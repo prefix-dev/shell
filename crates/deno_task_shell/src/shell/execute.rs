@@ -35,6 +35,7 @@ use crate::shell::types::FutureExecuteResult;
 use crate::shell::types::ShellPipeReader;
 use crate::shell::types::ShellPipeWriter;
 use crate::shell::types::ShellState;
+use crate::shell::types::TextPart::Text as OtherText;
 
 use crate::parser::Arithmetic;
 use crate::parser::ArithmeticPart;
@@ -1239,7 +1240,11 @@ impl VariableModifier {
     match self {
       VariableModifier::DefaultValue(default_value) => {
         match state.get_var(name) {
-          Some(v) => Ok((v.clone().into(), None)),
+          Some(v) => {
+            let t: Text =
+              Text::new([OtherText(v.clone().to_string())].to_vec());
+            Ok((t, None))
+          }
           None => {
             let v = evaluate_word(default_value.clone(), state, stdin, stderr)
               .await
@@ -1470,7 +1475,9 @@ fn evaluate_word_parts(
             } else if let Some(val) =
               state.get_var(&name).map(|v| v.to_string())
             {
-              Ok(Some(val.into()))
+              let t: Text =
+                Text::new([OtherText(val.clone().to_string())].to_vec());
+              Ok(Some(t))
             } else {
               Err(miette::miette!("Undefined variable: {}", name))
             }
