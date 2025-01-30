@@ -1305,7 +1305,7 @@ impl TextPart {
 
 #[derive(Debug, Clone)]
 pub struct Text {
-  pub parts: Vec<TextPart>,
+  parts: Vec<TextPart>,
 }
 
 impl Text {
