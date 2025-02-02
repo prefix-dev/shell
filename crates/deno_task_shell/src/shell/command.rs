@@ -88,6 +88,7 @@ enum ResolveCommandError {
 enum FailedShebangError {
   #[error(transparent)]
   CommandPath(#[from] ResolveCommandPathError),
+
   #[error("{0}")]
   MietteError(String),
 }
