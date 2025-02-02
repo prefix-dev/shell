@@ -7,6 +7,7 @@ use crate::test_builder::TestBuilder;
 pub struct TestElement {
     pub test: String,
     pub expected_output: String,
+    #[allow(dead_code)]
     pub span: SourceSpan,
 }
 
