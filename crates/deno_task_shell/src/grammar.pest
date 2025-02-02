@@ -321,7 +321,7 @@ pattern = !{
 }
 
 if_clause = !{
-    If ~ conditional_expression ~
+    If ~ conditional_expression ~ 
     linebreak ~ Then ~ linebreak ~ complete_command ~ linebreak ~
     else_part? ~ linebreak ~ Fi
 }
@@ -334,7 +334,7 @@ else_part = !{
 conditional_expression = !{
     ("[[" ~ (unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD) ~ "]]" ~ ";"?) |
     ("[" ~ (unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD) ~ "]" ~ ";"?) | 
-    ("test" ~ (unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD))
+    ("test" ~ (unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD) ~ ";"?)
 }
 
 unary_conditional_expression = !{
