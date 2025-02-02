@@ -10,7 +10,9 @@ futures = "0.3.30"
 tokio = { version = "1.40.0", features = ["full"] }
 dirs = "5.0.1"
 miette = "7.2.0"
+thiserror = "2.0.11"
 
 [dev-dependencies]
 pretty_assertions = "1.0.0"
+similar = "2.7.0"
 tempfile = "3.12.0"
