@@ -626,8 +626,12 @@ pub fn debug_parse(input: &str) {
 }
 
 pub fn parse(input: &str) -> Result<SequentialList> {
+  let named_source = miette::NamedSource::new("foobar.sh", input.to_string());
+
   let mut pairs = ShellParser::parse(Rule::FILE, input).map_err(|e| {
-    miette::Error::new(e.into_miette()).context("Failed to parse input")
+    miette::Error::new(e.into_miette())
+      .with_source_code(named_source)
+      .context("Failed to parse input")
   })?;
 
   parse_file(pairs.next().unwrap())
