@@ -15,7 +15,3 @@ foobar
 > export FOOBAR="foobar"
 > echo "${FOOBAR:-}" "${FOOBAR:-}"
 foobar foobar
-
-> if test -n "${xml_catalog_files_libxml2:-}"; then
->   echo "true"
-> fi
