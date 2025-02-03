@@ -53,6 +53,22 @@ fn extract_word(line: &str, pos: usize) -> (usize, &str) {
     (word_start, &line[word_start..pos])
 }
 
+fn escape_for_shell(s: &str) -> String {
+    let special_chars = [
+        ' ', '\'', '"', '(', ')', '[', ']', '|', '&', ';', '<', '>', '$', '`', '\\', '\t', '\n',
+        '*', '?', '{', '}', '!',
+    ];
+
+    let mut result = String::with_capacity(s.len() * 2);
+    for c in s.chars() {
+        if special_chars.contains(&c) {
+            result.push('\\');
+        }
+        result.push(c);
+    }
+    result
+}
+
 #[derive(Debug)]
 struct FileMatch {
     name: String,
@@ -87,10 +103,11 @@ impl FileMatch {
     }
 
     fn replacement(&self, base: &str) -> String {
+        let escaped = escape_for_shell(&self.name);
         if self.is_dir {
-            format!("{}{}/", base, self.name)
+            format!("{}{}/", base, escaped)
         } else {
-            format!("{}{}", base, self.name)
+            format!("{}{}", base, escaped)
         }
     }
 
