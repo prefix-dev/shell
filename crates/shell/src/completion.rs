@@ -7,6 +7,7 @@ use rustyline::{Context, Helper};
 use std::borrow::Cow::{self, Owned};
 use std::env;
 use std::fs;
+use std::os::unix::fs::PermissionsExt as _;
 use std::path::Path;
 
 pub struct ShellCompleter;
@@ -52,7 +53,9 @@ fn extract_word(line: &str, pos: usize) -> (usize, &str) {
     (word_start, &line[word_start..pos])
 }
 
-fn complete_filenames(_is_start: bool, word: &str, matches: &mut Vec<Pair>) {
+fn complete_filenames(is_start: bool, word: &str, matches: &mut Vec<Pair>) {
+    let only_executable = word.starts_with("./") && is_start;
+
     // Split the word into directory path and partial filename
     let (dir_path, partial_name) = match word.rfind('/') {
         Some(last_slash) => (&word[..=last_slash], &word[last_slash + 1..]),
@@ -69,6 +72,7 @@ fn complete_filenames(_is_start: bool, word: &str, matches: &mut Vec<Pair>) {
         format!("./{}", dir_path)
     };
 
+    let mut matching = Vec::new();
     if let Ok(entries) = fs::read_dir(Path::new(&search_dir)) {
         for entry in entries.flatten() {
             if let Ok(name) = entry.file_name().into_string() {
@@ -76,16 +80,47 @@ fn complete_filenames(_is_start: bool, word: &str, matches: &mut Vec<Pair>) {
                     let full_path = format!("{}{}", dir_path, name);
                     match entry.file_type() {
                         Ok(file_type) if file_type.is_dir() => {
-                            matches.push(Pair {
-                                display: full_path.clone() + "/",
+                            // only display last path component
+                            let display = if let Some(stripped) = full_path.rsplit('/').next() {
+                                stripped.to_owned()
+                            } else {
+                                full_path.clone()
+                            };
+
+                            matching.push(Pair {
+                                display: display + "/",
                                 replacement: full_path + "/",
                             });
                         }
                         Ok(_) => {
-                            matches.push(Pair {
-                                display: full_path.clone(),
-                                replacement: full_path,
-                            });
+                            let is_executable =
+                                entry.metadata().unwrap().permissions().mode() & 0o111 != 0;
+                            if only_executable && !is_executable {
+                                continue;
+                            }
+
+                            // Only display last path component
+                            let mut display = if let Some(stripped) = full_path.rsplit('/').next() {
+                                stripped.to_owned()
+                            } else {
+                                full_path.clone()
+                            };
+
+                            if is_executable {
+                                display.push_str("*");
+                            }
+
+                            if entry.metadata().unwrap().permissions().mode() & 0o111 != 0 {
+                                matching.push(Pair {
+                                    display,
+                                    replacement: full_path,
+                                });
+                            } else {
+                                matching.push(Pair {
+                                    display,
+                                    replacement: full_path,
+                                });
+                            }
                         }
                         Err(_) => {}
                     }
@@ -93,6 +128,9 @@ fn complete_filenames(_is_start: bool, word: &str, matches: &mut Vec<Pair>) {
             }
         }
     }
+    // sort matches
+    matching.sort_by(|a, b| a.display.cmp(&b.display));
+    matches.extend(matching);
 }
 
 fn complete_shell_commands(is_start: bool, word: &str, matches: &mut Vec<Pair>) {
