@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Display;
 use std::fs;
+use std::io::IsTerminal as _;
 use std::io::Read;
 use std::io::Write;
 use std::path::Path;
@@ -49,6 +50,16 @@ pub struct ShellState {
   last_command_exit_code: i32, // Exit code of the last command
   // The shell options to be modified using `set` command
   shell_options: HashMap<ShellOptions, bool>,
+}
+
+pub fn set_terminal_title(title: &str) {
+  // Only set title if we're in an interactive terminal session
+  if std::io::stdout().is_terminal() {
+    // OSC 0 ; title BEL - works in most terminals
+    print!("\x1B]0;{}\x07", title);
+    // Ensure it's displayed immediately
+    let _ = std::io::stdout().flush();
+  }
 }
 
 impl ShellState {
@@ -159,6 +170,8 @@ impl ShellState {
   /// Set the current working directory of this shell
   pub fn set_cwd(&mut self, cwd: &Path) {
     self.cwd = cwd.to_path_buf();
+
+    set_terminal_title(&format!("{} - shell", self.cwd.to_string_lossy(),));
     // $PWD holds the current working directory, so we keep cwd and $PWD in sync
     self
       .env_vars
