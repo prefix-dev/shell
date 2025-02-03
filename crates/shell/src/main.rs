@@ -37,12 +37,30 @@ struct Options {
     debug: bool,
 }
 
-fn init_state() -> ShellState {
+async fn init_state(norc: bool) -> miette::Result<ShellState> {
     let mut env_vars: HashMap<String, String> = std::env::vars().collect();
     let default_ps1 = "{display_cwd}{git_branch}$ ";
     env_vars.insert("PS1".to_string(), default_ps1.to_string());
     let cwd = std::env::current_dir().unwrap();
-    ShellState::new(env_vars, &cwd, commands::get_commands())
+    let mut state = ShellState::new(env_vars, &cwd, commands::get_commands());
+
+    // Load ~/.shellrc
+    if let Some(home_dir) = dirs::home_dir() {
+        let shellrc_file = home_dir.join(".shellrc");
+        if !norc && shellrc_file.exists() {
+            let line = format!("source '{}'", shellrc_file.to_string_lossy());
+            let prev_exit_code = execute(
+                &line,
+                Some(shellrc_file.as_path().display().to_string()),
+                &mut state,
+            )
+            .await
+            .context("Failed to source ~/.shellrc")?;
+            state.set_last_command_exit_code(prev_exit_code);
+        }
+    }
+
+    Ok(state)
 }
 
 async fn interactive(state: Option<ShellState>, norc: bool) -> miette::Result<()> {
@@ -61,7 +79,10 @@ async fn interactive(state: Option<ShellState>, norc: bool) -> miette::Result<()
     let helper = helper::ShellPromptHelper::default();
     rl.set_helper(Some(helper));
 
-    let mut state = state.unwrap_or_else(init_state);
+    let mut state = match state {
+        Some(state) => state,
+        None => init_state(norc).await?,
+    };
 
     let home = dirs::home_dir().ok_or(miette::miette!("Couldn't get home directory"))?;
 
@@ -73,20 +94,6 @@ async fn interactive(state: Option<ShellState>, norc: bool) -> miette::Result<()
         rl.load_history(history_file.as_path())
             .into_diagnostic()
             .context("Failed to read the command history")?;
-    }
-
-    // Load ~/.shellrc
-    let shellrc_file: PathBuf = [home.as_path(), Path::new(".shellrc")].iter().collect();
-    if !norc && Path::new(shellrc_file.as_path()).exists() {
-        let line = "source '".to_owned() + shellrc_file.to_str().unwrap() + "'";
-        let prev_exit_code = execute(
-            &line,
-            Some(shellrc_file.as_path().display().to_string()),
-            &mut state,
-        )
-        .await
-        .context("Failed to source ~/.shellrc")?;
-        state.set_last_command_exit_code(prev_exit_code);
     }
 
     let mut _prev_exit_code = 0;
@@ -183,33 +190,45 @@ async fn interactive(state: Option<ShellState>, norc: bool) -> miette::Result<()
 #[tokio::main]
 async fn main() -> miette::Result<()> {
     let options = Options::parse();
+    let mut state = init_state(options.norc).await?;
 
-    if options.file.is_some() || options.command.is_some() {
-        let script_text;
-        let filename: Option<String>;
-        if options.file.is_some() {
-            script_text = std::fs::read_to_string(options.file.clone().unwrap())
-                .expect("Failed to read file");
-            filename = Some(options.file.unwrap().display().to_string());
-        } else if options.command.is_some() {
-            script_text = options.command.unwrap();
-            filename = None;
-        } else {
-            panic!();
+    match (options.file, options.command) {
+        (None, None) => {
+            // Interactive mode only
+            interactive(None, options.norc).await
         }
-        let mut state = init_state();
-        if options.debug {
-            debug_parse(&script_text);
-            return Ok(());
+        (file, command) => {
+            // Handle script file or command
+            let (script_text, filename) = get_script_content(file, command)?;
+
+            if options.debug {
+                debug_parse(&script_text);
+                return Ok(());
+            }
+
+            let exit_code = execute(&script_text, filename, &mut state).await?;
+
+            if options.interact {
+                interactive(Some(state), options.norc).await?;
+            }
+
+            std::process::exit(exit_code);
         }
-        let exit_code = execute(&script_text, filename, &mut state).await?;
-        if options.interact {
-            interactive(Some(state), options.norc).await?;
-        }
-        std::process::exit(exit_code); // Exit with the correct code
-    } else {
-        interactive(None, options.norc).await?;
     }
+}
 
-    Ok(())
+fn get_script_content(
+    file: Option<PathBuf>,
+    command: Option<String>,
+) -> miette::Result<(String, Option<String>)> {
+    match (file, command) {
+        (Some(path), _) => {
+            let content = std::fs::read_to_string(&path)
+                .into_diagnostic()
+                .context("Failed to read script file")?;
+            Ok((content, Some(path.display().to_string())))
+        }
+        (_, Some(cmd)) => Ok((cmd, None)),
+        (None, None) => unreachable!(),
+    }
 }
