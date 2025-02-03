@@ -117,7 +117,7 @@ ASSIGNMENT_TILDE_PREFIX = ${
     )*
 }
 
-SUB_COMMAND = { "$(" ~ complete_command ~ ")"}
+SUB_COMMAND = { "$(" ~ !("(") ~ complete_command ~ ")" }
 
 DOUBLE_QUOTED = @{ "\"" ~ QUOTED_PENDING_WORD ~ "\"" }
 SINGLE_QUOTED = @{ "'" ~ (!"'" ~ ANY)* ~ "'" }
@@ -206,23 +206,23 @@ compound_command = {
 
 ARITHMETIC_EXPRESSION = !{ "((" ~ arithmetic_sequence ~ "))" }
 arithmetic_sequence = !{ arithmetic_expr ~ ("," ~ arithmetic_expr)* }
-arithmetic_expr = { parentheses_expr | variable_assignment | triple_conditional_expr | binary_arithmetic_expr | binary_conditional_expression | unary_arithmetic_expr | VARIABLE | NUMBER }
-parentheses_expr = !{ "(" ~ arithmetic_sequence ~ ")" }
+arithmetic_expr = { variable_assignment | triple_conditional_expr | binary_arithmetic_expr | binary_conditional_expression | unary_arithmetic_expr | VARIABLE | parentheses_expr | NUMBER }
+parentheses_expr = { "(" ~ arithmetic_sequence ~ ")" }
 
 variable_assignment = !{
     VARIABLE ~ assignment_operator ~ arithmetic_expr
 }
 
 triple_conditional_expr = !{
-    (parentheses_expr | variable_assignment | binary_arithmetic_expr | binary_conditional_expression | unary_arithmetic_expr | VARIABLE | NUMBER) ~
-    "?" ~ (parentheses_expr | variable_assignment | binary_arithmetic_expr | binary_conditional_expression | unary_arithmetic_expr | VARIABLE | NUMBER) ~
-    ":" ~ (parentheses_expr | variable_assignment | binary_arithmetic_expr | binary_conditional_expression | unary_arithmetic_expr | VARIABLE | NUMBER)
+    (variable_assignment | binary_arithmetic_expr | binary_conditional_expression | unary_arithmetic_expr | VARIABLE | parentheses_expr | NUMBER) ~
+    "?" ~ (variable_assignment | binary_arithmetic_expr | binary_conditional_expression | unary_arithmetic_expr | VARIABLE | parentheses_expr | NUMBER) ~
+    ":" ~ (variable_assignment | binary_arithmetic_expr | binary_conditional_expression | unary_arithmetic_expr | VARIABLE | parentheses_expr | NUMBER)
 }
 
 binary_arithmetic_expr = _{
-    (parentheses_expr | binary_conditional_expression | unary_arithmetic_expr | variable_assignment | VARIABLE | NUMBER) ~
+    (binary_conditional_expression | unary_arithmetic_expr | variable_assignment | VARIABLE | parentheses_expr | NUMBER) ~
     (binary_arithmetic_op ~
-        (parentheses_expr | variable_assignment | binary_conditional_expression | unary_arithmetic_expr | VARIABLE | NUMBER)
+        (binary_conditional_expression | unary_arithmetic_expr | variable_assignment | VARIABLE | parentheses_expr | NUMBER)
     )+
 }
 
