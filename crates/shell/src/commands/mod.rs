@@ -39,6 +39,10 @@ pub fn get_commands() -> HashMap<String, Rc<dyn ShellCommand>> {
             Rc::new(UnAliasCommand) as Rc<dyn ShellCommand>,
         ),
         (
+            ".".to_string(),
+            Rc::new(SourceCommand) as Rc<dyn ShellCommand>,
+        ),
+        (
             "source".to_string(),
             Rc::new(SourceCommand) as Rc<dyn ShellCommand>,
         ),
