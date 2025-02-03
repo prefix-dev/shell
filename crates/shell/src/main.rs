@@ -129,8 +129,8 @@ async fn interactive(state: Option<ShellState>, norc: bool) -> miette::Result<()
             let ps1 = state.env_vars().get("PS1").map_or("", |v| v);
 
             fn replace_placeholders(ps1: &str, display_cwd: &str, git_branch: &str) -> String {
-                ps1.replace("{display_cwd}", display_cwd)
-                    .replace("{git_branch}", git_branch)
+                ps1.replace(&format!("{{{}}}", "display_cwd"), display_cwd)
+                    .replace(&format!("{{{}}}", "git_branch"), git_branch)
             }
 
             let prompt = replace_placeholders(ps1, &display_cwd, &git_branch);
@@ -188,7 +188,8 @@ async fn main() -> miette::Result<()> {
         let script_text;
         let filename: Option<String>;
         if options.file.is_some() {
-            script_text = std::fs::read_to_string(options.file.clone().unwrap()).unwrap();
+            script_text = std::fs::read_to_string(options.file.clone().unwrap())
+                .expect("Failed to read file");
             filename = Some(options.file.unwrap().display().to_string());
         } else if options.command.is_some() {
             script_text = options.command.unwrap();
