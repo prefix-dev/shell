@@ -15,9 +15,8 @@
 > echo $((2 + 3 * 4))
 14
 
-# Fails
-# > echo $(((2 + 3) * 4))
-# 20
+> echo $(((2 + 3) * 4))
+20
 
 # Test with variables
 > export NUM=5
