@@ -7,8 +7,8 @@ use rustyline::{Context, Helper};
 use std::borrow::Cow::{self, Owned};
 use std::env;
 use std::fs;
-use std::os::unix::fs::PermissionsExt as _;
-use std::path::Path;
+use std::fs::Metadata;
+use std::path::{Path, PathBuf};
 
 pub struct ShellCompleter;
 
@@ -53,84 +53,115 @@ fn extract_word(line: &str, pos: usize) -> (usize, &str) {
     (word_start, &line[word_start..pos])
 }
 
-fn complete_filenames(is_start: bool, word: &str, matches: &mut Vec<Pair>) {
-    let only_executable = word.starts_with("./") && is_start;
+#[derive(Debug)]
+struct FileMatch {
+    name: String,
+    #[allow(dead_code)]
+    path: PathBuf,
+    is_dir: bool,
+    is_executable: bool,
+    is_symlink: bool,
+}
 
-    // Split the word into directory path and partial filename
+impl FileMatch {
+    fn from_entry(entry: fs::DirEntry, base_path: &Path) -> Option<Self> {
+        let metadata = match entry.metadata() {
+            Ok(m) => m,
+            Err(_) => return None,
+        };
+
+        let name = entry.file_name().into_string().ok()?;
+
+        // Skip hidden files
+        if name.starts_with('.') {
+            return None;
+        }
+
+        Some(Self {
+            name,
+            path: base_path.join(entry.file_name()),
+            is_dir: metadata.is_dir(),
+            is_executable: is_executable(&metadata),
+            is_symlink: metadata.file_type().is_symlink(),
+        })
+    }
+
+    fn replacement(&self, base: &str) -> String {
+        if self.is_dir {
+            format!("{}{}/", base, self.name)
+        } else {
+            format!("{}{}", base, self.name)
+        }
+    }
+
+    fn display_name(&self) -> String {
+        let mut name = self.name.clone();
+        if self.is_dir {
+            name.push('/');
+        } else if self.is_executable {
+            name.push('*');
+        }
+        if self.is_symlink {
+            name.push('@');
+        }
+        name
+    }
+}
+
+fn is_executable(metadata: &Metadata) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        metadata.permissions().mode() & 0o111 != 0
+    }
+    #[cfg(windows)]
+    {
+        let name = metadata.file_name().to_string_lossy();
+        name.ends_with(".exe") || name.ends_with(".bat") || name.ends_with(".cmd")
+    }
+}
+
+fn resolve_dir_path(dir_path: &str) -> PathBuf {
+    if dir_path.starts_with('/') {
+        PathBuf::from(dir_path)
+    } else if let Some(stripped) = dir_path.strip_prefix('~') {
+        dirs::home_dir()
+            .map(|h| h.join(stripped.strip_prefix('/').unwrap_or(stripped)))
+            .unwrap_or_else(|| PathBuf::from(dir_path))
+    } else {
+        PathBuf::from(".").join(dir_path)
+    }
+}
+
+fn complete_filenames(is_start: bool, word: &str, matches: &mut Vec<Pair>) {
     let (dir_path, partial_name) = match word.rfind('/') {
         Some(last_slash) => (&word[..=last_slash], &word[last_slash + 1..]),
         None => ("", word),
     };
 
-    // Determine the full directory path to search
-    let search_dir = if dir_path.starts_with('/') {
-        dir_path.to_string()
-    } else if let Some(stripped) = dir_path.strip_prefix('~') {
-        let home_dir = dirs::home_dir().unwrap();
-        format!("{}{}", home_dir.display(), stripped)
-    } else {
-        format!("./{}", dir_path)
-    };
+    let search_dir = resolve_dir_path(dir_path);
+    let only_executable = word.starts_with("./") && is_start;
 
-    let mut matching = Vec::new();
-    if let Ok(entries) = fs::read_dir(Path::new(&search_dir)) {
-        for entry in entries.flatten() {
-            if let Ok(name) = entry.file_name().into_string() {
-                if name.starts_with(partial_name) {
-                    let full_path = format!("{}{}", dir_path, name);
-                    match entry.file_type() {
-                        Ok(file_type) if file_type.is_dir() => {
-                            // only display last path component
-                            let display = if let Some(stripped) = full_path.rsplit('/').next() {
-                                stripped.to_owned()
-                            } else {
-                                full_path.clone()
-                            };
+    let mut files: Vec<FileMatch> = fs::read_dir(&search_dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|entry| FileMatch::from_entry(entry, &search_dir))
+        .filter(|f| f.name.starts_with(partial_name))
+        .filter(|f| !only_executable || f.is_executable || f.is_dir)
+        .collect();
 
-                            matching.push(Pair {
-                                display: display + "/",
-                                replacement: full_path + "/",
-                            });
-                        }
-                        Ok(_) => {
-                            let is_executable =
-                                entry.metadata().unwrap().permissions().mode() & 0o111 != 0;
-                            if only_executable && !is_executable {
-                                continue;
-                            }
+    // Sort directories first, then by name
+    files.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => a.name.cmp(&b.name),
+    });
 
-                            // Only display last path component
-                            let mut display = if let Some(stripped) = full_path.rsplit('/').next() {
-                                stripped.to_owned()
-                            } else {
-                                full_path.clone()
-                            };
-
-                            if is_executable {
-                                display.push_str("*");
-                            }
-
-                            if entry.metadata().unwrap().permissions().mode() & 0o111 != 0 {
-                                matching.push(Pair {
-                                    display,
-                                    replacement: full_path,
-                                });
-                            } else {
-                                matching.push(Pair {
-                                    display,
-                                    replacement: full_path,
-                                });
-                            }
-                        }
-                        Err(_) => {}
-                    }
-                }
-            }
-        }
-    }
-    // sort matches
-    matching.sort_by(|a, b| a.display.cmp(&b.display));
-    matches.extend(matching);
+    matches.extend(files.into_iter().map(|f| Pair {
+        display: f.display_name(),
+        replacement: f.replacement(&dir_path),
+    }));
 }
 
 fn complete_shell_commands(is_start: bool, word: &str, matches: &mut Vec<Pair>) {
