@@ -19,6 +19,9 @@
 # > echo $(((2 + 3) * 4))
 # 20
 
+> echo $((4 * (2 + 3)))
+20
+
 # Test with variables
 > export NUM=5
 > echo $((NUM + 3))
