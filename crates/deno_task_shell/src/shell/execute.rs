@@ -1,6 +1,7 @@
 // Copyright 2018-2024 the Deno authors. MIT license.
 
 use std::collections::HashMap;
+use std::fs;
 use std::path::Path;
 use std::rc::Rc;
 
@@ -972,6 +973,49 @@ async fn execute_if_clause(
   }
 }
 
+#[derive(Debug)]
+enum FilePermission {
+  Readable,
+  Writable,
+  Executable,
+}
+
+fn check_permission(path: &str, permission: FilePermission) -> bool {
+  #[cfg(unix)]
+  {
+    use std::os::unix::fs::MetadataExt;
+    fs::metadata(path)
+      .map(|m| match permission {
+        FilePermission::Readable => (m.mode() & 0o444) != 0,
+        FilePermission::Writable => (m.mode() & 0o222) != 0,
+        FilePermission::Executable => (m.mode() & 0o111) != 0,
+      })
+      .unwrap_or(false)
+  }
+
+  #[cfg(windows)]
+  {
+    match permission {
+      FilePermission::Readable => fs::metadata(path).is_ok(),
+      FilePermission::Writable => fs::metadata(path)
+        .map(|m| m.permissions().readonly())
+        .map(|readonly| !readonly)
+        .unwrap_or(false),
+      FilePermission::Executable => {
+        let path = Path::new(path);
+        path
+          .extension()
+          .map(|ext| {
+            ext.eq_ignore_ascii_case("exe")
+              || ext.eq_ignore_ascii_case("cmd")
+              || ext.eq_ignore_ascii_case("bat")
+          })
+          .unwrap_or(false)
+      }
+    }
+  }
+}
+
 async fn evaluate_condition(
   condition: Condition,
   state: &mut ShellState,
@@ -1021,34 +1065,43 @@ async fn evaluate_condition(
       )
     }
     ConditionInner::Unary { op, right } => {
-      let _right =
+      let rhs =
         evaluate_word(right, state, stdin.clone(), stderr.clone()).await?;
-      match op {
-        Some(UnaryOp::FileExists) => todo!(),
-        Some(UnaryOp::BlockSpecial) => todo!(),
-        Some(UnaryOp::CharSpecial) => todo!(),
-        Some(UnaryOp::Directory) => todo!(),
-        Some(UnaryOp::RegularFile) => todo!(),
-        Some(UnaryOp::SetGroupId) => todo!(),
-        Some(UnaryOp::SymbolicLink) => todo!(),
-        Some(UnaryOp::StickyBit) => todo!(),
-        Some(UnaryOp::NamedPipe) => todo!(),
-        Some(UnaryOp::Readable) => todo!(),
-        Some(UnaryOp::SizeNonZero) => todo!(),
-        Some(UnaryOp::TerminalFd) => todo!(),
-        Some(UnaryOp::SetUserId) => todo!(),
-        Some(UnaryOp::Writable) => todo!(),
-        Some(UnaryOp::Executable) => todo!(),
-        Some(UnaryOp::OwnedByEffectiveGroupId) => todo!(),
-        Some(UnaryOp::ModifiedSinceLastRead) => todo!(),
-        Some(UnaryOp::OwnedByEffectiveUserId) => todo!(),
-        Some(UnaryOp::Socket) => todo!(),
-        Some(UnaryOp::NonEmptyString) => todo!(),
-        Some(UnaryOp::EmptyString) => todo!(),
-        Some(UnaryOp::VariableSet) => todo!(),
-        Some(UnaryOp::VariableNameReference) => todo!(),
-        None => todo!(),
-      }
+      Ok(
+        match op {
+          Some(UnaryOp::FileExists) => Path::new(&rhs.value).exists(),
+          Some(UnaryOp::BlockSpecial) => todo!(),
+          Some(UnaryOp::CharSpecial) => todo!(),
+          Some(UnaryOp::Directory) => Path::new(&rhs.value).is_dir(),
+          Some(UnaryOp::RegularFile) => Path::new(&rhs.value).is_file(),
+          Some(UnaryOp::SetGroupId) => todo!(),
+          Some(UnaryOp::SymbolicLink) => Path::new(&rhs.value).is_symlink(),
+          Some(UnaryOp::StickyBit) => todo!(),
+          Some(UnaryOp::NamedPipe) => todo!(),
+          Some(UnaryOp::Writable) => {
+            check_permission(&rhs.value, FilePermission::Writable)
+          }
+          Some(UnaryOp::SizeNonZero) => todo!(),
+          Some(UnaryOp::TerminalFd) => todo!(),
+          Some(UnaryOp::SetUserId) => todo!(),
+          Some(UnaryOp::Readable) => {
+            check_permission(&rhs.value, FilePermission::Readable)
+          }
+          Some(UnaryOp::Executable) => {
+            check_permission(&rhs.value, FilePermission::Executable)
+          }
+          Some(UnaryOp::OwnedByEffectiveGroupId) => todo!(),
+          Some(UnaryOp::ModifiedSinceLastRead) => todo!(),
+          Some(UnaryOp::OwnedByEffectiveUserId) => todo!(),
+          Some(UnaryOp::Socket) => todo!(),
+          Some(UnaryOp::NonEmptyString) => !rhs.value.is_empty(),
+          Some(UnaryOp::EmptyString) => rhs.value.is_empty(),
+          Some(UnaryOp::VariableSet) => state.get_var(&rhs.value).is_some(),
+          Some(UnaryOp::VariableNameReference) => todo!(),
+          None => todo!(),
+        }
+        .into(),
+      )
     }
   }
 }
