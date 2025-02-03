@@ -1,16 +1,13 @@
 // Copyright 2018-2024 the Deno authors. MIT license.
+#![cfg(test)]
 
-#[cfg(test)]
 mod test_builder;
+mod test_runner;
 
-#[cfg(test)]
 use deno_task_shell::ExecuteResult;
-#[cfg(test)]
 use futures::FutureExt;
-#[cfg(test)]
 use test_builder::TestBuilder;
 
-#[cfg(test)]
 const FOLDER_SEPARATOR: char = if cfg!(windows) { '\\' } else { '/' };
 
 #[tokio::test]
