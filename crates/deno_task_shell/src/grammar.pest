@@ -290,7 +290,7 @@ term = !{ and_or ~ (separator ~ and_or)* }
 for_clause = {
     For ~ name ~ linebreak ~
     (In ~ (brace_group | wordlist)? ~ sequential_sep)? ~
-    do_group
+    "do" ~ complete_command ~ "done"
 }
 
 case_clause = !{

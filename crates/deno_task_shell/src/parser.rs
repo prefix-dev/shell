@@ -162,6 +162,8 @@ pub enum CommandInner {
   Subshell(Box<SequentialList>),
   #[error("Invalid if command")]
   If(IfClause),
+  #[error("Invalid for loop")]
+  For(ForLoop),
   #[error("Invalid arithmetic expression")]
   ArithmeticExpression(Arithmetic),
 }
@@ -221,6 +223,16 @@ pub struct IfClause {
   pub condition: Condition,
   pub then_body: SequentialList,
   pub else_part: Option<ElsePart>,
+}
+
+#[cfg_attr(feature = "serialization", derive(serde::Serialize))]
+#[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
+#[derive(Debug, PartialEq, Eq, Clone, Error)]
+#[error("Invalid for loop")]
+pub struct ForLoop {
+  pub var_name: String,
+  pub wordlist: Vec<Word>,
+  pub body: SequentialList,
 }
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
@@ -935,6 +947,49 @@ fn parse_simple_command(pair: Pair<Rule>) -> Result<Command> {
   })
 }
 
+fn parse_wordlist(pair: Pair<Rule>) -> Result<Vec<Word>> {
+  let mut words = Vec::new();
+  for word_pair in pair.into_inner() {
+    words.push(parse_word(word_pair)?);
+  }
+  Ok(words)
+}
+
+fn parse_for_loop(pairs: Pair<Rule>) -> Result<ForLoop> {
+  let mut inner = pairs.into_inner();
+  inner.next().unwrap(); // Skip the FOR keyword
+  let var_name = inner
+    .next()
+    .ok_or_else(|| miette!("Expected variable name in for loop"))?
+    .as_str()
+    .to_string();
+
+  inner.next().unwrap(); // Skip the IN keyword
+  println!("Var name: {:?}", var_name);
+
+  let wordlist = match inner.next() {
+    Some(wordlist_pair) => parse_wordlist(wordlist_pair)?,
+    None => panic!("Expected wordlist in for loop"),
+  };
+
+  // skip sequential_sep
+  inner.next().unwrap();
+
+  let body_pair = inner
+    .next()
+    .ok_or_else(|| miette!("Expected body in for loop"))?;
+  print!("body_pair: {:?}", body_pair);
+  let body = parse_complete_command(body_pair)?;
+  println!("var_name: {:?}", var_name);
+  println!("body: {:?}", body);
+
+  Ok(ForLoop {
+    var_name,
+    wordlist,
+    body,
+  })
+}
+
 fn parse_compound_command(pair: Pair<Rule>) -> Result<Command> {
   let inner = pair.into_inner().next().unwrap();
   match inner.as_rule() {
@@ -942,7 +997,13 @@ fn parse_compound_command(pair: Pair<Rule>) -> Result<Command> {
       Err(miette!("Unsupported compound command brace_group"))
     }
     Rule::subshell => parse_subshell(inner),
-    Rule::for_clause => Err(miette!("Unsupported compound command for_clause")),
+    Rule::for_clause => {
+      let for_loop = parse_for_loop(inner);
+      Ok(Command {
+        inner: CommandInner::For(for_loop?),
+        redirect: None,
+      })
+    }
     Rule::case_clause => {
       Err(miette!("Unsupported compound command case_clause"))
     }
