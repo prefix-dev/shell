@@ -18,6 +18,7 @@ pub use types::ShellPipeReader;
 pub use types::ShellPipeWriter;
 pub use types::ShellState;
 
+pub use commands::builtin_commands;
 pub use commands::parse_arg_kinds;
 pub use commands::ArgKind;
 

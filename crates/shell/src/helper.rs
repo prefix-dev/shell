@@ -5,7 +5,7 @@ use rustyline::{
 
 use crate::completion;
 
-use std::borrow::Cow::Borrowed;
+use std::{borrow::Cow::Borrowed, collections::HashSet};
 
 #[derive(Helper, Completer, Hinter, Validator)]
 pub(crate) struct ShellPromptHelper {
@@ -18,10 +18,10 @@ pub(crate) struct ShellPromptHelper {
     pub colored_prompt: String,
 }
 
-impl Default for ShellPromptHelper {
-    fn default() -> Self {
+impl ShellPromptHelper {
+    pub fn new(builtin_commands: HashSet<String>) -> Self {
         Self {
-            completer: completion::ShellCompleter,
+            completer: completion::ShellCompleter::new(builtin_commands),
             validator: MatchingBracketValidator::new(),
             colored_prompt: String::new(),
         }
