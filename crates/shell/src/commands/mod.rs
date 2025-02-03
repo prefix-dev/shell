@@ -69,7 +69,7 @@ pub fn get_commands() -> HashMap<String, Rc<dyn ShellCommand>> {
         (
             "clear".to_string(),
             Rc::new(ClearCommand) as Rc<dyn ShellCommand>,
-        )
+        ),
     ])
 }
 
