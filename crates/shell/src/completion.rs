@@ -163,7 +163,7 @@ fn complete_filenames(is_start: bool, word: &str, matches: &mut Vec<Pair>) {
     };
 
     let search_dir = resolve_dir_path(dir_path);
-    let only_executable = (word.starts_with("./") || word.starts_with("/")) && is_start;
+    let only_executable = (word.starts_with("./") || word.starts_with('/')) && is_start;
 
     let files: Vec<FileMatch> = fs::read_dir(&search_dir)
         .into_iter()
@@ -176,7 +176,7 @@ fn complete_filenames(is_start: bool, word: &str, matches: &mut Vec<Pair>) {
 
     matches.extend(files.into_iter().map(|f| Pair {
         display: f.display_name(),
-        replacement: f.replacement(&dir_path),
+        replacement: f.replacement(dir_path),
     }));
 }
 
@@ -210,13 +210,14 @@ fn complete_executables_in_path(is_start: bool, word: &str, matches: &mut Vec<Pa
             if let Ok(entries) = fs::read_dir(path) {
                 for entry in entries.flatten() {
                     if let Ok(name) = entry.file_name().into_string() {
-                        if name.starts_with(word) && entry.path().is_file() {
-                            if found.insert(name.clone()) {
-                                matches.push(Pair {
-                                    display: name.clone(),
-                                    replacement: name,
-                                });
-                            }
+                        if name.starts_with(word)
+                            && entry.path().is_file()
+                            && found.insert(name.clone())
+                        {
+                            matches.push(Pair {
+                                display: name.clone(),
+                                replacement: name,
+                            });
                         }
                     }
                 }
