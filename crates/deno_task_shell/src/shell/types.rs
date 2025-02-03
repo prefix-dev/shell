@@ -52,6 +52,7 @@ pub struct ShellState {
   shell_options: HashMap<ShellOptions, bool>,
 }
 
+#[allow(clippy::print_stdout)]
 pub fn set_terminal_title(title: &str) {
   // Only set title if we're in an interactive terminal session
   if std::io::stdout().is_terminal() {
