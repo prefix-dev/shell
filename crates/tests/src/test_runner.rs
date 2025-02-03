@@ -37,6 +37,10 @@ impl Tests {
 
             if line.starts_with('>') {
                 if !current_test.is_empty() && !current_output.is_empty() {
+                    // Empty output is signified by a single % character
+                    if current_output == "%empty" {
+                        current_output = String::new();
+                    }
                     tests.push(TestElement {
                         test: std::mem::take(&mut current_test),
                         expected_output: std::mem::take(&mut current_output),
