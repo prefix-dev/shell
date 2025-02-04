@@ -36,6 +36,8 @@ pub struct ShellState {
   shell_vars: HashMap<String, String>,
   /// The current working directory of the shell
   cwd: PathBuf,
+  /// The previous working directory of the shell (used for `cd -`)
+  previous_cwd: Option<PathBuf>,
   /// The commands that are available in the shell
   commands: Rc<HashMap<String, Rc<dyn ShellCommand>>>,
   /// A map of aliases for commands (e.g. `ll=ls -al`)
@@ -77,6 +79,7 @@ impl ShellState {
       shell_vars: Default::default(),
       alias: Default::default(),
       cwd: PathBuf::new(),
+      previous_cwd: None,
       commands: Rc::new(commands),
       token: CancellationToken::default(),
       git_repository: false,
@@ -100,6 +103,10 @@ impl ShellState {
 
   pub fn cwd(&self) -> &PathBuf {
     &self.cwd
+  }
+
+  pub fn previous_cwd(&self) -> Option<&PathBuf> {
+    self.previous_cwd.as_ref()
   }
 
   pub fn alias_map(&self) -> &HashMap<String, Vec<String>> {
@@ -170,6 +177,7 @@ impl ShellState {
 
   /// Set the current working directory of this shell
   pub fn set_cwd(&mut self, cwd: &Path) {
+    self.previous_cwd = Some(self.cwd.clone());
     self.cwd = cwd.to_path_buf();
 
     set_terminal_title(&format!("{} - shell", self.cwd.to_string_lossy(),));
