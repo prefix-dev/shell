@@ -15,3 +15,9 @@ foobar
 > export FOOBAR="foobar"
 > echo "${FOOBAR:-}" "${OTHER:-defaultbar}"
 foobar defaultbar
+
+> FOOBAR="foobar"
+> echo "${FOOBAR}"
+> echo $FOOBAR
+foobar
+foobar
