@@ -8,7 +8,6 @@ use std::borrow::Cow::{self, Owned};
 use std::collections::HashSet;
 use std::env;
 use std::fs;
-use std::fs::Metadata;
 use std::path::{Path, PathBuf};
 
 pub struct ShellCompleter {
@@ -103,7 +102,7 @@ impl FileMatch {
             name,
             path: base_path.join(entry.file_name()),
             is_dir: metadata.is_dir(),
-            is_executable: is_executable(&metadata),
+            is_executable: is_executable(&entry),
             is_symlink: metadata.file_type().is_symlink(),
         })
     }
@@ -131,16 +130,22 @@ impl FileMatch {
     }
 }
 
-fn is_executable(metadata: &Metadata) -> bool {
+fn is_executable(entry: &fs::DirEntry) -> bool {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
+
+        let Ok(metadata) = entry.metadata() else {
+            return false;
+        };
+
         metadata.permissions().mode() & 0o111 != 0
     }
     #[cfg(windows)]
     {
-        let name = metadata.file_name().to_string_lossy();
-        name.ends_with(".exe") || name.ends_with(".bat") || name.ends_with(".cmd")
+        let file_name = entry.file_name();
+        // Load COMSPEC from the environment
+        file_name.ends_with(".exe") || file_name.ends_with(".bat") || file_name.ends_with(".cmd")
     }
 }
 
