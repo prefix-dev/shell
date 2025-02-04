@@ -1120,6 +1120,7 @@ fn parse_unary_conditional_expression(pair: Pair<Rule>) -> Result<Condition> {
     Rule::variable_conditional_op => match operator.as_str() {
       "-v" => UnaryOp::VariableSet,
       "-R" => UnaryOp::VariableNameReference,
+
       _ => {
         return Err(miette!(
           "Unexpected variable conditional operator: {}",
@@ -1374,6 +1375,8 @@ fn parse_word(pair: Pair<Rule>) -> Result<Word> {
         }
       }
     }
+    // This is the bare _name_ of a variable, not a variable expansion
+    Rule::VARIABLE => parts.push(WordPart::Text(pair.as_str().to_string())),
     _ => {
       return Err(miette!("Unexpected rule in word: {:?}", pair.as_rule()));
     }

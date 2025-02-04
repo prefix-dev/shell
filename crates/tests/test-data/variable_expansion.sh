@@ -63,3 +63,7 @@ a}b
 # # Error cases
 # > echo "${UNDEFINED?error message}"
 # error message
+
+> export VERSION="1.2.3"
+> echo "Version: ${VERSION:2}"
+Version: 2.3

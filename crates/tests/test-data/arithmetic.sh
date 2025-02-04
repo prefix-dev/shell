@@ -31,6 +31,16 @@
 > echo $((A * B + 1))
 7
 
+# # Test numeric equality
+# > echo $((1 == 2))
+# 0
+
+# > echo $((2 == 2))
+# 1
+
+# > echo $((3 != 4))
+# 1
+
 # # Test increment/decrement NOT IMPLEMENTED YET!
 # > export COUNT=1
 # > echo $((COUNT++))
