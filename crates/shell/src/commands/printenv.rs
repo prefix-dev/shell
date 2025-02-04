@@ -1,8 +1,5 @@
-use std::ffi::OsString;
-
 use deno_task_shell::{ExecuteResult, ShellCommand, ShellCommandContext};
 use futures::future::LocalBoxFuture;
-use uu_printenv::uumain as uu_printenv;
 
 pub struct PrintEnvCommand;
 
@@ -18,17 +15,32 @@ impl ShellCommand for PrintEnvCommand {
 }
 
 fn execute_printenv(context: &mut ShellCommandContext) -> Result<(), i32> {
-    let mut args: Vec<OsString> = vec![OsString::from("printenv")];
+    let args = context.args.clone();
 
-    context
-        .args
-        .iter()
-        .for_each(|arg| args.push(OsString::from(arg)));
+    let env_vars = context.state.env_vars();
 
-    let exit_code = uu_printenv(args.into_iter());
-    if exit_code != 0 {
-        return Err(exit_code);
+    if args.is_empty() {
+        // Print all environment variables
+        let mut vars: Vec<_> = env_vars.iter().collect();
+        vars.sort_by(|(a, _), (b, _)| a.cmp(b));
+
+        for (key, value) in vars {
+            context
+                .stdout
+                .write_line(&format!("{}={}", key, value))
+                .map_err(|_| 1)?;
+        }
+        Ok(())
+    } else {
+        // Print specified variables
+        for name in args {
+            match env_vars.get(&name) {
+                Some(value) => {
+                    context.stdout.write_line(value).map_err(|_| 1)?;
+                }
+                None => return Err(1),
+            }
+        }
+        Ok(())
     }
-
-    Ok(())
 }

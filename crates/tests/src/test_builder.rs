@@ -222,8 +222,6 @@ impl TestBuilder {
     }
 
     pub async fn run(&mut self) {
-        // backup all env vars
-        let backup_env_vars = std::env::vars().collect::<HashMap<_, _>>();
         std::env::set_var("NO_GRAPHICS", "1");
 
         let list = parse(&self.command).unwrap();
@@ -317,15 +315,6 @@ impl TestBuilder {
                         self.command, path,
                     )
                 }
-            }
-        }
-
-        // restore all env vars, unset any new ones
-        for (key, value) in std::env::vars() {
-            if !backup_env_vars.contains_key(&key) {
-                std::env::remove_var(&key);
-            } else {
-                std::env::set_var(key, value);
             }
         }
     }

@@ -270,7 +270,6 @@ impl ShellState {
       }
       EnvChange::UnsetVar(name) => {
         self.shell_vars.remove(name);
-        std::env::remove_var(name);
         if cfg!(windows) {
           // environment variables are case insensitive on windows
           self.env_vars.remove(&name.to_uppercase());
@@ -319,7 +318,6 @@ impl ShellState {
     } else {
       self.shell_vars.remove(&name);
       self.env_vars.insert(name.clone(), value.to_string());
-      std::env::set_var(name, value);
     }
   }
 
