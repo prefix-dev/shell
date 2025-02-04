@@ -23,21 +23,21 @@ path = "src/main.rs"
 [features]
 
 [dependencies]
-clap = { version = "4.5.17", features = ["derive"] }
+clap = { version = "4.5.27", features = ["derive"] }
 deno_task_shell = { path = "../deno_task_shell", features = ["shell"] }
-futures = "0.3.30"
-rustyline = { version = "14.0.0", features = ["derive"] }
-tokio = "1.40.0"
-uu_ls = "0.0.27"
-dirs = "5.0.1"
-which = "6.0.3"
-uu_uname = "0.0.27"
-uu_touch = "0.0.27"
-uu_date = "0.0.27"
-miette = { version = "7.2.0", features = ["fancy"] }
+futures = "0.3.31"
+rustyline = { version = "15.0.0", features = ["derive"] }
+tokio = "1.43.0"
+uu_ls = "0.0.29"
+dirs = "6.0.0"
+which = "7.0.1"
+uu_uname = "0.0.29"
+uu_touch = "0.0.29"
+uu_date = "0.0.29"
+miette = { version = "7.5.0", features = ["fancy"] }
 filetime = "0.2.25"
-chrono = "0.4.38"
-parse_datetime = "0.6.0"
+chrono = "0.4.39"
+parse_datetime = "0.7.0"
 dtparse = "2.0.1"
 windows-sys = "0.59.0"
 ctrlc = "3.4.5"
