@@ -20,6 +20,7 @@ use crate::parser::BinaryOp;
 use crate::parser::Condition;
 use crate::parser::ConditionInner;
 use crate::parser::ElsePart;
+use crate::parser::ForLoop;
 use crate::parser::IoFile;
 use crate::parser::RedirectOpInput;
 use crate::parser::RedirectOpOutput;
@@ -581,6 +582,10 @@ async fn execute_command(
       // The state can be changed
       execute_if_clause(if_clause, &mut state, stdin, stdout, stderr).await
     }
+    CommandInner::For(for_clause) => {
+      // The state can be changed
+      execute_for_clause(for_clause, &mut state, stdin, stdout, stderr).await
+    }
     CommandInner::ArithmeticExpression(arithmetic) => {
       // The state can be changed
       match execute_arithmetic_expression(arithmetic, &mut state).await {
@@ -594,6 +599,68 @@ async fn execute_command(
         }
       }
     }
+  }
+}
+
+async fn execute_for_clause(
+  for_clause: ForLoop,
+  state: &mut ShellState,
+  stdin: ShellPipeReader,
+  stdout: ShellPipeWriter,
+  mut stderr: ShellPipeWriter,
+) -> ExecuteResult {
+  let mut changes = Vec::new();
+  let mut last_exit_code = 0;
+  let mut async_handles = Vec::new();
+
+  let args = match evaluate_args(
+    for_clause.wordlist,
+    state,
+    stdin.clone(),
+    stderr.clone(),
+  )
+  .await
+  {
+    Ok(args) => args,
+    Err(err) => {
+      return err.into_exit_code(&mut stderr);
+    }
+  };
+
+  for word in args.value {
+    let change = EnvChange::SetShellVar(for_clause.var_name.clone(), word);
+    state.apply_changes(&[change]);
+
+    let result = execute_sequential_list(
+      for_clause.body.clone(),
+      state.clone(),
+      stdin.clone(),
+      stdout.clone(),
+      stderr.clone(),
+      AsyncCommandBehavior::Yield,
+    )
+    .await;
+
+    match result {
+      ExecuteResult::Exit(code, handles) => {
+        async_handles.extend(handles);
+        last_exit_code = code;
+        break;
+      }
+      ExecuteResult::Continue(code, env_changes, handles) => {
+        changes.extend(env_changes);
+        async_handles.extend(handles);
+        last_exit_code = code;
+      }
+    }
+  }
+
+  state.apply_changes(&changes);
+
+  if state.exit_on_error() && last_exit_code != 0 {
+    ExecuteResult::Exit(last_exit_code, async_handles)
+  } else {
+    ExecuteResult::Continue(last_exit_code, changes, async_handles)
   }
 }
 

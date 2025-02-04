@@ -159,17 +159,17 @@ Then = _{ "then" }
 Else = { "else" }
 Elif = { "elif" }
 Fi = _{ "fi" }
-Do = { "do" }
-Done = { "done" }
+Do = _{ "do" }
+Done = _{ "done" }
 Case = { "case" }
 Esac = { "esac" }
 While = { "while" }
 Until = { "until" }
-For = { "for" }
+For = _{ "for" }
 Lbrace = { "{" }
 Rbrace = { "}" }
 Bang = { "!" }
-In = { "in" }
+In = _{ "in" }
 Stdout = ${ "|" ~ !"|" ~ !"&"}
 StdoutStderr = { "|&" }
 
@@ -289,7 +289,7 @@ term = !{ and_or ~ (separator ~ and_or)* }
 
 for_clause = {
     For ~ name ~ linebreak ~
-    (In ~ (brace_group | wordlist)? ~ sequential_sep)? ~
+    (In ~ (brace_group | wordlist)? ~ ";")? ~
     do_group
 }
 
@@ -413,7 +413,6 @@ newline_list = _{ NEWLINE+ }
 linebreak = _{ NEWLINE* }
 separator_op = { "&" | ";" }
 separator = _{ separator_op ~ linebreak | newline_list }
-sequential_sep = !{ ";" ~ linebreak | newline_list }
 
 wordlist = !{ UNQUOTED_PENDING_WORD+ }
 
