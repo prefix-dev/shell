@@ -965,7 +965,6 @@ fn parse_for_loop(pairs: Pair<Rule>) -> Result<ForLoop> {
     .to_string();
 
   inner.next().unwrap(); // Skip the IN keyword
-  println!("Var name: {:?}", var_name);
 
   let wordlist = match inner.next() {
     Some(wordlist_pair) => parse_wordlist(wordlist_pair)?,
@@ -978,10 +977,7 @@ fn parse_for_loop(pairs: Pair<Rule>) -> Result<ForLoop> {
   let body_pair = inner
     .next()
     .ok_or_else(|| miette!("Expected body in for loop"))?;
-  print!("body_pair: {:?}", body_pair);
   let body = parse_complete_command(body_pair)?;
-  println!("var_name: {:?}", var_name);
-  println!("body: {:?}", body);
 
   Ok(ForLoop {
     var_name,

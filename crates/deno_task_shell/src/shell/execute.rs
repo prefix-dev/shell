@@ -607,17 +607,22 @@ async fn execute_for_clause(
   state: &mut ShellState,
   stdin: ShellPipeReader,
   stdout: ShellPipeWriter,
-  stderr: ShellPipeWriter,
+  mut stderr: ShellPipeWriter,
 ) -> ExecuteResult {
-  println!("for loop: {:?}", for_clause);
-
   let mut changes = Vec::new();
   let mut last_exit_code = 0;
   let mut async_handles = Vec::new();
 
   for word in for_clause.wordlist {
+    let word =
+      match evaluate_word(word, state, stdin.clone(), stderr.clone()).await {
+        Ok(word) => word,
+        Err(err) => {
+          return err.into_exit_code(&mut stderr);
+        }
+      };
     let change =
-      EnvChange::SetShellVar(for_clause.var_name.clone(), word.to_string());
+      EnvChange::SetShellVar(for_clause.var_name.clone(), word.value);
     state.apply_changes(&[change]);
 
     let result = execute_sequential_list(
