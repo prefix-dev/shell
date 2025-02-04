@@ -8,12 +8,14 @@ use uu_ls::uumain as uu_ls;
 use crate::execute;
 
 pub mod date;
+pub mod printenv;
 pub mod set;
 pub mod touch;
 pub mod uname;
 pub mod which;
 
 pub use date::DateCommand;
+pub use printenv::PrintEnvCommand;
 pub use set::SetCommand;
 pub use touch::TouchCommand;
 pub use uname::UnameCommand;
@@ -65,6 +67,10 @@ pub fn get_commands() -> HashMap<String, Rc<dyn ShellCommand>> {
         (
             "set".to_string(),
             Rc::new(SetCommand) as Rc<dyn ShellCommand>,
+        ),
+        (
+            "printenv".to_string(),
+            Rc::new(PrintEnvCommand) as Rc<dyn ShellCommand>,
         ),
         (
             "clear".to_string(),

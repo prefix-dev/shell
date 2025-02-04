@@ -78,7 +78,7 @@ FILE_NAME_PENDING_WORD = ${
 }
 
 UNQUOTED_ESCAPE_CHAR = ${ ("\\" ~ "$" | "$" ~ !"(" ~  !"{" ~ !VARIABLE) | "\\" ~ (" " | "`" | "\"" | "(" | ")") }
-QUOTED_ESCAPE_CHAR = ${ "\\" ~ "$" | "$" ~ !"(" ~ !"{" ~ !VARIABLE | "\\" ~ ("`" | "\"" | "(" | ")" | "'") }
+QUOTED_ESCAPE_CHAR = ${ "\\" ~ "$" | "$" ~ !"(" ~ !"{" ~ !(ASCII_DIGIT | VARIABLE) | "\\" ~ ("`" | "\"" | "(" | ")" | "'") }
 PARAMETER_ESCAPE_CHAR = ${ "\\" ~ "$" | "$" ~ !"(" ~ !"{" ~ !VARIABLE | "\\" ~ "}" }
 
 UNQUOTED_CHAR = ${ ("\\" ~ " ") | !("]]" | "[[" | "(" | ")" | "<" | ">" | "|" | "&" | ";" | "\"" | "'" | "$") ~ ANY }
@@ -87,10 +87,13 @@ QUOTED_CHAR = ${ !"\"" ~ ANY }
 VARIABLE_EXPANSION = ${
     "$" ~ (
         "{" ~ VARIABLE ~ VARIABLE_MODIFIER? ~ "}" |
+        SPECIAL_PARAM |
         VARIABLE
     )
 }
 
+SPECIAL_PARAM = ${ ARGNUM | "@" | "#" | "?" | "$" | "*" }
+ARGNUM = ${ ASCII_NONZERO_DIGIT ~ ASCII_DIGIT* | "0" }
 VARIABLE = ${ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 
 VARIABLE_MODIFIER = _{

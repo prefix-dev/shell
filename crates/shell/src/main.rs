@@ -35,14 +35,38 @@ struct Options {
 
     #[clap(short, long)]
     debug: bool,
+
+    // Trailing args to forward to the script
+    #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
+    args: Vec<String>,
 }
 
-async fn init_state(norc: bool) -> miette::Result<ShellState> {
+async fn init_state(norc: bool, var_args: &[String]) -> miette::Result<ShellState> {
     let mut env_vars: HashMap<String, String> = std::env::vars().collect();
     let default_ps1 = "{display_cwd}{git_branch}$ ";
     env_vars.insert("PS1".to_string(), default_ps1.to_string());
+
+    let mut shell_vars = HashMap::new();
+    // Set all arguments such as $0, $1, $2, etc.
+    for (idx, arg) in var_args.iter().enumerate() {
+        shell_vars.insert(format!("{}", idx + 1), arg.clone());
+    }
+
+    // Set the $@ variable
+    let args: Vec<String> = std::env::args().collect();
+    shell_vars.insert("@".to_string(), args.join(" "));
+    shell_vars.insert("#".to_string(), args.len().to_string());
+
+    // Set the SHELL variable
+    let current_exe = std::env::current_exe().into_diagnostic()?;
+    env_vars.insert(
+        "SHELL".to_string(),
+        current_exe.to_string_lossy().to_string(),
+    );
+
     let cwd = std::env::current_dir().unwrap();
-    let mut state = ShellState::new(env_vars, &cwd, commands::get_commands());
+    let mut state =
+        ShellState::new(env_vars, &cwd, commands::get_commands()).with_shell_vars(shell_vars);
 
     // Load ~/.shellrc
     if let Some(home_dir) = dirs::home_dir() {
@@ -63,7 +87,7 @@ async fn init_state(norc: bool) -> miette::Result<ShellState> {
     Ok(state)
 }
 
-async fn interactive(state: Option<ShellState>, norc: bool) -> miette::Result<()> {
+async fn interactive(state: Option<ShellState>, norc: bool, args: &[String]) -> miette::Result<()> {
     let config = Config::builder()
         .history_ignore_space(true)
         .completion_type(CompletionType::List)
@@ -81,7 +105,7 @@ async fn interactive(state: Option<ShellState>, norc: bool) -> miette::Result<()
 
     let mut state = match state {
         Some(state) => state,
-        None => init_state(norc).await?,
+        None => init_state(norc, args).await?,
     };
 
     let home = dirs::home_dir().ok_or(miette::miette!("Couldn't get home directory"))?;
@@ -190,12 +214,12 @@ async fn interactive(state: Option<ShellState>, norc: bool) -> miette::Result<()
 #[tokio::main]
 async fn main() -> miette::Result<()> {
     let options = Options::parse();
-    let mut state = init_state(options.norc).await?;
+    let mut state = init_state(options.norc, &options.args).await?;
 
     match (options.file, options.command) {
         (None, None) => {
             // Interactive mode only
-            interactive(None, options.norc).await
+            interactive(None, options.norc, &options.args).await
         }
         (file, command) => {
             // Handle script file or command
@@ -209,7 +233,7 @@ async fn main() -> miette::Result<()> {
             let exit_code = execute(&script_text, filename, &mut state).await?;
 
             if options.interact {
-                interactive(Some(state), options.norc).await?;
+                interactive(Some(state), options.norc, &options.args).await?;
             }
 
             std::process::exit(exit_code);

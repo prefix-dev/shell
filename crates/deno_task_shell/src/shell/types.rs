@@ -101,6 +101,13 @@ impl ShellState {
     result
   }
 
+  pub fn with_shell_vars(&self, shell_vars: HashMap<String, String>) -> Self {
+    Self {
+      shell_vars,
+      ..self.clone()
+    }
+  }
+
   pub fn cwd(&self) -> &PathBuf {
     &self.cwd
   }
@@ -289,6 +296,10 @@ impl ShellState {
     }
   }
 
+  pub fn set_shell_var(&mut self, name: &str, value: &str) {
+    self.shell_vars.insert(name.to_string(), value.to_string());
+  }
+
   pub fn apply_env_var(&mut self, name: &str, value: &str) {
     let name = if cfg!(windows) {
       // environment variables are case insensitive on windows
@@ -306,7 +317,7 @@ impl ShellState {
       }
     } else {
       self.shell_vars.remove(&name);
-      self.env_vars.insert(name, value.to_string());
+      self.env_vars.insert(name.clone(), value.to_string());
     }
   }
 
