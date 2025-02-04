@@ -99,8 +99,13 @@ async fn interactive(state: Option<ShellState>, norc: bool, args: &[String]) -> 
     .expect("Error setting Ctrl-C handler");
 
     let mut rl = Editor::with_config(config).into_diagnostic()?;
+    let builtins = deno_task_shell::builtin_commands()
+        .keys()
+        .chain(commands::get_commands().keys())
+        .map(|s| s.to_string())
+        .collect();
 
-    let helper = helper::ShellPromptHelper::default();
+    let helper = helper::ShellPromptHelper::new(builtins);
     rl.set_helper(Some(helper));
 
     let mut state = match state {
