@@ -72,6 +72,10 @@ pub fn get_commands() -> HashMap<String, Rc<dyn ShellCommand>> {
             "printenv".to_string(),
             Rc::new(PrintEnvCommand) as Rc<dyn ShellCommand>,
         ),
+        (
+            "clear".to_string(),
+            Rc::new(ClearCommand) as Rc<dyn ShellCommand>,
+        ),
     ])
 }
 
@@ -154,5 +158,19 @@ impl ShellCommand for SourceCommand {
                 Box::pin(futures::future::ready(ExecuteResult::from_exit_code(1)))
             }
         }
+    }
+}
+
+pub struct ClearCommand;
+
+impl ShellCommand for ClearCommand {
+    fn execute(&self, _context: ShellCommandContext) -> LocalBoxFuture<'static, ExecuteResult> {
+        Box::pin(async move {
+            // ANSI escape sequence to clear screen and move cursor to top
+            print!("\x1B[2J\x1B[1;1H");
+            // Ensure output is flushed
+            std::io::Write::flush(&mut std::io::stdout()).unwrap();
+            ExecuteResult::Continue(0, vec![], vec![])
+        })
     }
 }
