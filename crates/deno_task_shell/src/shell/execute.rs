@@ -1096,10 +1096,7 @@ async fn evaluate_condition(
           Some(UnaryOp::Socket) => todo!(),
           Some(UnaryOp::NonEmptyString) => !rhs.value.is_empty(),
           Some(UnaryOp::EmptyString) => rhs.value.is_empty(),
-          Some(UnaryOp::VariableSet) => {
-            println!("VariableSet: {:?}", rhs.value);
-            state.get_var(&rhs.value).is_some()
-          }
+          Some(UnaryOp::VariableSet) => state.get_var(&rhs.value).is_some(),
           Some(UnaryOp::VariableNameReference) => todo!(),
           None => todo!(),
         }
