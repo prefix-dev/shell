@@ -143,9 +143,15 @@ fn is_executable(entry: &fs::DirEntry) -> bool {
     }
     #[cfg(windows)]
     {
-        let file_name = entry.file_name();
-        // Load COMSPEC from the environment
-        file_name.ends_with(".exe") || file_name.ends_with(".bat") || file_name.ends_with(".cmd")
+        entry
+            .path()
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .map(|ext| {
+                let ext = ext.to_lowercase();
+                matches!(ext.as_str(), "exe" | "bat" | "cmd")
+            })
+            .unwrap_or(false)
     }
 }
 
