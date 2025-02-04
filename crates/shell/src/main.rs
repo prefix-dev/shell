@@ -46,15 +46,16 @@ async fn init_state(norc: bool, var_args: &[String]) -> miette::Result<ShellStat
     let default_ps1 = "{display_cwd}{git_branch}$ ";
     env_vars.insert("PS1".to_string(), default_ps1.to_string());
 
+    let mut shell_vars = HashMap::new();
     // Set all arguments such as $0, $1, $2, etc.
     for (idx, arg) in var_args.iter().enumerate() {
-        env_vars.insert(format!("{}", idx + 1), arg.clone());
+        shell_vars.insert(format!("{}", idx + 1), arg.clone());
     }
 
     // Set the $@ variable
     let args: Vec<String> = std::env::args().collect();
-    env_vars.insert("@".to_string(), args.join(" "));
-    env_vars.insert("#".to_string(), args.len().to_string());
+    shell_vars.insert("@".to_string(), args.join(" "));
+    shell_vars.insert("#".to_string(), args.len().to_string());
 
     // Set the SHELL variable
     let current_exe = std::env::current_exe().into_diagnostic()?;
@@ -64,7 +65,8 @@ async fn init_state(norc: bool, var_args: &[String]) -> miette::Result<ShellStat
     );
 
     let cwd = std::env::current_dir().unwrap();
-    let mut state = ShellState::new(env_vars, &cwd, commands::get_commands());
+    let mut state =
+        ShellState::new(env_vars, &cwd, commands::get_commands()).with_shell_vars(shell_vars);
 
     // Load ~/.shellrc
     if let Some(home_dir) = dirs::home_dir() {
