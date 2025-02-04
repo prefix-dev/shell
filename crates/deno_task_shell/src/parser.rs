@@ -955,29 +955,36 @@ fn parse_wordlist(pair: Pair<Rule>) -> Result<Vec<Word>> {
   Ok(words)
 }
 
+fn parse_do_group(pairs: Pair<Rule>) -> Result<SequentialList> {
+  let mut inner = pairs.into_inner();
+  let mut result = Vec::new();
+  let body_pair = inner
+    .next()
+    .ok_or_else(|| miette!("Expected body in do group"))?;
+  parse_compound_list(body_pair, &mut result)?;
+
+  Ok(SequentialList { items: result })
+}
+
 fn parse_for_loop(pairs: Pair<Rule>) -> Result<ForLoop> {
   let mut inner = pairs.into_inner();
-  inner.next().unwrap(); // Skip the FOR keyword
+
   let var_name = inner
     .next()
     .ok_or_else(|| miette!("Expected variable name in for loop"))?
     .as_str()
     .to_string();
 
-  inner.next().unwrap(); // Skip the IN keyword
-
   let wordlist = match inner.next() {
     Some(wordlist_pair) => parse_wordlist(wordlist_pair)?,
     None => panic!("Expected wordlist in for loop"),
   };
 
-  // skip sequential_sep
-  inner.next().unwrap();
-
   let body_pair = inner
     .next()
     .ok_or_else(|| miette!("Expected body in for loop"))?;
-  let body = parse_complete_command(body_pair)?;
+
+  let body = parse_do_group(body_pair)?;
 
   Ok(ForLoop {
     var_name,
