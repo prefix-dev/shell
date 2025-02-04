@@ -613,16 +613,22 @@ async fn execute_for_clause(
   let mut last_exit_code = 0;
   let mut async_handles = Vec::new();
 
-  for word in for_clause.wordlist {
-    let word =
-      match evaluate_word(word, state, stdin.clone(), stderr.clone()).await {
-        Ok(word) => word,
-        Err(err) => {
-          return err.into_exit_code(&mut stderr);
-        }
-      };
-    let change =
-      EnvChange::SetShellVar(for_clause.var_name.clone(), word.value);
+  let args = match evaluate_args(
+    for_clause.wordlist,
+    state,
+    stdin.clone(),
+    stderr.clone(),
+  )
+  .await
+  {
+    Ok(args) => args,
+    Err(err) => {
+      return err.into_exit_code(&mut stderr);
+    }
+  };
+
+  for word in args.value {
+    let change = EnvChange::SetShellVar(for_clause.var_name.clone(), word);
     state.apply_changes(&[change]);
 
     let result = execute_sequential_list(
