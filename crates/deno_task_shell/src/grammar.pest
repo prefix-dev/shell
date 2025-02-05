@@ -292,7 +292,7 @@ term = !{ and_or ~ (separator ~ and_or)* }
 
 for_clause = {
     For ~ name ~ linebreak ~
-    (In ~ (brace_group | wordlist)? ~ ";")? ~
+    (In ~ (brace_group | wordlist)? ~ (";" | NEWLINE))? ~
     do_group
 }
 

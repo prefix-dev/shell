@@ -23,6 +23,14 @@ Current fruit: apple
 Current fruit: banana
 Current fruit: orange
 
+> for item in a b c
+> do
+>     echo "Current letter: $item"
+> done
+Current letter: a
+Current letter: b
+Current letter: c
+
 # > for i in {1..5}; do echo $i; done
 # 1
 # 2
