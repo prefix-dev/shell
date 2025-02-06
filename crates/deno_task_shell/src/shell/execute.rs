@@ -17,6 +17,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::parser::AssignmentOp;
 use crate::parser::BinaryOp;
+use crate::parser::BraceRange;
 use crate::parser::Condition;
 use crate::parser::ConditionInner;
 use crate::parser::ElsePart;
@@ -446,6 +447,7 @@ async fn resolve_redirect_word_pipe(
     &mut state.clone(),
     stdin.clone(),
     stderr.clone(),
+    true,
   )
   .await;
   let words = match words {
@@ -1303,6 +1305,7 @@ pub async fn evaluate_args(
       state,
       stdin.clone(),
       stderr.clone(),
+      true,
     )
     .await?;
     result.extend(parts);
@@ -1317,7 +1320,20 @@ async fn evaluate_word(
   stderr: ShellPipeWriter,
 ) -> Result<WordResult, EvaluateWordTextError> {
   Ok(
-    evaluate_word_parts(word.into_parts(), state, stdin, stderr)
+    evaluate_word_parts(word.into_parts(), state, stdin, stderr, true)
+      .await?
+      .into(),
+  )
+}
+
+async fn evaluate_word_no_glob(
+  word: Word,
+  state: &mut ShellState,
+  stdin: ShellPipeReader,
+  stderr: ShellPipeWriter,
+) -> Result<WordResult, EvaluateWordTextError> {
+  Ok(
+    evaluate_word_parts(word.into_parts(), state, stdin, stderr, false)
       .await?
       .into(),
   )
@@ -1469,6 +1485,7 @@ fn evaluate_word_parts(
   state: &mut ShellState,
   stdin: ShellPipeReader,
   stderr: ShellPipeWriter,
+  expand_glob: bool,
 ) -> LocalBoxFuture<Result<WordPartsResult, EvaluateWordTextError>> {
   fn text_parts_to_string(parts: Vec<TextPart>) -> String {
     let mut result =
@@ -1644,6 +1661,10 @@ fn evaluate_word_parts(
                 "Tilde expansion with username is not supported."
               ))
             }
+          }
+          WordPart::BraceRange(BraceRange { start, end, step: _ }) => {
+            current_text.push(TextPart::Text(format!("{:?} -- {:?}", start, end)));
+            continue;
           }
           WordPart::Arithmetic(arithmetic) => {
             let arithmetic_result =

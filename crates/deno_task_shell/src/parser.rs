@@ -400,6 +400,29 @@ pub enum VariableModifier {
   feature = "serialization",
   serde(rename_all = "camelCase", tag = "kind", content = "value")
 )]
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum BraceElement {
+    Integer(i64),
+    String(String),
+}
+
+#[cfg_attr(feature = "serialization", derive(serde::Serialize))]
+#[cfg_attr(
+  feature = "serialization",
+  serde(rename_all = "camelCase", tag = "kind", content = "value")
+)]
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct BraceRange {
+    pub start: BraceElement,
+    pub end: BraceElement,
+    pub  step: Option<BraceElement>,
+}
+
+#[cfg_attr(feature = "serialization", derive(serde::Serialize))]
+#[cfg_attr(
+  feature = "serialization",
+  serde(rename_all = "camelCase", tag = "kind", content = "value")
+)]
 #[derive(Debug, PartialEq, Eq, Clone, Error)]
 pub enum WordPart {
   #[error("Invalid text")]
@@ -414,6 +437,8 @@ pub enum WordPart {
   Tilde(TildePrefix),
   #[error("Invalid arithmetic expression")]
   Arithmetic(Arithmetic),
+  #[error("Invalid range expression")]
+  BraceRange(BraceRange),
   #[error("Invalid exit status")]
   ExitStatus,
 }
@@ -996,9 +1021,6 @@ fn parse_for_loop(pairs: Pair<Rule>) -> Result<ForLoop> {
 fn parse_compound_command(pair: Pair<Rule>) -> Result<Command> {
   let inner = pair.into_inner().next().unwrap();
   match inner.as_rule() {
-    Rule::brace_group => {
-      Err(miette!("Unsupported compound command brace_group"))
-    }
     Rule::subshell => parse_subshell(inner),
     Rule::for_clause => {
       let for_loop = parse_for_loop(inner);
@@ -1222,7 +1244,7 @@ fn parse_binary_conditional_expression(pair: Pair<Rule>) -> Result<Condition> {
 
   let left_word = parse_word(left)?;
   let right_word = parse_word(right)?;
-
+  println!("right word: {:?}", right_word);
   let op = match operator.as_rule() {
     Rule::binary_bash_conditional_op => match operator.as_str() {
       "==" => BinaryOp::Equal,
@@ -1268,12 +1290,41 @@ fn parse_binary_conditional_expression(pair: Pair<Rule>) -> Result<Condition> {
   })
 }
 
+
+fn parse_brace_element(pair: Pair<Rule>) -> Result<BraceElement> {
+  let text = pair.as_str();
+  if let Ok(num) = text.parse::<i64>() {
+      Ok(BraceElement::Integer(num))
+  } else {
+      Ok(BraceElement::String(text.to_string()))
+  }
+}
+
+fn parse_brace_expansion(pair: Pair<Rule>) -> Result<WordPart> {
+  let mut inner = pair.into_inner();
+
+  let start = inner
+      .next()
+      .ok_or_else(|| miette!("Expected start of brace expansion"))?;
+  let start = parse_brace_element(start)?;
+
+  let end = inner
+      .next()
+      .ok_or_else(|| miette!("Expected end of brace expansion"))?;
+  let end = parse_brace_element(end)?;
+
+  let step = inner.next().map(parse_brace_element).transpose()?;
+
+  Ok(WordPart::BraceRange(BraceRange { start, end, step }))
+}
+
 fn parse_word(pair: Pair<Rule>) -> Result<Word> {
   let mut parts = Vec::new();
 
   match pair.as_rule() {
     Rule::UNQUOTED_PENDING_WORD => {
       for part in pair.into_inner() {
+        println!("part: {:?}", part.as_rule());
         match part.as_rule() {
           Rule::EXIT_STATUS => parts.push(WordPart::ExitStatus),
           Rule::UNQUOTED_CHAR => {
@@ -1320,6 +1371,11 @@ fn parse_word(pair: Pair<Rule>) -> Result<Word> {
           Rule::TILDE_PREFIX => {
             let tilde_prefix = parse_tilde_prefix(part)?;
             parts.push(tilde_prefix);
+          }
+          Rule::BRACE_RANGE_EXPANSION => {
+            println!("Part: {:?}", part);
+            let brace_expansion = parse_brace_expansion(part)?;
+            parts.push(brace_expansion);
           }
           Rule::ARITHMETIC_EXPRESSION => {
             let arithmetic_expression = parse_arithmetic_expression(part)?;

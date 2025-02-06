@@ -10,21 +10,23 @@ INT = { ("+" | "-")? ~ ASCII_DIGIT+ }
 QUOTED_WORD = { DOUBLE_QUOTED | SINGLE_QUOTED }
 
 UNQUOTED_PENDING_WORD = ${ 
-    (TILDE_PREFIX ~ (!(OPERATOR | WHITESPACE | NEWLINE) ~ (
+    (TILDE_PREFIX ~ (!(WHITESPACE | NEWLINE) ~ (
         EXIT_STATUS | 
         UNQUOTED_ESCAPE_CHAR | 
         "$" ~ ARITHMETIC_EXPRESSION |
-        SUB_COMMAND | 
+        SUB_COMMAND |
+        BRACE_EXPANSION |
         VARIABLE_EXPANSION | 
         UNQUOTED_CHAR | 
         QUOTED_WORD
     ))*)
     | 
-    (!(OPERATOR | WHITESPACE | NEWLINE) ~ (
+    (!(WHITESPACE | NEWLINE) ~ (
         EXIT_STATUS | 
         UNQUOTED_ESCAPE_CHAR | 
         "$" ~ ARITHMETIC_EXPRESSION |
         SUB_COMMAND | 
+        BRACE_EXPANSION |
         VARIABLE_EXPANSION | 
         UNQUOTED_CHAR | 
         QUOTED_WORD
@@ -36,6 +38,7 @@ QUOTED_PENDING_WORD = ${ (
     QUOTED_ESCAPE_CHAR | 
     "$" ~ ARITHMETIC_EXPRESSION |
     SUB_COMMAND | 
+    BRACE_EXPANSION |
     VARIABLE_EXPANSION |
     QUOTED_CHAR
 )* }
@@ -46,6 +49,7 @@ PARAMETER_PENDING_WORD = ${
         PARAMETER_ESCAPE_CHAR | 
         "$" ~ ARITHMETIC_EXPRESSION |
         SUB_COMMAND | 
+        BRACE_EXPANSION |
         VARIABLE_EXPANSION |
         QUOTED_WORD | 
         QUOTED_CHAR
@@ -55,6 +59,7 @@ PARAMETER_PENDING_WORD = ${
         PARAMETER_ESCAPE_CHAR | 
         "$" ~ ARITHMETIC_EXPRESSION |
         SUB_COMMAND | 
+        BRACE_EXPANSION |
         VARIABLE_EXPANSION |
         QUOTED_WORD | 
         QUOTED_CHAR
@@ -62,26 +67,28 @@ PARAMETER_PENDING_WORD = ${
  }
 
 FILE_NAME_PENDING_WORD = ${
-    (TILDE_PREFIX ~ (!(WHITESPACE | OPERATOR | NEWLINE) ~ (
+    (TILDE_PREFIX ~ (!(WHITESPACE | NEWLINE) ~ (
         UNQUOTED_ESCAPE_CHAR |
+        BRACE_EXPANSION |
         VARIABLE_EXPANSION |
         UNQUOTED_CHAR |
         QUOTED_WORD
     ))*)
     |
-    (!(WHITESPACE | OPERATOR | NEWLINE) ~ (
+    (!(WHITESPACE | NEWLINE) ~ (
         UNQUOTED_ESCAPE_CHAR |
+        BRACE_EXPANSION |
         VARIABLE_EXPANSION |
         UNQUOTED_CHAR |
         QUOTED_WORD
     ))+
 }
 
-UNQUOTED_ESCAPE_CHAR = ${ ("\\" ~ "$" | "$" ~ !"(" ~  !"{" ~ !VARIABLE) | "\\" ~ (" " | "`" | "\"" | "(" | ")") }
+UNQUOTED_ESCAPE_CHAR = ${ ("\\" ~ "$" | "$" ~ !"(" ~  !"{" ~ !VARIABLE) | "\\" ~ (" " | "`" | "\"" | "(" | ")" | "{" | "}") }
 QUOTED_ESCAPE_CHAR = ${ "\\" ~ "$" | "$" ~ !"(" ~ !"{" ~ !(ASCII_DIGIT | VARIABLE) | "\\" ~ ("`" | "\"" | "(" | ")" | "'") }
 PARAMETER_ESCAPE_CHAR = ${ "\\" ~ "$" | "$" ~ !"(" ~ !"{" ~ !VARIABLE | "\\" ~ "}" }
 
-UNQUOTED_CHAR = ${ ("\\" ~ " ") | !("]]" | "[[" | "(" | ")" | "<" | ">" | "|" | "&" | ";" | "\"" | "'" | "$") ~ ANY }
+UNQUOTED_CHAR = ${ ("\\" ~ " ") | !OPERATOR ~ ANY }
 QUOTED_CHAR = ${ !"\"" ~ ANY }
 
 VARIABLE_EXPANSION = ${
@@ -91,6 +98,21 @@ VARIABLE_EXPANSION = ${
         VARIABLE
     )
 }
+
+// {1..5} -> 1 2 3 4 5
+// {1..5..2} -> 1 3 5
+// {1,24,5,123} -> 1 24 5 123
+// TODO: this should support some more things: `{1..100}` should work, and `{1..a}` (single unicode char)
+// However, {aa..bb} should not work, as it's not a valid range
+BRACE_ELEMENT = ${ ASCII_DIGIT+ | ANY }
+BRACE_RANGE_EXPANSION = ${
+    "{" ~ (BRACE_ELEMENT ~ ".." ~ BRACE_ELEMENT ~ (".." ~ BRACE_ELEMENT)?) ~ "}"
+}
+
+COMMA = { "," }
+BRACE_LIST_EXPANSION = ${ "{" ~ (UNQUOTED_PENDING_WORD? ~ COMMA)+ ~ (UNQUOTED_PENDING_WORD? ~ COMMA?) ~ "}" }
+
+BRACE_EXPANSION = _{ BRACE_RANGE_EXPANSION | BRACE_LIST_EXPANSION }
 
 SPECIAL_PARAM = ${ ARGNUM | "@" | "#" | "?" | "$" | "*" }
 ARGNUM = ${ ASCII_NONZERO_DIGIT ~ ASCII_DIGIT* | "0" }
@@ -153,7 +175,7 @@ EXIT_STATUS = ${ "$?" }
 // Operators
 OPERATOR = _{
     AND_IF | OR_IF | DSEMI | DLESS | DGREAT | LESSAND | GREATAND | LESSGREAT | DLESSDASH | CLOBBER |
-    "," |"(" | ")" | "{" | "}" | ";" | "&" | "|" | "<" | ">"
+    "(" | ")" | ";" | "&" | "|" | "<" | ">" | "{" | "}" | "," 
 }
 
 // Reserved words
@@ -197,7 +219,6 @@ command = !{
 }
 
 compound_command = {
-    brace_group |
     ARITHMETIC_EXPRESSION |
     subshell |
     for_clause |
@@ -292,7 +313,7 @@ term = !{ and_or ~ (separator ~ and_or)* }
 
 for_clause = {
     For ~ name ~ linebreak ~
-    (In ~ (brace_group | wordlist)? ~ (";" | NEWLINE))? ~
+    (In ~ (wordlist)? ~ (";" | NEWLINE))? ~
     do_group
 }
 
@@ -384,7 +405,6 @@ function_body = !{ compound_command ~ redirect_list? }
 fname = @{ RESERVED_WORD | NAME | ASSIGNMENT_WORD | UNQUOTED_PENDING_WORD }
 name = @{ NAME } 
 
-brace_group = !{ Lbrace ~ compound_list ~ Rbrace }
 do_group = !{ Do ~ compound_list ~ Done }
 
 simple_command = !{
