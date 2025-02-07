@@ -4,10 +4,10 @@ use futures::future::LocalBoxFuture;
 use futures::FutureExt as _;
 use miette::IntoDiagnostic;
 use miette::Result;
-use tokio::fs::File;
-use tokio::io::AsyncReadExt as _;
 use std::io::IsTerminal;
 use std::path::Path;
+use tokio::fs::File;
+use tokio::io::AsyncReadExt as _;
 
 use crate::shell::commands::execute_with_cancellation;
 use crate::shell::types::ExecuteResult;
@@ -22,7 +22,10 @@ use super::ShellCommandContext;
 pub struct CatCommand;
 
 impl ShellCommand for CatCommand {
-    fn execute(&self, context: ShellCommandContext) -> LocalBoxFuture<'static, ExecuteResult> {
+    fn execute(
+        &self,
+        context: ShellCommandContext,
+    ) -> LocalBoxFuture<'static, ExecuteResult> {
         async move {
             execute_with_cancellation!(
                 cat_command(
@@ -46,7 +49,7 @@ async fn cat_command(
     mut stdout: ShellPipeWriter,
     mut stderr: ShellPipeWriter,
 ) -> ExecuteResult {
-    match execute_cat(cwd, args, stdin, &mut stdout, &mut stderr).await {
+    match execute_cat(cwd, args, stdin, &mut stdout).await {
         Ok(()) => ExecuteResult::Continue(0, Vec::new(), Vec::new()),
         Err(err) => {
             let _ = stderr.write_line(&format!("cat: {err}"));
@@ -60,7 +63,6 @@ async fn execute_cat(
     args: Vec<String>,
     stdin: ShellPipeReader,
     stdout: &mut ShellPipeWriter,
-    stderr: &mut ShellPipeWriter,
 ) -> Result<()> {
     let flags = parse_args(args)?;
     let mut buf = vec![0; 1024];
@@ -73,10 +75,12 @@ async fn execute_cat(
                 Ok(mut file) => {
                     let mut new_line = true;
                     loop {
-                        let size = file.read(&mut buf).await.into_diagnostic()?;
+                        let size =
+                            file.read(&mut buf).await.into_diagnostic()?;
                         if size == 0 {
                             if let ShellPipeWriter::Stdout = stdout {
-                                if !new_line && std::io::stdout().is_terminal() {
+                                if !new_line && std::io::stdout().is_terminal()
+                                {
                                     stdout.write_all(b"%\n")?;
                                 }
                             }
