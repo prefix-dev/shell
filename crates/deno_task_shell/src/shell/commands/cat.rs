@@ -87,8 +87,7 @@ async fn execute_cat(
                     }
                 }
                 Err(err) => {
-                    stderr.write_line(&format!("cat: {path}: {err}"))?;
-                    miette::bail!("failed to open file: {path}");
+                    miette::bail!(format!("{path}: {err}"));
                 }
             }
         }
