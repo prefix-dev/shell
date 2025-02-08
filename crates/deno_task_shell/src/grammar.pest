@@ -166,7 +166,7 @@ Do = _{ "do" }
 Done = _{ "done" }
 Case = { "case" }
 Esac = { "esac" }
-While = { "while" }
+While = _{ "while" }
 Until = { "until" }
 For = _{ "for" }
 Lbrace = { "{" }
@@ -375,7 +375,7 @@ binary_posix_conditional_op = !{
     "-eq" | "-ne" | "-lt" | "-le" | "-gt" | "-ge"
 }
 
-while_clause = !{ While ~ compound_list ~ do_group }
+while_clause = !{ While ~ conditional_expression ~ do_group }
 until_clause = !{ Until ~ compound_list ~ do_group }
 
 function_definition = !{ fname ~ "(" ~ ")" ~ linebreak ~ function_body }
