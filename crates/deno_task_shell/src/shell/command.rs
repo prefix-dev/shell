@@ -7,6 +7,7 @@ use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
 
+use crate::parser::CommandInner;
 use crate::shell::types::ShellState;
 use crate::ExecutableCommand;
 use crate::ExecuteResult;
@@ -197,15 +198,12 @@ async fn parse_shebang_args(
         return err_unsupported(text);
     }
     let cmd = match cmd.inner {
-        crate::parser::CommandInner::Simple(cmd) => cmd,
-        crate::parser::CommandInner::Subshell(_) => {
-            return err_unsupported(text)
-        }
-        crate::parser::CommandInner::If(_) => return err_unsupported(text),
-        crate::parser::CommandInner::For(_) => return err_unsupported(text),
-        crate::parser::CommandInner::ArithmeticExpression(_) => {
-            return err_unsupported(text)
-        }
+        CommandInner::Simple(cmd) => cmd,
+        CommandInner::Subshell(_) => return err_unsupported(text),
+        CommandInner::If(_) => return err_unsupported(text),
+        CommandInner::For(_) => return err_unsupported(text),
+        CommandInner::While(_) => return err_unsupported(text),
+        CommandInner::ArithmeticExpression(_) => return err_unsupported(text),
     };
     if !cmd.env_vars.is_empty() {
         return err_unsupported(text);

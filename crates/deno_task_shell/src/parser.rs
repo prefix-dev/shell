@@ -164,6 +164,8 @@ pub enum CommandInner {
     If(IfClause),
     #[error("Invalid for loop")]
     For(ForLoop),
+    #[error("Invalid while loop")]
+    While(WhileLoop),
     #[error("Invalid arithmetic expression")]
     ArithmeticExpression(Arithmetic),
 }
@@ -233,6 +235,16 @@ pub struct ForLoop {
     pub var_name: String,
     pub wordlist: Vec<Word>,
     pub body: SequentialList,
+}
+
+#[cfg_attr(feature = "serialization", derive(serde::Serialize))]
+#[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
+#[derive(Debug, PartialEq, Eq, Clone, Error)]
+#[error("Invalid while loop")]
+pub struct WhileLoop {
+    pub condition: Condition,
+    pub body: SequentialList,
+    pub is_until: bool,
 }
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
@@ -1003,6 +1015,25 @@ fn parse_for_loop(pairs: Pair<Rule>) -> Result<ForLoop> {
     })
 }
 
+fn parse_while_loop(pair: Pair<Rule>, is_until: bool) -> Result<WhileLoop> {
+    let mut inner = pair.into_inner();
+    let condition = inner
+        .next()
+        .ok_or_else(|| miette!("Expected condition in while loop"))?;
+    let condition = parse_conditional_expression(condition)?;
+
+    let body_pair = inner
+        .next()
+        .ok_or_else(|| miette!("Expected body in while loop"))?;
+    let body = parse_do_group(body_pair)?;
+
+    Ok(WhileLoop {
+        condition,
+        body,
+        is_until,
+    })
+}
+
 fn parse_compound_command(pair: Pair<Rule>) -> Result<Command> {
     let inner = pair.into_inner().next().unwrap();
     match inner.as_rule() {
@@ -1017,6 +1048,20 @@ fn parse_compound_command(pair: Pair<Rule>) -> Result<Command> {
                 redirect: None,
             })
         }
+        Rule::while_clause => {
+            let while_loop = parse_while_loop(inner, false);
+            Ok(Command {
+                inner: CommandInner::While(while_loop?),
+                redirect: None,
+            })
+        }
+        Rule::until_clause => {
+            let while_loop = parse_while_loop(inner, true);
+            Ok(Command {
+                inner: CommandInner::While(while_loop?),
+                redirect: None,
+            })
+        }
         Rule::case_clause => {
             Err(miette!("Unsupported compound command case_clause"))
         }
@@ -1026,12 +1071,6 @@ fn parse_compound_command(pair: Pair<Rule>) -> Result<Command> {
                 inner: CommandInner::If(if_clause),
                 redirect: None,
             })
-        }
-        Rule::while_clause => {
-            Err(miette!("Unsupported compound command while_clause"))
-        }
-        Rule::until_clause => {
-            Err(miette!("Unsupported compound command until_clause"))
         }
         Rule::ARITHMETIC_EXPRESSION => {
             let arithmetic_expression = parse_arithmetic_expression(inner)?;
