@@ -680,43 +680,46 @@ async fn execute_while_clause(
             stderr.clone(),
         )
         .await;
+
         match condition_result {
-            Ok(ConditionalResult {
-                value: true,
-                changes: env_changes,
-            }) => {
+            Ok(ConditionalResult { value, changes: env_changes }) => {
                 state.apply_changes(&env_changes);
                 changes.extend(env_changes);
-                let exec_result = execute_sequential_list(
-                    while_clause.body.clone(),
-                    state.clone(),
-                    stdin.clone(),
-                    stdout.clone(),
-                    stderr.clone(),
-                    AsyncCommandBehavior::Yield,
-                )
-                .await;
-                match exec_result {
-                    ExecuteResult::Exit(code, handles) => {
-                        async_handles.extend(handles);
-                        last_exit_code = code;
-                        break;
+
+                // For until loops, we invert the condition
+                let should_execute_body = if while_clause.is_until {
+                    !value
+                } else {
+                    value
+                };
+
+                if should_execute_body {
+                    let exec_result = execute_sequential_list(
+                        while_clause.body.clone(),
+                        state.clone(),
+                        stdin.clone(),
+                        stdout.clone(),
+                        stderr.clone(),
+                        AsyncCommandBehavior::Yield,
+                    )
+                    .await;
+
+                    match exec_result {
+                        ExecuteResult::Exit(code, handles) => {
+                            async_handles.extend(handles);
+                            last_exit_code = code;
+                            break;
+                        }
+                        ExecuteResult::Continue(code, env_changes, handles) => {
+                            state.apply_changes(&env_changes);
+                            changes.extend(env_changes);
+                            async_handles.extend(handles);
+                            last_exit_code = code;
+                        }
                     }
-                    ExecuteResult::Continue(code, env_changes, handles) => {
-                        state.apply_changes(&env_changes);
-                        changes.extend(env_changes);
-                        async_handles.extend(handles);
-                        last_exit_code = code;
-                    }
+                } else {
+                    break;
                 }
-            }
-            Ok(ConditionalResult {
-                value: false,
-                changes: env_changes,
-            }) => {
-                state.apply_changes(&env_changes);
-                changes.extend(env_changes);
-                break;
             }
             Err(err) => {
                 return err.into_exit_code(&mut stderr);
