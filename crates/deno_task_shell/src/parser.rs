@@ -1027,7 +1027,11 @@ fn parse_while_loop(pair: Pair<Rule>, is_until: bool) -> Result<WhileLoop> {
         .ok_or_else(|| miette!("Expected body in while loop"))?;
     let body = parse_do_group(body_pair)?;
 
-    Ok(WhileLoop { condition, body, is_until })
+    Ok(WhileLoop {
+        condition,
+        body,
+        is_until,
+    })
 }
 
 fn parse_compound_command(pair: Pair<Rule>) -> Result<Command> {

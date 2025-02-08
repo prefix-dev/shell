@@ -682,16 +682,16 @@ async fn execute_while_clause(
         .await;
 
         match condition_result {
-            Ok(ConditionalResult { value, changes: env_changes }) => {
+            Ok(ConditionalResult {
+                value,
+                changes: env_changes,
+            }) => {
                 state.apply_changes(&env_changes);
                 changes.extend(env_changes);
 
                 // For until loops, we invert the condition
-                let should_execute_body = if while_clause.is_until {
-                    !value
-                } else {
-                    value
-                };
+                let should_execute_body =
+                    if while_clause.is_until { !value } else { value };
 
                 if should_execute_body {
                     let exec_result = execute_sequential_list(
