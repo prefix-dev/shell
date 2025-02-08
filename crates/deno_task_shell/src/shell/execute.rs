@@ -1177,7 +1177,11 @@ fn is_glob(pattern: &str) -> bool {
     pattern.chars().any(|c| matches!(c, '?' | '*' | '['))
 }
 
-fn string_match(left: &str, right: &str, is_quoted: bool) -> Result<bool, glob::PatternError> {
+fn string_match(
+    left: &str,
+    right: &str,
+    is_quoted: bool,
+) -> Result<bool, glob::PatternError> {
     let match_options = glob::MatchOptions {
         case_sensitive: true,
         require_literal_separator: true,
@@ -1699,7 +1703,7 @@ fn evaluate_word_parts(
                     TextPart::Quoted(_) => None,
                     TextPart::Text(text) => Some(text.as_str()),
                 })
-                .any(|text| is_glob(text))
+                .any(is_glob)
         {
             let mut current_text = String::new();
             for text_part in text_parts {
