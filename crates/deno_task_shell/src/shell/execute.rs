@@ -479,6 +479,7 @@ async fn resolve_redirect_word_pipe(
     let words = evaluate_word_parts(
         word.into_parts(),
         &mut state.clone(),
+        EvaluateGlob::Enabled,
         stdin.clone(),
         stderr.clone(),
     )
@@ -1168,6 +1169,33 @@ fn check_permission(path: &str, permission: FilePermission) -> bool {
     }
 }
 
+fn glob_pattern(pattern: &str) -> Result<glob::Pattern, glob::PatternError> {
+    glob::Pattern::new(pattern)
+}
+
+fn is_glob(pattern: &str) -> bool {
+    pattern.chars().any(|c| matches!(c, '?' | '*' | '['))
+}
+
+fn string_match(
+    left: &str,
+    right: &str,
+    is_quoted: bool,
+) -> Result<bool, glob::PatternError> {
+    let match_options = glob::MatchOptions {
+        case_sensitive: true,
+        require_literal_separator: true,
+        require_literal_leading_dot: true,
+    };
+    // if rhs contains a glob pattern, we need to use the glob matcher
+    if !is_quoted && is_glob(right) {
+        let matcher = glob_pattern(right)?;
+        Ok(matcher.matches_with(left, match_options))
+    } else {
+        Ok(left == right)
+    }
+}
+
 async fn evaluate_condition(
     condition: Condition,
     state: &mut ShellState,
@@ -1183,9 +1211,18 @@ async fn evaluate_condition(
             state.apply_changes(&left.changes);
             changes.extend(left.clone().changes);
 
-            let right =
-                evaluate_word(right, state, stdin.clone(), stderr.clone())
-                    .await?;
+            let quoted = right
+                .parts()
+                .first()
+                .map(|w| matches!(w, WordPart::Quoted(_)))
+                .unwrap_or(false);
+            let right = evaluate_word_no_glob(
+                right,
+                state,
+                stdin.clone(),
+                stderr.clone(),
+            )
+            .await?;
             state.apply_changes(&right.changes);
             changes.extend(right.clone().changes);
 
@@ -1208,8 +1245,12 @@ async fn evaluate_condition(
             }
 
             Ok(match op {
-                BinaryOp::Equal => left == right,
-                BinaryOp::NotEqual => left != right,
+                BinaryOp::Equal => {
+                    string_match(&left.value, &right.value, quoted).unwrap()
+                }
+                BinaryOp::NotEqual => {
+                    !string_match(&left.value, &right.value, quoted).unwrap()
+                }
                 BinaryOp::LessThan => left < right,
                 BinaryOp::LessThanOrEqual => left <= right,
                 BinaryOp::GreaterThan => left > right,
@@ -1398,6 +1439,7 @@ pub async fn evaluate_args(
         let parts = evaluate_word_parts(
             arg.into_parts(),
             state,
+            EvaluateGlob::Enabled,
             stdin.clone(),
             stderr.clone(),
         )
@@ -1413,9 +1455,33 @@ async fn evaluate_word(
     stdin: ShellPipeReader,
     stderr: ShellPipeWriter,
 ) -> Result<WordResult, EvaluateWordTextError> {
-    Ok(evaluate_word_parts(word.into_parts(), state, stdin, stderr)
-        .await?
-        .into())
+    Ok(evaluate_word_parts(
+        word.into_parts(),
+        state,
+        EvaluateGlob::Enabled,
+        stdin,
+        stderr,
+    )
+    .await?
+    .into())
+}
+
+async fn evaluate_word_no_glob(
+    word: Word,
+    state: &mut ShellState,
+    stdin: ShellPipeReader,
+    stderr: ShellPipeWriter,
+) -> Result<WordResult, EvaluateWordTextError> {
+    let parts = evaluate_word_parts(
+        word.into_parts(),
+        state,
+        EvaluateGlob::Disabled,
+        stdin,
+        stderr,
+    )
+    .await?;
+
+    Ok(parts.into())
 }
 
 #[derive(Debug, Error)]
@@ -1593,9 +1659,24 @@ impl VariableModifier {
     }
 }
 
+/// Whether to evaluate glob patterns in a word
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EvaluateGlob {
+    Enabled,
+    Disabled,
+}
+
+/// Whether the word is quoted in the current context
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IsQuoted {
+    Yes,
+    No,
+}
+
 fn evaluate_word_parts(
     parts: Vec<WordPart>,
     state: &mut ShellState,
+    eval_glob: EvaluateGlob,
     stdin: ShellPipeReader,
     stderr: ShellPipeWriter,
 ) -> LocalBoxFuture<Result<WordPartsResult, EvaluateWordTextError>> {
@@ -1611,16 +1692,18 @@ fn evaluate_word_parts(
     fn evaluate_word_text(
         state: &ShellState,
         text_parts: Vec<TextPart>,
-        is_quoted: bool,
+        is_quoted: IsQuoted,
+        eval_glob: EvaluateGlob,
     ) -> Result<WordPartsResult, EvaluateWordTextError> {
-        if !is_quoted
+        if is_quoted == IsQuoted::No
+            && eval_glob == EvaluateGlob::Enabled
             && text_parts
                 .iter()
                 .filter_map(|p| match p {
                     TextPart::Quoted(_) => None,
                     TextPart::Text(text) => Some(text.as_str()),
                 })
-                .any(|text| text.chars().any(|c| matches!(c, '?' | '*' | '[')))
+                .any(is_glob)
         {
             let mut current_text = String::new();
             for text_part in text_parts {
@@ -1702,7 +1785,8 @@ fn evaluate_word_parts(
 
     fn evaluate_word_parts_inner(
         parts: Vec<WordPart>,
-        is_quoted: bool,
+        is_quoted: IsQuoted,
+        eval_glob: EvaluateGlob,
         state: &mut ShellState,
         stdin: ShellPipeReader,
         stderr: ShellPipeWriter,
@@ -1761,7 +1845,8 @@ fn evaluate_word_parts(
                         WordPart::Quoted(parts) => {
                             let res = evaluate_word_parts_inner(
                                 parts,
-                                true,
+                                IsQuoted::Yes,
+                                eval_glob,
                                 state,
                                 stdin.clone(),
                                 stderr.clone(),
@@ -1829,6 +1914,7 @@ fn evaluate_word_parts(
                                 state,
                                 current_text,
                                 is_quoted,
+                                eval_glob,
                             )?);
 
                             // store all the parts except the last one
@@ -1837,6 +1923,7 @@ fn evaluate_word_parts(
                                     state,
                                     vec![part],
                                     is_quoted,
+                                    eval_glob,
                                 )?);
                             }
 
@@ -1852,6 +1939,7 @@ fn evaluate_word_parts(
                     state,
                     current_text,
                     is_quoted,
+                    eval_glob,
                 )?);
             }
             Ok(result)
@@ -1859,7 +1947,14 @@ fn evaluate_word_parts(
         .boxed_local()
     }
 
-    evaluate_word_parts_inner(parts, false, state, stdin, stderr)
+    evaluate_word_parts_inner(
+        parts,
+        IsQuoted::No,
+        eval_glob,
+        state,
+        stdin,
+        stderr,
+    )
 }
 
 async fn evaluate_command_substitution(
