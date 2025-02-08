@@ -1659,14 +1659,14 @@ impl VariableModifier {
     }
 }
 
-/// Wether to evaluate glob patterns in a word
+/// Whether to evaluate glob patterns in a word
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EvaluateGlob {
     Enabled,
     Disabled,
 }
 
-/// Wether the word is quoted in the current context
+/// Whether the word is quoted in the current context
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IsQuoted {
     Yes,
