@@ -428,6 +428,13 @@ impl ExecuteResult {
       ExecuteResult::Continue(_, changes, handles) => (handles, changes),
     }
   }
+
+  pub fn exit_code(&self) -> i32 {
+    match self {
+      ExecuteResult::Exit(code, _) => *code,
+      ExecuteResult::Continue(code, _, _) => *code,
+    }
+  }
 }
 
 /// Reader side of a pipe.

@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use deno_task_shell::parser::debug_parse;
+use deno_task_shell::ExecuteResult;
 use deno_task_shell::ShellState;
 use miette::Context;
 use miette::IntoDiagnostic;
@@ -73,14 +74,14 @@ async fn init_state(norc: bool, var_args: &[String]) -> miette::Result<ShellStat
         let shellrc_file = home_dir.join(".shellrc");
         if !norc && shellrc_file.exists() {
             let line = format!("source '{}'", shellrc_file.to_string_lossy());
-            let prev_exit_code = execute(
+            let result = execute(
                 &line,
                 Some(shellrc_file.as_path().display().to_string()),
                 &mut state,
             )
             .await
             .context("Failed to source ~/.shellrc")?;
-            state.set_last_command_exit_code(prev_exit_code);
+            state.set_last_command_exit_code(result.exit_code());
         }
     }
 
@@ -183,15 +184,13 @@ async fn interactive(state: Option<ShellState>, norc: bool, args: &[String]) -> 
                 rl.add_history_entry(line.as_str()).into_diagnostic()?;
 
                 // Process the input (here we just echo it back)
-                let prev_exit_code = execute(&line, None, &mut state)
+                let result = execute(&line, None, &mut state)
                     .await
                     .context("Failed to execute")?;
-                state.set_last_command_exit_code(prev_exit_code);
+                state.set_last_command_exit_code(result.exit_code());
 
-                // Check for exit command
-                if line.trim().eq_ignore_ascii_case("exit") {
-                    println!("Exiting...");
-                    break;
+                if let ExecuteResult::Exit(exit_code, _) = result {
+                    std::process::exit(exit_code);
                 }
             }
             Err(ReadlineError::Interrupted) => {
@@ -235,13 +234,13 @@ async fn main() -> miette::Result<()> {
                 return Ok(());
             }
 
-            let exit_code = execute(&script_text, filename, &mut state).await?;
+            let result = execute(&script_text, filename, &mut state).await?;
 
             if options.interact {
                 interactive(Some(state), options.norc, &options.args).await?;
             }
 
-            std::process::exit(exit_code);
+            std::process::exit(result.exit_code());
         }
     }
 }
