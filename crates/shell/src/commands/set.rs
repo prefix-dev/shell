@@ -17,7 +17,7 @@ impl ShellCommand for SetCommand {
             Ok((code, env_changes)) => ExecuteResult::Continue(code, env_changes, Vec::new()),
             Err(err) => {
                 context.stderr.write_line(&format!("set: {err}")).unwrap();
-                ExecuteResult::Exit(2, Vec::new())
+                ExecuteResult::Exit(2, Vec::new(), Vec::new())
             }
         };
         Box::pin(futures::future::ready(result))

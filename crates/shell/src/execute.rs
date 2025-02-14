@@ -20,7 +20,7 @@ pub async fn execute_inner(
             stderr.write_all(format!("Filename: {:?}\n", filename).as_bytes())?;
         }
         stderr.write_all(format!("Syntax error: {:?}", e).as_bytes())?;
-        return Ok(ExecuteResult::Exit(1, vec![]));
+        return Ok(ExecuteResult::Exit(1, vec![], vec![]));
     }
 
     // spawn a sequential list and pipe its output to the environment
@@ -44,12 +44,15 @@ pub async fn execute(
 ) -> miette::Result<ExecuteResult> {
     let result = execute_inner(text, filename, state.clone()).await?;
 
-    if let ExecuteResult::Continue(_, changes, _) = &result {
-        // set CWD to the last command's CWD
-        state.apply_changes(changes);
-        std::env::set_current_dir(state.cwd())
-            .into_diagnostic()
-            .context("Failed to set CWD")?;
-    }
+    let changes = match &result {
+        ExecuteResult::Exit(_, changes, _) => changes,
+        ExecuteResult::Continue(_, changes, _) => changes,
+    };
+    // set CWD to the last command's CWD
+    state.apply_changes(changes);
+    std::env::set_current_dir(state.cwd())
+        .into_diagnostic()
+        .context("Failed to set CWD")?;
+
     Ok(result)
 }

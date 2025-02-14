@@ -189,7 +189,7 @@ async fn interactive(state: Option<ShellState>, norc: bool, args: &[String]) -> 
                     .context("Failed to execute")?;
                 state.set_last_command_exit_code(result.exit_code());
 
-                if let ExecuteResult::Exit(exit_code, _) = result {
+                if let ExecuteResult::Exit(exit_code, _, _) = result {
                     std::process::exit(exit_code);
                 }
             }
