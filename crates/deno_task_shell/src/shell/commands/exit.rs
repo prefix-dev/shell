@@ -14,19 +14,19 @@ use super::ShellCommandContext;
 pub struct ExitCommand;
 
 impl ShellCommand for ExitCommand {
-  fn execute(
-    &self,
-    mut context: ShellCommandContext,
-  ) -> LocalBoxFuture<'static, ExecuteResult> {
-    let result = match execute_exit(context.args) {
-      Ok(code) => ExecuteResult::Exit(code, Vec::new(), Vec::new()),
-      Err(err) => {
-        context.stderr.write_line(&format!("exit: {err}")).unwrap();
-        ExecuteResult::Exit(2, Vec::new(), Vec::new())
-      }
-    };
-    Box::pin(futures::future::ready(result))
-  }
+    fn execute(
+        &self,
+        mut context: ShellCommandContext,
+    ) -> LocalBoxFuture<'static, ExecuteResult> {
+        let result = match execute_exit(context.args) {
+            Ok(code) => ExecuteResult::Exit(code, Vec::new(), Vec::new()),
+            Err(err) => {
+                context.stderr.write_line(&format!("exit: {err}")).unwrap();
+                ExecuteResult::Exit(2, Vec::new(), Vec::new())
+            }
+        };
+        Box::pin(futures::future::ready(result))
+    }
 }
 
 fn execute_exit(args: Vec<String>) -> Result<i32> {

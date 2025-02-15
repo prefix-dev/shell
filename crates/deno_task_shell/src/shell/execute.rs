@@ -135,10 +135,10 @@ pub async fn execute_with_pipes(
     )
     .await;
 
-  match result {
-    ExecuteResult::Exit(code, _, _) => code,
-    ExecuteResult::Continue(exit_code, _, _) => exit_code,
-  }
+    match result {
+        ExecuteResult::Exit(code, _, _) => code,
+        ExecuteResult::Continue(exit_code, _, _) => exit_code,
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -192,9 +192,9 @@ pub fn execute_sequential_list(
                 .await;
                 match result {
                     ExecuteResult::Exit(exit_code, changes, handles) => {
-            state.apply_changes(&changes);
-            state.set_shell_var("?", &exit_code.to_string());
-            final_changes.extend(changes);
+                        state.apply_changes(&changes);
+                        state.set_shell_var("?", &exit_code.to_string());
+                        final_changes.extend(changes);
                         async_handles.extend(handles);
                         final_exit_code = exit_code;
                         was_exit = true;
@@ -344,7 +344,7 @@ fn execute_sequence(
                             .await;
                     match next_result {
                         ExecuteResult::Exit(code, sub_changes, sub_handles) => {
-              changes.extend(sub_changes);
+                            changes.extend(sub_changes);
                             async_handles.extend(sub_handles);
                             ExecuteResult::Exit(code, changes, async_handles)
                         }
@@ -381,21 +381,22 @@ async fn execute_pipeline(
     stdout: ShellPipeWriter,
     stderr: ShellPipeWriter,
 ) -> ExecuteResult {
-  let result =
-    execute_pipeline_inner(pipeline.inner, state, stdin, stdout, stderr).await;
-  if pipeline.negated {
-    match result {
-      ExecuteResult::Exit(code, changes, handles) => {
-        ExecuteResult::Exit(code, changes, handles)
-      }
-      ExecuteResult::Continue(code, changes, handles) => {
-        let new_code = if code == 0 { 1 } else { 0 };
-        ExecuteResult::Continue(new_code, changes, handles)
-      }
+    let result =
+        execute_pipeline_inner(pipeline.inner, state, stdin, stdout, stderr)
+            .await;
+    if pipeline.negated {
+        match result {
+            ExecuteResult::Exit(code, changes, handles) => {
+                ExecuteResult::Exit(code, changes, handles)
+            }
+            ExecuteResult::Continue(code, changes, handles) => {
+                let new_code = if code == 0 { 1 } else { 0 };
+                ExecuteResult::Continue(new_code, changes, handles)
+            }
+        }
+    } else {
+        result
     }
-  } else {
-    result
-  }
 }
 
 async fn execute_pipeline_inner(
@@ -595,68 +596,73 @@ async fn execute_command(
                     let _ = stderr.write_line(
             "only redirecting to stdout (1) and stderr (2) is supported",
           );
-          return ExecuteResult::from_exit_code(1);
+                    return ExecuteResult::from_exit_code(1);
+                }
+                Some(RedirectFd::StdoutStderr) => {
+                    (stdin, pipe.clone(), pipe, changes)
+                }
+            },
         }
-        Some(RedirectFd::StdoutStderr) => (stdin, pipe.clone(), pipe, changes),
-      },
-    }
-  } else {
-    (stdin, stdout, stderr, None)
-  };
-  let mut changes = if let Some(changes) = changes {
-    state.apply_changes(&changes);
-    changes
-  } else {
-    Vec::new()
-  };
-  match command.inner {
-    CommandInner::Simple(command) => {
-      // This can change the state, so we need to pass it by mutable reference
-      execute_simple_command(command, &mut state, stdin, stdout, stderr).await
-    }
-    CommandInner::Subshell(list) => {
-      // Here the state can be changed but we can not pass by reference
-      match execute_subshell(list, state, stdin, stdout, stderr).await {
-        ExecuteResult::Exit(code, _, handles) => {
-          ExecuteResult::Exit(code, changes, handles)
+    } else {
+        (stdin, stdout, stderr, None)
+    };
+    let mut changes = if let Some(changes) = changes {
+        state.apply_changes(&changes);
+        changes
+    } else {
+        Vec::new()
+    };
+    match command.inner {
+        CommandInner::Simple(command) => {
+            // This can change the state, so we need to pass it by mutable reference
+            execute_simple_command(command, &mut state, stdin, stdout, stderr)
+                .await
         }
-        ExecuteResult::Continue(code, _, handles) => {
-          ExecuteResult::Continue(code, changes, handles)
+        CommandInner::Subshell(list) => {
+            // Here the state can be changed but we can not pass by reference
+            match execute_subshell(list, state, stdin, stdout, stderr).await {
+                ExecuteResult::Exit(code, _, handles) => {
+                    ExecuteResult::Exit(code, changes, handles)
+                }
+                ExecuteResult::Continue(code, _, handles) => {
+                    ExecuteResult::Continue(code, changes, handles)
+                }
+            }
         }
-      }
-    }
-    CommandInner::If(if_clause) => {
-      // The state can be changed
-      execute_if_clause(if_clause, &mut state, stdin, stdout, stderr).await
-    }
-    CommandInner::For(for_clause) => {
-      // The state can be changed
-      execute_for_clause(for_clause, &mut state, stdin, stdout, stderr).await
-    }
-    CommandInner::While(while_clause) => {
-      execute_while_clause(
-          while_clause,
-          &mut state,
-          stdin,
-          stdout,
-          stderr,
-      )
-      .await
-  }
-    CommandInner::ArithmeticExpression(arithmetic) => {
-      // The state can be changed
-      match execute_arithmetic_expression(arithmetic, &mut state).await {
-        Ok(result) => {
-          changes.extend(result.changes);
-          ExecuteResult::Continue(0, changes, Vec::new())
+        CommandInner::If(if_clause) => {
+            // The state can be changed
+            execute_if_clause(if_clause, &mut state, stdin, stdout, stderr)
+                .await
         }
-        Err(e) => {
-          let _ = stderr.write_line(&e.to_string());
-          ExecuteResult::Continue(2, changes, Vec::new())
+        CommandInner::For(for_clause) => {
+            // The state can be changed
+            execute_for_clause(for_clause, &mut state, stdin, stdout, stderr)
+                .await
         }
-      }
+        CommandInner::While(while_clause) => {
+            execute_while_clause(
+                while_clause,
+                &mut state,
+                stdin,
+                stdout,
+                stderr,
+            )
+            .await
+        }
+        CommandInner::ArithmeticExpression(arithmetic) => {
+            // The state can be changed
+            match execute_arithmetic_expression(arithmetic, &mut state).await {
+                Ok(result) => {
+                    changes.extend(result.changes);
+                    ExecuteResult::Continue(0, changes, Vec::new())
+                }
+                Err(e) => {
+                    let _ = stderr.write_line(&e.to_string());
+                    ExecuteResult::Continue(2, changes, Vec::new())
+                }
+            }
+        }
     }
-  }
 }
 
 async fn execute_while_clause(
@@ -777,7 +783,7 @@ async fn execute_for_clause(
 
         match result {
             ExecuteResult::Exit(code, env_changes, handles) => {
-        changes.extend(env_changes);
+                changes.extend(env_changes);
                 async_handles.extend(handles);
                 last_exit_code = code;
                 break;
@@ -1079,7 +1085,7 @@ async fn execute_pipe_sequence(
 
     match last_result {
         ExecuteResult::Exit(code, env_changes, mut handles) => {
-      changes.extend(env_changes);
+            changes.extend(env_changes);
             handles.extend(all_handles);
             ExecuteResult::Continue(code, changes, handles)
         }
@@ -1158,7 +1164,7 @@ async fn execute_if_clause(
                 .await;
                 match exec_result {
                     ExecuteResult::Exit(code, env_changes, handles) => {
-            changes.extend(env_changes);
+                        changes.extend(env_changes);
                         return ExecuteResult::Exit(code, changes, handles);
                     }
                     ExecuteResult::Continue(code, env_changes, handles) => {
@@ -1190,8 +1196,10 @@ async fn execute_if_clause(
                         .await;
                         match exec_result {
                             ExecuteResult::Exit(code, env_changes, handles) => {
-                changes.extend(env_changes);
-                                return ExecuteResult::Exit(code, changes, handles);
+                                changes.extend(env_changes);
+                                return ExecuteResult::Exit(
+                                    code, changes, handles,
+                                );
                             }
                             ExecuteResult::Continue(
                                 code,
@@ -1440,17 +1448,17 @@ async fn execute_simple_command(
         let _ = stdout.write_line(&format!("+ {:}", args.join(" ")));
     }
 
-  let result = execute_command_args(args, state, stdin, stdout, stderr).await;
-  match result {
-    ExecuteResult::Exit(code, env_changes, handles) => {
-      changes.extend(env_changes);
-      ExecuteResult::Exit(code, changes, handles)
+    let result = execute_command_args(args, state, stdin, stdout, stderr).await;
+    match result {
+        ExecuteResult::Exit(code, env_changes, handles) => {
+            changes.extend(env_changes);
+            ExecuteResult::Exit(code, changes, handles)
+        }
+        ExecuteResult::Continue(code, env_changes, handles) => {
+            changes.extend(env_changes);
+            ExecuteResult::Continue(code, changes, handles)
+        }
     }
-    ExecuteResult::Continue(code, env_changes, handles) => {
-      changes.extend(env_changes);
-      ExecuteResult::Continue(code, changes, handles)
-    }
-  }
 }
 
 fn execute_command_args(

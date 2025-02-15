@@ -389,52 +389,52 @@ pub const CANCELLATION_EXIT_CODE: i32 = 130;
 
 #[derive(Debug)]
 pub enum ExecuteResult {
-  Exit(i32, Vec<EnvChange>, Vec<JoinHandle<i32>>),
-  Continue(i32, Vec<EnvChange>, Vec<JoinHandle<i32>>),
+    Exit(i32, Vec<EnvChange>, Vec<JoinHandle<i32>>),
+    Continue(i32, Vec<EnvChange>, Vec<JoinHandle<i32>>),
 }
 
 impl ExecuteResult {
-  pub fn for_cancellation() -> ExecuteResult {
-    ExecuteResult::Exit(CANCELLATION_EXIT_CODE, Vec::new(), Vec::new())
-  }
+    pub fn for_cancellation() -> ExecuteResult {
+        ExecuteResult::Exit(CANCELLATION_EXIT_CODE, Vec::new(), Vec::new())
+    }
 
     pub fn from_exit_code(exit_code: i32) -> ExecuteResult {
         ExecuteResult::Continue(exit_code, Vec::new(), Vec::new())
     }
 
-  pub fn into_exit_code_and_handles(self) -> (i32, Vec<JoinHandle<i32>>) {
-    match self {
-      ExecuteResult::Exit(code, _, handles) => (code, handles),
-      ExecuteResult::Continue(code, _, handles) => (code, handles),
+    pub fn into_exit_code_and_handles(self) -> (i32, Vec<JoinHandle<i32>>) {
+        match self {
+            ExecuteResult::Exit(code, _, handles) => (code, handles),
+            ExecuteResult::Continue(code, _, handles) => (code, handles),
+        }
     }
-  }
 
     pub fn into_handles(self) -> Vec<JoinHandle<i32>> {
         self.into_exit_code_and_handles().1
     }
 
-  pub fn into_changes(self) -> Vec<EnvChange> {
-    match self {
-      ExecuteResult::Exit(_, changes, _) => changes,
-      ExecuteResult::Continue(_, changes, _) => changes,
+    pub fn into_changes(self) -> Vec<EnvChange> {
+        match self {
+            ExecuteResult::Exit(_, changes, _) => changes,
+            ExecuteResult::Continue(_, changes, _) => changes,
+        }
     }
-  }
 
-  pub fn into_handles_and_changes(
-    self,
-  ) -> (Vec<JoinHandle<i32>>, Vec<EnvChange>) {
-    match self {
-      ExecuteResult::Exit(_, changes, handles) => (handles, changes),
-      ExecuteResult::Continue(_, changes, handles) => (handles, changes),
+    pub fn into_handles_and_changes(
+        self,
+    ) -> (Vec<JoinHandle<i32>>, Vec<EnvChange>) {
+        match self {
+            ExecuteResult::Exit(_, changes, handles) => (handles, changes),
+            ExecuteResult::Continue(_, changes, handles) => (handles, changes),
+        }
     }
-  }
 
-  pub fn exit_code(&self) -> i32 {
-    match self {
-      ExecuteResult::Exit(code, _, _) => *code,
-      ExecuteResult::Continue(code, _, _) => *code,
+    pub fn exit_code(&self) -> i32 {
+        match self {
+            ExecuteResult::Exit(code, _, _) => *code,
+            ExecuteResult::Continue(code, _, _) => *code,
+        }
     }
-  }
 }
 
 /// Reader side of a pipe.
