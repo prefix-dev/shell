@@ -31,6 +31,21 @@ Current letter: a
 Current letter: b
 Current letter: c
 
+> i=0; while [[ $i -lt 5 ]]; do echo "Number: $i"; i=$((i+1)); done
+Number: 0
+Number: 1
+Number: 2
+Number: 3
+Number: 4
+
+> i=0; until [[ $i -gt 5 ]]; do echo "Number: $i"; i=$((i+1)); done
+Number: 0
+Number: 1
+Number: 2
+Number: 3
+Number: 4
+Number: 5
+
 # > for i in {1..5}; do echo $i; done
 # 1
 # 2

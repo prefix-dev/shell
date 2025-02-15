@@ -23,14 +23,14 @@ path = "src/main.rs"
 [features]
 
 [dependencies]
-clap = { version = "4.5.27", features = ["derive"] }
+clap = { version = "4.5.28", features = ["derive"] }
 deno_task_shell = { path = "../deno_task_shell", features = ["shell"] }
 futures = "0.3.31"
 rustyline = { version = "15.0.0", features = ["derive"] }
 tokio = "1.43.0"
 uu_ls = "0.0.29"
 dirs = "6.0.0"
-which = "7.0.1"
+which = "7.0.2"
 uu_uname = "0.0.29"
 uu_touch = "0.0.29"
 uu_date = "0.0.29"

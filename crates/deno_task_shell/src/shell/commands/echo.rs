@@ -10,11 +10,11 @@ use super::ShellCommandContext;
 pub struct EchoCommand;
 
 impl ShellCommand for EchoCommand {
-  fn execute(
-    &self,
-    mut context: ShellCommandContext,
-  ) -> LocalBoxFuture<'static, ExecuteResult> {
-    let _ = context.stdout.write_line(&context.args.join(" "));
-    Box::pin(futures::future::ready(ExecuteResult::from_exit_code(0)))
-  }
+    fn execute(
+        &self,
+        mut context: ShellCommandContext,
+    ) -> LocalBoxFuture<'static, ExecuteResult> {
+        let _ = context.stdout.write_line(&context.args.join(" "));
+        Box::pin(futures::future::ready(ExecuteResult::from_exit_code(0)))
+    }
 }
