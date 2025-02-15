@@ -577,7 +577,7 @@ async fn execute_command(
       // Here the state can be changed but we can not pass by reference
       match execute_subshell(list, state, stdin, stdout, stderr).await {
         ExecuteResult::Exit(code, _, handles) => {
-          ExecuteResult::Exit(code, changes, handles)
+          ExecuteResult::Continue(code, changes, handles)
         }
         ExecuteResult::Continue(code, _, handles) => {
           ExecuteResult::Continue(code, changes, handles)
