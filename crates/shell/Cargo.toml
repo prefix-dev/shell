@@ -41,6 +41,7 @@ parse_datetime = "0.7.0"
 dtparse = "2.0.1"
 windows-sys = "0.59.0"
 ctrlc = "3.4.5"
+libc = "0.2.170"
 
 [package.metadata.release]
 # Dont publish the binary

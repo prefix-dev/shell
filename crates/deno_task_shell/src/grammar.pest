@@ -168,7 +168,6 @@ Case = { "case" }
 Esac = { "esac" }
 While = _{ "while" }
 Until = _{ "until" }
-Time = { "time" }
 For = _{ "for" }
 Lbrace = { "{" }
 Rbrace = { "}" }
@@ -181,7 +180,7 @@ RESERVED_WORD = _{
     If | Then | Else | Elif | Fi | Do | Done |
     Case | Esac | While | Until | For |
     Lbrace | Rbrace | Bang | In |
-    StdoutStderr | Stdout | Time
+    StdoutStderr | Stdout
 }
 
 // Main grammar rules
