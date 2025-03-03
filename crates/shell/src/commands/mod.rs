@@ -10,6 +10,7 @@ use crate::execute;
 pub mod date;
 pub mod printenv;
 pub mod set;
+pub mod time;
 pub mod touch;
 pub mod uname;
 pub mod which;
@@ -17,6 +18,7 @@ pub mod which;
 pub use date::DateCommand;
 pub use printenv::PrintEnvCommand;
 pub use set::SetCommand;
+pub use time::TimeCommand;
 pub use touch::TouchCommand;
 pub use uname::UnameCommand;
 pub use which::WhichCommand;
@@ -75,6 +77,10 @@ pub fn get_commands() -> HashMap<String, Rc<dyn ShellCommand>> {
         (
             "clear".to_string(),
             Rc::new(ClearCommand) as Rc<dyn ShellCommand>,
+        ),
+        (
+            "time".to_string(),
+            Rc::new(TimeCommand) as Rc<dyn ShellCommand>,
         ),
     ])
 }
