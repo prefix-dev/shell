@@ -7,9 +7,9 @@ use futures::future::LocalBoxFuture;
 use libc::{rusage, timeval, RUSAGE_CHILDREN};
 
 #[cfg(windows)]
-use windows_sys::Win32::Foundation::HANDLE;
+use windows_sys::Win32::System::Threading::GetProcessTimes;
 #[cfg(windows)]
-use windows_sys::Win32::System::ProcessStatus::{GetProcessTimes, FILETIME};
+use windows_sys::Win32::Foundation::{FILETIME, HANDLE};
 
 pub struct TimeCommand;
 
