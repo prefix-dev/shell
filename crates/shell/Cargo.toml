@@ -37,9 +37,9 @@ uu_date = "0.0.29"
 miette = { version = "7.5.0", features = ["fancy"] }
 filetime = "0.2.25"
 chrono = "0.4.39"
-parse_datetime = "0.7.0"
+parse_datetime = "0.8.0"
 dtparse = "2.0.1"
-windows-sys = "0.59.0"
+windows-sys = { version = "0.59.0", features = ["Win32_System_ProcessStatus", "Win32_Foundation", "Win32_System_Threading"] }
 ctrlc = "3.4.5"
 libc = "0.2.170"
 
