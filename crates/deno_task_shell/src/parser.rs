@@ -229,14 +229,13 @@ pub struct IfClause {
     pub else_part: Option<ElsePart>,
 }
 
-
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
 #[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
 #[derive(Debug, PartialEq, Eq, Clone, Error)]
 #[error("Invalid case clause")]
 pub struct CaseClause {
     pub word: Word,
-    pub cases: Vec<(Word, SequentialList)>,
+    pub cases: Vec<(Vec<Word>, SequentialList)>,
 }
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
@@ -1144,33 +1143,41 @@ fn parse_if_clause(pair: Pair<Rule>) -> Result<IfClause> {
 fn parse_case_clause(pair: Pair<Rule>) -> Result<CaseClause> {
     let mut inner = pair.into_inner();
 
-    let word_pair = inner.next().ok_or_else(|| miette!("Expected case word"))?;
+    let word_pair =
+        inner.next().ok_or_else(|| miette!("Expected case word"))?;
     let word = parse_word(word_pair)?;
 
-    // Skip `In` keyword
-    inner.next().ok_or_else(|| miette!("Expected 'in' keyword"))?;
-
     let mut cases = Vec::new();
+    let case_list =
+        inner.next().ok_or_else(|| miette!("Expected case list"))?;
 
-    // Parse case_list or case_list_ns
-    while let Some(case_item_pair) = inner.next() {
+    for case_item_pair in case_list.into_inner() {
         if case_item_pair.as_rule() == Rule::Esac {
-            break; // Stop when reaching `esac`
+            break;
         }
-        let mut case_inner = case_item_pair.into_inner();
-        let pattern_pair = case_inner.next().ok_or_else(|| miette!("Expected case pattern"))?;
-        let pattern = parse_word(pattern_pair)?;
 
+        let mut case_inner = case_item_pair.into_inner();
+
+        // Extract pattern(s) - multiple patterns can exist, separated by `|`
+        let mut patterns = Vec::new();
+        for pattern_pair in case_inner.by_ref() {
+            if pattern_pair.as_rule() == Rule::pattern {
+                for p in pattern_pair.into_inner() {
+                    patterns.push(parse_word(p)?);
+                }
+                break;
+            }
+        }
+
+        // Extract compound list (command block)
         let mut result = Vec::new();
         if let Some(compound_list_pair) = case_inner.next() {
             parse_compound_list(compound_list_pair, &mut result)?;
         }
-        cases.push((pattern, SequentialList {items: result}));
+        cases.push((patterns, SequentialList { items: result }));
     }
-
     Ok(CaseClause { word, cases })
 }
-
 
 fn parse_else_part(pair: Pair<Rule>) -> Result<ElsePart> {
     let mut inner = pair.into_inner();

@@ -17,6 +17,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::parser::AssignmentOp;
 use crate::parser::BinaryOp;
+use crate::parser::CaseClause;
 use crate::parser::Condition;
 use crate::parser::ConditionInner;
 use crate::parser::ElsePart;
@@ -27,7 +28,6 @@ use crate::parser::RedirectOpOutput;
 use crate::parser::UnaryOp;
 use crate::parser::VariableModifier;
 use crate::parser::WhileLoop;
-use crate::parser::CaseClause;
 use crate::shell::commands::ShellCommand;
 use crate::shell::commands::ShellCommandContext;
 use crate::shell::types::pipe;
@@ -651,14 +651,8 @@ async fn execute_command(
             .await
         }
         CommandInner::Case(case_clause) => {
-            execute_case_clause(
-                case_clause,
-                &mut state,
-                stdin,
-                stdout,
-                stderr,
-            )
-            .await
+            execute_case_clause(case_clause, &mut state, stdin, stdout, stderr)
+                .await
         }
         CommandInner::ArithmeticExpression(arithmetic) => {
             // The state can be changed
@@ -778,44 +772,60 @@ async fn execute_case_clause(
     let mut async_handles = Vec::new();
 
     // Evaluate the word to match against
-    let word_value = match evaluate_word(case_clause.word.clone(), state, stdin.clone(), stderr.clone()).await {
+    let word_value = match evaluate_word(
+        case_clause.word.clone(),
+        state,
+        stdin.clone(),
+        stderr.clone(),
+    )
+    .await
+    {
         Ok(word_value) => word_value,
         Err(err) => return err.into_exit_code(&mut stderr),
     };
 
     // Find the first matching case pattern
-    for (pattern, body) in case_clause.cases {
-        let pattern_value = match evaluate_word(pattern.clone(), state, stdin.clone(), stderr.clone()).await {
-            Ok(pattern_value) => pattern_value,
-            Err(err) => return err.into_exit_code(&mut stderr),
-        };
-
-        // Check if pattern matches word_value (supporting wildcard cases)
-        if pattern_matches(&pattern_value.value, &word_value.value) {
-            let exec_result = execute_sequential_list(
-                body,
-                state.clone(),
+    for (all_pattern, body) in case_clause.cases {
+        for pattern in all_pattern {
+            let pattern_value = match evaluate_word(
+                pattern.clone(),
+                state,
                 stdin.clone(),
-                stdout.clone(),
                 stderr.clone(),
-                AsyncCommandBehavior::Yield,
             )
-            .await;
+            .await
+            {
+                Ok(pattern_value) => pattern_value,
+                Err(err) => return err.into_exit_code(&mut stderr),
+            };
 
-            match exec_result {
-                ExecuteResult::Exit(code, env_changes, handles) => {
-                    state.apply_changes(&env_changes);
-                    changes.extend(env_changes);
-                    async_handles.extend(handles);
-                    last_exit_code = code;
-                    break;
-                }
-                ExecuteResult::Continue(code, env_changes, handles) => {
-                    state.apply_changes(&env_changes);
-                    changes.extend(env_changes);
-                    async_handles.extend(handles);
-                    last_exit_code = code;
-                    break; // Case executes only once
+            // Check if pattern matches word_value
+            if pattern_matches(&pattern_value.value, &word_value.value) {
+                let exec_result = execute_sequential_list(
+                    body,
+                    state.clone(),
+                    stdin.clone(),
+                    stdout.clone(),
+                    stderr.clone(),
+                    AsyncCommandBehavior::Yield,
+                )
+                .await;
+
+                match exec_result {
+                    ExecuteResult::Exit(code, env_changes, handles) => {
+                        state.apply_changes(&env_changes);
+                        changes.extend(env_changes);
+                        async_handles.extend(handles);
+                        last_exit_code = code;
+                        break;
+                    }
+                    ExecuteResult::Continue(code, env_changes, handles) => {
+                        state.apply_changes(&env_changes);
+                        changes.extend(env_changes);
+                        async_handles.extend(handles);
+                        last_exit_code = code;
+                        break;
+                    }
                 }
             }
         }
@@ -829,7 +839,6 @@ async fn execute_case_clause(
         ExecuteResult::Continue(last_exit_code, changes, async_handles)
     }
 }
-
 
 async fn execute_for_clause(
     for_clause: ForLoop,
