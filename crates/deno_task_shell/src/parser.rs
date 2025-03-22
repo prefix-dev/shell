@@ -439,6 +439,8 @@ pub enum WordPart {
     Arithmetic(Arithmetic),
     #[error("Invalid exit status")]
     ExitStatus,
+    #[error("Invalid default case statement")]
+    Star,
 }
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
@@ -1456,6 +1458,9 @@ fn parse_word(pair: Pair<Rule>) -> Result<Word> {
         Rule::ASSIGNMENT_WORD => {
             let assignment_str = pair.as_str().to_string();
             parts.push(WordPart::Text(assignment_str));
+        }
+        Rule::STAR => {
+            parts.push(WordPart::Star);
         }
         Rule::FILE_NAME_PENDING_WORD => {
             for part in pair.into_inner() {

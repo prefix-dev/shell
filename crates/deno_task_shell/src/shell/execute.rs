@@ -786,6 +786,7 @@ async fn execute_case_clause(
 
     // Find the first matching case pattern
     for (all_pattern, body) in case_clause.cases {
+        let mut result_matched = false;
         for pattern in all_pattern {
             let pattern_value = match evaluate_word(
                 pattern.clone(),
@@ -801,6 +802,7 @@ async fn execute_case_clause(
 
             // Check if pattern matches word_value
             if pattern_matches(&pattern_value.value, &word_value.value) {
+                result_matched = true;
                 let exec_result = execute_sequential_list(
                     body,
                     state.clone(),
@@ -828,6 +830,9 @@ async fn execute_case_clause(
                     }
                 }
             }
+        }
+        if result_matched {
+            break;
         }
     }
 
@@ -2093,6 +2098,12 @@ fn evaluate_word_parts(
                             let exit_code = state.last_command_exit_code();
                             current_text
                                 .push(TextPart::Text(exit_code.to_string()));
+                            continue;
+                        }
+                        WordPart::Star => {
+                            let star = "*";
+                            current_text
+                                .push(TextPart::Quoted(star.to_string()));
                             continue;
                         }
                     };
