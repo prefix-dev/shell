@@ -166,6 +166,8 @@ pub enum CommandInner {
     For(ForLoop),
     #[error("Invalid while loop")]
     While(WhileLoop),
+    #[error("Invalid case clause command")]
+    Case(CaseClause),
     #[error("Invalid arithmetic expression")]
     ArithmeticExpression(Arithmetic),
 }
@@ -225,6 +227,15 @@ pub struct IfClause {
     pub condition: Condition,
     pub then_body: SequentialList,
     pub else_part: Option<ElsePart>,
+}
+
+#[cfg_attr(feature = "serialization", derive(serde::Serialize))]
+#[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
+#[derive(Debug, PartialEq, Eq, Clone, Error)]
+#[error("Invalid case clause")]
+pub struct CaseClause {
+    pub word: Word,
+    pub cases: Vec<(Vec<Word>, SequentialList)>,
 }
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
@@ -428,6 +439,8 @@ pub enum WordPart {
     Arithmetic(Arithmetic),
     #[error("Invalid exit status")]
     ExitStatus,
+    #[error("Invalid default case statement")]
+    Star,
 }
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
@@ -1063,7 +1076,11 @@ fn parse_compound_command(pair: Pair<Rule>) -> Result<Command> {
             })
         }
         Rule::case_clause => {
-            Err(miette!("Unsupported compound command case_clause"))
+            let case_clause = parse_case_clause(inner)?;
+            Ok(Command {
+                inner: CommandInner::Case(case_clause),
+                redirect: None,
+            })
         }
         Rule::if_clause => {
             let if_clause = parse_if_clause(inner)?;
@@ -1123,6 +1140,45 @@ fn parse_if_clause(pair: Pair<Rule>) -> Result<IfClause> {
         then_body,
         else_part,
     })
+}
+
+fn parse_case_clause(pair: Pair<Rule>) -> Result<CaseClause> {
+    let mut inner = pair.into_inner();
+
+    let word_pair =
+        inner.next().ok_or_else(|| miette!("Expected case word"))?;
+    let word = parse_word(word_pair)?;
+
+    let mut cases = Vec::new();
+    let case_list =
+        inner.next().ok_or_else(|| miette!("Expected case list"))?;
+
+    for case_item_pair in case_list.into_inner() {
+        if case_item_pair.as_rule() == Rule::Esac {
+            break;
+        }
+
+        let mut case_inner = case_item_pair.into_inner();
+
+        // Extract pattern(s) - multiple patterns can exist, separated by `|`
+        let mut patterns = Vec::new();
+        for pattern_pair in case_inner.by_ref() {
+            if pattern_pair.as_rule() == Rule::pattern {
+                for p in pattern_pair.into_inner() {
+                    patterns.push(parse_word(p)?);
+                }
+                break;
+            }
+        }
+
+        // Extract compound list (command block)
+        let mut result = Vec::new();
+        if let Some(compound_list_pair) = case_inner.next() {
+            parse_compound_list(compound_list_pair, &mut result)?;
+        }
+        cases.push((patterns, SequentialList { items: result }));
+    }
+    Ok(CaseClause { word, cases })
 }
 
 fn parse_else_part(pair: Pair<Rule>) -> Result<ElsePart> {
@@ -1402,6 +1458,9 @@ fn parse_word(pair: Pair<Rule>) -> Result<Word> {
         Rule::ASSIGNMENT_WORD => {
             let assignment_str = pair.as_str().to_string();
             parts.push(WordPart::Text(assignment_str));
+        }
+        Rule::STAR => {
+            parts.push(WordPart::Star);
         }
         Rule::FILE_NAME_PENDING_WORD => {
             for part in pair.into_inner() {
