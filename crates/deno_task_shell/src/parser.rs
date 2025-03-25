@@ -1142,6 +1142,10 @@ fn parse_if_clause(pair: Pair<Rule>) -> Result<IfClause> {
     })
 }
 
+fn wrap_in_quoted(word: Word) -> Word {
+    Word::new(vec![WordPart::Quoted(word.into_parts())])
+}
+
 fn parse_case_clause(pair: Pair<Rule>) -> Result<CaseClause> {
     let mut inner = pair.into_inner();
 
@@ -1165,7 +1169,8 @@ fn parse_case_clause(pair: Pair<Rule>) -> Result<CaseClause> {
         for pattern_pair in case_inner.by_ref() {
             if pattern_pair.as_rule() == Rule::pattern {
                 for p in pattern_pair.into_inner() {
-                    patterns.push(parse_word(p)?);
+                    let parsed_word = parse_word(p)?; 
+                    patterns.push(wrap_in_quoted(parsed_word));
                 }
                 break;
             }
