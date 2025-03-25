@@ -50,6 +50,7 @@ use crate::parser::IfClause;
 use crate::parser::PipeSequence;
 use crate::parser::PipeSequenceOperator;
 use crate::parser::Pipeline;
+use crate::parser::Function;
 use crate::parser::PipelineInner;
 use crate::parser::Redirect;
 use crate::parser::RedirectFd;
@@ -667,6 +668,9 @@ async fn execute_command(
                 }
             }
         }
+        CommandInner::FunctionType(function) => {
+            execute_function(function, state, stdin, stdout, stderr).await
+        }
     }
 }
 
@@ -842,6 +846,38 @@ async fn execute_case_clause(
         ExecuteResult::Exit(last_exit_code, changes, async_handles)
     } else {
         ExecuteResult::Continue(last_exit_code, changes, async_handles)
+    }
+}
+
+async fn execute_function(
+    func: Function,
+    state: ShellState,
+    stdin: ShellPipeReader,
+    stdout: ShellPipeWriter,
+    stderr: ShellPipeWriter,
+) -> ExecuteResult {
+    // Store the function definition in the state
+    let mut state = state;
+    state.add_function(func.name.clone(), func.body.clone());
+
+    // Execute the function body
+    let result = execute_sequential_list(
+        func.body,
+        state,
+        stdin,
+        stdout,
+        stderr,
+        AsyncCommandBehavior::Yield,
+    )
+    .await;
+
+    match result {
+        ExecuteResult::Exit(code, env_changes, handles) => {
+            ExecuteResult::Continue(code, env_changes, handles)
+        }
+        ExecuteResult::Continue(code, env_changes, handles) => {
+            ExecuteResult::Continue(code, env_changes, handles)
+        }
     }
 }
 
@@ -1586,6 +1622,27 @@ fn execute_command_args(
 
         args.remove(0)
     };
+
+     // Check if this is a function call
+     if let Some(body) = state.clone().get_function(&command_name) {
+        // Set $0 to function name and $1, $2, etc. to arguments
+        let mut changes = vec![EnvChange::SetShellVar("0".to_string(), command_name.clone())];
+        for (i, arg) in args.iter().enumerate() {
+            changes.push(EnvChange::SetShellVar((i + 1).to_string(), arg.clone()));
+        }
+
+        let mut state = state;
+        state.apply_changes(&changes);
+
+        return Box::pin(execute_sequential_list(
+            body.clone(),
+            state,
+            stdin,
+            stdout,
+            stderr,
+            AsyncCommandBehavior::Yield,
+        ));
+    }
 
     if state.token().is_cancelled() {
         Box::pin(future::ready(ExecuteResult::for_cancellation()))

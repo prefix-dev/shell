@@ -191,9 +191,9 @@ pipeline = !{ Bang? ~ pipe_sequence }
 pipe_sequence = !{ command ~ ((StdoutStderr | Stdout) ~ linebreak ~ pipe_sequence)? }
 
 command = !{
+    function_definition | 
     compound_command ~ redirect_list? |
-    simple_command |
-    function_definition
+    simple_command
 }
 
 compound_command = {
@@ -378,10 +378,14 @@ binary_posix_conditional_op = !{
 while_clause = !{ While ~ conditional_expression ~ do_group }
 until_clause = !{ Until ~ conditional_expression ~ do_group }
 
-function_definition = !{ fname ~ "(" ~ ")" ~ linebreak ~ function_body }
+function_definition = { 
+    fname ~ "(" ~ ")" ~ linebreak ~ compound_list |
+    "function" ~ fname ~ ("(" ~ ")")? ~ linebreak ~ compound_list
+}
+
 function_body = !{ compound_command ~ redirect_list? }
 
-fname = @{ RESERVED_WORD | NAME | ASSIGNMENT_WORD | UNQUOTED_PENDING_WORD }
+fname = @{ NAME }
 name = @{ NAME } 
 
 brace_group = !{ Lbrace ~ compound_list ~ Rbrace }
