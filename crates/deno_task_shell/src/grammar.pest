@@ -148,7 +148,6 @@ LESSGREAT = { "<>" }
 DLESSDASH = { "<<-" }
 CLOBBER = { ">|" }
 AMPERSAND = { "&" }
-STAR = { "*" }
 EXIT_STATUS = ${ "$?" }
 
 // Operators
@@ -321,7 +320,7 @@ case_item_ns = !{
 }
 
 pattern = !{
-    (Esac | (STAR | UNQUOTED_PENDING_WORD)) ~ ("|" ~ (STAR | UNQUOTED_PENDING_WORD))*
+    (UNQUOTED_PENDING_WORD) ~ ("|" ~ UNQUOTED_PENDING_WORD)*
 }
 
 if_clause = !{
