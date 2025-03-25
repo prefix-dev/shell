@@ -17,6 +17,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::parser::AssignmentOp;
 use crate::parser::BinaryOp;
+use crate::parser::CaseClause;
 use crate::parser::Condition;
 use crate::parser::ConditionInner;
 use crate::parser::ElsePart;
@@ -649,6 +650,10 @@ async fn execute_command(
             )
             .await
         }
+        CommandInner::Case(case_clause) => {
+            execute_case_clause(case_clause, &mut state, stdin, stdout, stderr)
+                .await
+        }
         CommandInner::ArithmeticExpression(arithmetic) => {
             // The state can be changed
             match execute_arithmetic_expression(arithmetic, &mut state).await {
@@ -730,6 +735,104 @@ async fn execute_while_clause(
             Err(err) => {
                 return err.into_exit_code(&mut stderr);
             }
+        }
+    }
+
+    state.apply_changes(&changes);
+
+    if state.exit_on_error() && last_exit_code != 0 {
+        ExecuteResult::Exit(last_exit_code, changes, async_handles)
+    } else {
+        ExecuteResult::Continue(last_exit_code, changes, async_handles)
+    }
+}
+
+fn pattern_matches(pattern: &str, word_value: &str) -> bool {
+    let patterns: Vec<&str> = pattern.split('|').collect();
+
+    for pat in patterns {
+        match glob::Pattern::new(pat) {
+            Ok(glob) if glob.matches(word_value) => return true,
+            _ => continue,
+        }
+    }
+
+    false
+}
+
+async fn execute_case_clause(
+    case_clause: CaseClause,
+    state: &mut ShellState,
+    stdin: ShellPipeReader,
+    stdout: ShellPipeWriter,
+    mut stderr: ShellPipeWriter,
+) -> ExecuteResult {
+    let mut changes = Vec::new();
+    let mut last_exit_code = 0;
+    let mut async_handles = Vec::new();
+
+    // Evaluate the word to match against
+    let word_value = match evaluate_word(
+        case_clause.word.clone(),
+        state,
+        stdin.clone(),
+        stderr.clone(),
+    )
+    .await
+    {
+        Ok(word_value) => word_value,
+        Err(err) => return err.into_exit_code(&mut stderr),
+    };
+
+    // Find the first matching case pattern
+    for (all_pattern, body) in case_clause.cases {
+        let mut result_matched = false;
+        for pattern in all_pattern {
+            let pattern_value = match evaluate_word(
+                pattern.clone(),
+                state,
+                stdin.clone(),
+                stderr.clone(),
+            )
+            .await
+            {
+                Ok(pattern_value) => pattern_value,
+                Err(err) => return err.into_exit_code(&mut stderr),
+            };
+
+            // Check if pattern matches word_value
+            if pattern_matches(&pattern_value.value, &word_value.value) {
+                result_matched = true;
+                let exec_result = execute_sequential_list(
+                    body,
+                    state.clone(),
+                    stdin.clone(),
+                    stdout.clone(),
+                    stderr.clone(),
+                    AsyncCommandBehavior::Yield,
+                )
+                .await;
+
+                match exec_result {
+                    ExecuteResult::Exit(code, env_changes, handles) => {
+                        state.apply_changes(&env_changes);
+                        changes.extend(env_changes);
+                        async_handles.extend(handles);
+                        last_exit_code = code;
+                        break;
+                    }
+                    ExecuteResult::Continue(code, env_changes, handles) => {
+                        state.apply_changes(&env_changes);
+                        changes.extend(env_changes);
+                        async_handles.extend(handles);
+                        last_exit_code = code;
+                        break;
+                    }
+                }
+            }
+        }
+        if result_matched {
+            break;
         }
     }
 

@@ -166,6 +166,8 @@ pub enum CommandInner {
     For(ForLoop),
     #[error("Invalid while loop")]
     While(WhileLoop),
+    #[error("Invalid case clause command")]
+    Case(CaseClause),
     #[error("Invalid arithmetic expression")]
     ArithmeticExpression(Arithmetic),
 }
@@ -225,6 +227,15 @@ pub struct IfClause {
     pub condition: Condition,
     pub then_body: SequentialList,
     pub else_part: Option<ElsePart>,
+}
+
+#[cfg_attr(feature = "serialization", derive(serde::Serialize))]
+#[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
+#[derive(Debug, PartialEq, Eq, Clone, Error)]
+#[error("Invalid case clause")]
+pub struct CaseClause {
+    pub word: Word,
+    pub cases: Vec<(Vec<Word>, SequentialList)>,
 }
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
@@ -1063,7 +1074,11 @@ fn parse_compound_command(pair: Pair<Rule>) -> Result<Command> {
             })
         }
         Rule::case_clause => {
-            Err(miette!("Unsupported compound command case_clause"))
+            let case_clause = parse_case_clause(inner)?;
+            Ok(Command {
+                inner: CommandInner::Case(case_clause),
+                redirect: None,
+            })
         }
         Rule::if_clause => {
             let if_clause = parse_if_clause(inner)?;
@@ -1123,6 +1138,50 @@ fn parse_if_clause(pair: Pair<Rule>) -> Result<IfClause> {
         then_body,
         else_part,
     })
+}
+
+fn wrap_in_quoted(word: Word) -> Word {
+    Word::new(vec![WordPart::Quoted(word.into_parts())])
+}
+
+fn parse_case_clause(pair: Pair<Rule>) -> Result<CaseClause> {
+    let mut inner = pair.into_inner();
+
+    let word_pair =
+        inner.next().ok_or_else(|| miette!("Expected case word"))?;
+    let word = parse_word(word_pair)?;
+
+    let mut cases = Vec::new();
+    let case_list =
+        inner.next().ok_or_else(|| miette!("Expected case list"))?;
+
+    for case_item_pair in case_list.into_inner() {
+        if case_item_pair.as_rule() == Rule::Esac {
+            break;
+        }
+
+        let mut case_inner = case_item_pair.into_inner();
+
+        // Extract pattern(s) - multiple patterns can exist, separated by `|`
+        let mut patterns = Vec::new();
+        for pattern_pair in case_inner.by_ref() {
+            if pattern_pair.as_rule() == Rule::pattern {
+                for p in pattern_pair.into_inner() {
+                    let parsed_word = parse_word(p)?;
+                    patterns.push(wrap_in_quoted(parsed_word));
+                }
+                break;
+            }
+        }
+
+        // Extract compound list (command block)
+        let mut result = Vec::new();
+        if let Some(compound_list_pair) = case_inner.next() {
+            parse_compound_list(compound_list_pair, &mut result)?;
+        }
+        cases.push((patterns, SequentialList { items: result }));
+    }
+    Ok(CaseClause { word, cases })
 }
 
 fn parse_else_part(pair: Pair<Rule>) -> Result<ElsePart> {

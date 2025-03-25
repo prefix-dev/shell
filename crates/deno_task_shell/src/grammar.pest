@@ -164,7 +164,7 @@ Elif = { "elif" }
 Fi = _{ "fi" }
 Do = _{ "do" }
 Done = _{ "done" }
-Case = { "case" }
+Case = _{ "case" }
 Esac = { "esac" }
 While = _{ "while" }
 Until = _{ "until" }
@@ -320,7 +320,7 @@ case_item_ns = !{
 }
 
 pattern = !{
-    (Esac | UNQUOTED_PENDING_WORD) ~ ("|" ~ UNQUOTED_PENDING_WORD)*
+    (UNQUOTED_PENDING_WORD) ~ ("|" ~ UNQUOTED_PENDING_WORD)*
 }
 
 if_clause = !{

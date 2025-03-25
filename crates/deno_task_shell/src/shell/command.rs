@@ -204,6 +204,7 @@ async fn parse_shebang_args(
         CommandInner::For(_) => return err_unsupported(text),
         CommandInner::While(_) => return err_unsupported(text),
         CommandInner::ArithmeticExpression(_) => return err_unsupported(text),
+        CommandInner::Case(_) => return err_unsupported(text),
     };
     if !cmd.env_vars.is_empty() {
         return err_unsupported(text);
