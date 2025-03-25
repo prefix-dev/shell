@@ -150,6 +150,15 @@ pub struct Command {
 }
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
+#[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[error("Invalid function")]
+pub struct Function {
+    pub name: String,
+    pub body: SequentialList,
+}
+
+#[cfg_attr(feature = "serialization", derive(serde::Serialize))]
 #[cfg_attr(
     feature = "serialization",
     serde(rename_all = "camelCase", tag = "kind")
@@ -170,6 +179,8 @@ pub enum CommandInner {
     Case(CaseClause),
     #[error("Invalid arithmetic expression")]
     ArithmeticExpression(Arithmetic),
+    #[error("Invalid function definition")]
+    FunctionType(Function),
 }
 
 impl From<Command> for Sequence {
@@ -910,12 +921,58 @@ fn parse_command(pair: Pair<Rule>) -> Result<Command> {
     match inner.as_rule() {
         Rule::simple_command => parse_simple_command(inner),
         Rule::compound_command => parse_compound_command(inner),
-        Rule::function_definition => {
-            Err(miette!("Function definitions are not supported yet"))
-        }
+        Rule::function_definition => parse_function_definition(inner),
         _ => Err(miette!("Unexpected rule in command: {:?}", inner.as_rule())),
     }
 }
+
+fn parse_function_definition(pair: Pair<Rule>) -> Result<Command> {
+    let mut inner = pair.into_inner();
+    
+    // Handle both styles: 
+    // 1. name() { body }
+    // 2. function name { body } or function name() { body }
+    let (name, body_pair) = if inner.peek().unwrap().as_rule() == Rule::fname {
+        // Style 1: name() { body }
+        let name = inner.next().unwrap().as_str().to_string();
+        // Skip the () part - these are just the parentheses tokens in the grammar
+        if inner.peek().is_some() {
+            let next = inner.peek().unwrap();
+            if next.as_str() == "(" || next.as_str() == ")" {
+                inner.next(); // skip (
+                inner.next(); // skip )
+            }
+        }
+        (name, inner.next().unwrap())
+    } else {
+        // Style 2: function name [()] { body }
+        // Skip "function" keyword
+        inner.next();
+        let name = inner.next().unwrap().as_str().to_string();
+        // Skip optional () - these are just the parentheses tokens
+        if inner.peek().is_some() {
+            let next = inner.peek().unwrap();
+            if next.as_str() == "(" || next.as_str() == ")" {
+                inner.next(); // skip (
+                inner.next(); // skip )
+            }
+        }
+        (name, inner.next().unwrap())
+    };
+
+    // Parse the function body
+    let mut body_items = Vec::new();
+    parse_compound_list(body_pair, &mut body_items)?;
+
+    Ok(Command {
+        inner: CommandInner::FunctionType(Function {
+            name,
+            body: SequentialList { items: body_items },
+        }),
+        redirect: None,
+    })
+}
+
 
 fn parse_simple_command(pair: Pair<Rule>) -> Result<Command> {
     let mut env_vars = Vec::new();
