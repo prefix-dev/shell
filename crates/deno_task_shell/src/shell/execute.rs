@@ -2100,12 +2100,6 @@ fn evaluate_word_parts(
                                 .push(TextPart::Text(exit_code.to_string()));
                             continue;
                         }
-                        WordPart::Star => {
-                            let star = "*";
-                            current_text
-                                .push(TextPart::Quoted(star.to_string()));
-                            continue;
-                        }
                     };
 
                 if let Ok(Some(text)) = evaluation_result_text {

@@ -439,8 +439,6 @@ pub enum WordPart {
     Arithmetic(Arithmetic),
     #[error("Invalid exit status")]
     ExitStatus,
-    #[error("Invalid default case statement")]
-    Star,
 }
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
@@ -1169,7 +1167,7 @@ fn parse_case_clause(pair: Pair<Rule>) -> Result<CaseClause> {
         for pattern_pair in case_inner.by_ref() {
             if pattern_pair.as_rule() == Rule::pattern {
                 for p in pattern_pair.into_inner() {
-                    let parsed_word = parse_word(p)?; 
+                    let parsed_word = parse_word(p)?;
                     patterns.push(wrap_in_quoted(parsed_word));
                 }
                 break;
@@ -1463,9 +1461,6 @@ fn parse_word(pair: Pair<Rule>) -> Result<Word> {
         Rule::ASSIGNMENT_WORD => {
             let assignment_str = pair.as_str().to_string();
             parts.push(WordPart::Text(assignment_str));
-        }
-        Rule::STAR => {
-            parts.push(WordPart::Star);
         }
         Rule::FILE_NAME_PENDING_WORD => {
             for part in pair.into_inner() {
