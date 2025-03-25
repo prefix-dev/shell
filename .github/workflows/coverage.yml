@@ -1,6 +1,15 @@
 name: coverage
 
-on: [push]
+on:
+  push:
+    tags:
+      - 'v*'
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
 jobs:
   test:
     name: coverage
