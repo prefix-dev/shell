@@ -935,7 +935,7 @@ fn parse_function_definition(pair: Pair<Rule>) -> Result<Command> {
     let (name, body_pair) = if inner.peek().unwrap().as_rule() == Rule::fname {
         // Style 1: name() { body }
         let name = inner.next().unwrap().as_str().to_string();
-        // Skip the () part - these are just the parentheses tokens in the grammar
+        // Skip the () part
         if inner.peek().is_some() {
             let next = inner.peek().unwrap();
             if next.as_str() == "(" || next.as_str() == ")" {
@@ -949,7 +949,7 @@ fn parse_function_definition(pair: Pair<Rule>) -> Result<Command> {
         // Skip "function" keyword
         inner.next();
         let name = inner.next().unwrap().as_str().to_string();
-        // Skip optional () - these are just the parentheses tokens
+        // Skip optional ()
         if inner.peek().is_some() {
             let next = inner.peek().unwrap();
             if next.as_str() == "(" || next.as_str() == ")" {
@@ -961,8 +961,19 @@ fn parse_function_definition(pair: Pair<Rule>) -> Result<Command> {
     };
 
     // Parse the function body
+    let mut body_inner = body_pair.into_inner();
+    // Skip Lbrace
+    if let Some(lbrace) = body_inner.next() {
+        if lbrace.as_str() != "{" {
+            return Err(miette!("Expected Lbrace to start function body"));
+        }
+    }
+    // Parse the actual compound_list
+    let compound_list = body_inner.next()
+        .ok_or_else(|| miette!("Expected compound list in function body"))?;
     let mut body_items = Vec::new();
-    parse_compound_list(body_pair, &mut body_items)?;
+
+    parse_compound_list(compound_list, &mut body_items)?;
 
     Ok(Command {
         inner: CommandInner::FunctionType(Function {
@@ -972,7 +983,6 @@ fn parse_function_definition(pair: Pair<Rule>) -> Result<Command> {
         redirect: None,
     })
 }
-
 
 fn parse_simple_command(pair: Pair<Rule>) -> Result<Command> {
     let mut env_vars = Vec::new();

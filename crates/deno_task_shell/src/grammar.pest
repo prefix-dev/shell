@@ -379,11 +379,11 @@ while_clause = !{ While ~ conditional_expression ~ do_group }
 until_clause = !{ Until ~ conditional_expression ~ do_group }
 
 function_definition = { 
-    fname ~ "(" ~ ")" ~ linebreak ~ compound_list |
-    "function" ~ fname ~ ("(" ~ ")")? ~ linebreak ~ compound_list
+    fname ~ "(" ~ ")" ~ linebreak ~ function_body |
+    "function" ~ fname ~ ("(" ~ ")")? ~ linebreak ~ function_body
 }
 
-function_body = !{ compound_command ~ redirect_list? }
+function_body = !{ Lbrace ~ compound_list ~ Rbrace }
 
 fname = @{ NAME }
 name = @{ NAME } 

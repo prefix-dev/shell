@@ -25,7 +25,7 @@ use crate::shell::fs_util;
 
 use super::commands::builtin_commands;
 use super::commands::ShellCommand;
-use crate::parser::SequentialList;
+use crate::parser::Function;
 
 #[derive(Clone)]
 pub struct ShellState {
@@ -53,7 +53,7 @@ pub struct ShellState {
     last_command_exit_code: i32, // Exit code of the last command
     // The shell options to be modified using `set` command
     shell_options: HashMap<ShellOptions, bool>,
-    functions: HashMap<String, SequentialList>,
+    pub functions: HashMap<String, Function>,
 }
 
 #[allow(clippy::print_stdout)]
@@ -357,12 +357,12 @@ impl ShellState {
         self.token = CancellationToken::default();
     }
 
-    pub fn add_function(&mut self, name: String, body: SequentialList) {
-        self.functions.insert(name, body);
+    pub fn add_function(&mut self, name: String, func: Function) {
+        self.functions.insert(name, func);
     }
 
-    pub fn get_function(&self, name: &str) -> Option<&SequentialList> {
-        self.functions.get(name)
+    pub fn get_function(&self, name: &str) -> Option<&Function> {
+        return self.functions.get(name);
     }
 }
 
