@@ -1463,6 +1463,16 @@ async fn test_set() {
         .await;
 }
 
+#[tokio::test]
+async fn test_reserved_substring() {
+    // Test that there is no panic (prefix-dev/shell#256)
+    TestBuilder::new()
+        .command(r#"find . -name 'platform*'"#)
+        .assert_exit_code(1)
+        .run()
+        .await;
+}
+
 #[cfg(test)]
 fn no_such_file_error_text() -> &'static str {
     if cfg!(windows) {
