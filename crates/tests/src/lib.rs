@@ -1467,8 +1467,14 @@ async fn test_set() {
 async fn test_reserved_substring() {
     // Test that there is no panic (prefix-dev/shell#256)
     TestBuilder::new()
-        .command(r#"find . -name 'platform*'"#)
-        .assert_exit_code(1)
+        .command(r#"fiqwertymnbvc bla"#)
+        .assert_exit_code(127)
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"forplmoknib bla"#)
+        .assert_exit_code(127)
         .run()
         .await;
 }
