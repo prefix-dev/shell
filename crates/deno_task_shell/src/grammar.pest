@@ -153,7 +153,7 @@ EXIT_STATUS = ${ "$?" }
 // Operators
 OPERATOR = _{
     AND_IF | OR_IF | DSEMI | DLESS | DGREAT | LESSAND | GREATAND | LESSGREAT | DLESSDASH | CLOBBER |
-    "," |"(" | ")" | "{" | "}" | ";" | "&" | "|" | "<" | ">"
+    "(" | ")" | "{" | "}" | ";" | "&" | "|" | "<" | ">"
 }
 
 // Reserved words
