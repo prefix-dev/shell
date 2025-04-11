@@ -1479,6 +1479,17 @@ async fn test_reserved_substring() {
         .await;
 }
 
+#[tokio::test]
+async fn test_comma_unquoted() {
+    // Allow `,` in unquoted words
+    TestBuilder::new()
+        .command("echo a,b,c")
+        .assert_exit_code(0)
+        .assert_stdout("a,b,c\n")
+        .run()
+        .await;
+}
+
 #[cfg(test)]
 fn no_such_file_error_text() -> &'static str {
     if cfg!(windows) {
