@@ -40,6 +40,25 @@ cargo r -- ./scripts/hello_world.sh
 cargo r -- ./scripts/hello_world.sh --interact
 ```
 
+## How to build and run using pixi
+
+These commands will install Rust, Cargo and build and run the project.
+
+```bash
+pixi r build
+pixi r run
+```
+
+## How to build a pixi package
+
+This creates a conda package for `shell` and installs it globally
+
+```bash
+cd crates/shell
+pixi build
+pixi global install --path ./shell-0.3.0-hbf21a9e_0.conda
+```
+
 ## License
 
 The project is licensed under the MIT License. It is an extension of the existing `deno_task_shell` project (also licensed under the MIT License, by the authors of `deno`).
