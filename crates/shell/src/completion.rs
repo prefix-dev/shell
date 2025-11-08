@@ -275,7 +275,9 @@ mod tests {
         let history = DefaultHistory::new();
         let line = format!("cat {}/.gi", temp_path.display());
         let pos = line.len();
-        let (_start, matches) = completer.complete(&line, pos, &Context::new(&history)).unwrap();
+        let (_start, matches) = completer
+            .complete(&line, pos, &Context::new(&history))
+            .unwrap();
 
         // Should find .gitignore and .github/
         assert_eq!(matches.len(), 2);
@@ -300,7 +302,9 @@ mod tests {
         let history = DefaultHistory::new();
         let line = format!("cat {}/", temp_path.display());
         let pos = line.len();
-        let (_start, matches) = completer.complete(&line, pos, &Context::new(&history)).unwrap();
+        let (_start, matches) = completer
+            .complete(&line, pos, &Context::new(&history))
+            .unwrap();
 
         // Should only find visible files, not hidden ones
         let displays: Vec<&str> = matches.iter().map(|m| m.display.as_str()).collect();
@@ -323,7 +327,9 @@ mod tests {
         let history = DefaultHistory::new();
         let line = format!("cd {}/.gith", temp_path.display());
         let pos = line.len();
-        let (_start, matches) = completer.complete(&line, pos, &Context::new(&history)).unwrap();
+        let (_start, matches) = completer
+            .complete(&line, pos, &Context::new(&history))
+            .unwrap();
 
         // Should find .github/
         assert_eq!(matches.len(), 1);
@@ -345,7 +351,9 @@ mod tests {
         let history = DefaultHistory::new();
         let line = format!("ls {}/.", temp_path.display());
         let pos = line.len();
-        let (_start, matches) = completer.complete(&line, pos, &Context::new(&history)).unwrap();
+        let (_start, matches) = completer
+            .complete(&line, pos, &Context::new(&history))
+            .unwrap();
 
         // Should find all hidden files
         assert!(matches.len() >= 3);
