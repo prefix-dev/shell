@@ -50,12 +50,43 @@ impl Completer for ShellCompleter {
 }
 
 fn extract_word(line: &str, pos: usize) -> (usize, &str) {
-    if line.ends_with(' ') {
-        return (pos, "");
+    if pos == 0 {
+        return (0, "");
     }
-    let words: Vec<_> = line[..pos].split_whitespace().collect();
-    let word_start = words.last().map_or(0, |w| line.rfind(w).unwrap());
-    (word_start, &line[word_start..pos])
+
+    let bytes = line.as_bytes();
+
+    // Walk backwards from pos to find the start of the word
+    let mut i = pos;
+    while i > 0 {
+        i -= 1;
+        let ch = bytes[i] as char;
+
+        // Check for word boundary characters
+        if ch == ' ' || ch == '|' || ch == '&' || ch == ';' || ch == '<' || ch == '>' || ch == '\t' {
+            // Count preceding backslashes to see if this character is escaped
+            let mut num_backslashes = 0;
+            let mut j = i;
+            while j > 0 {
+                j -= 1;
+                if bytes[j] == b'\\' {
+                    num_backslashes += 1;
+                } else {
+                    break;
+                }
+            }
+
+            // If even number of backslashes (including 0), the character is NOT escaped
+            if num_backslashes % 2 == 0 {
+                // This is an unescaped word boundary
+                return (i + 1, &line[i + 1..pos]);
+            }
+            // Odd number of backslashes means the character is escaped, continue
+        }
+    }
+
+    // Reached the beginning of the line
+    (0, &line[0..pos])
 }
 
 fn escape_for_shell(s: &str) -> String {
@@ -167,6 +198,22 @@ fn resolve_dir_path(dir_path: &str) -> PathBuf {
     }
 }
 
+fn unescape_for_completion(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut chars = s.chars();
+    while let Some(ch) = chars.next() {
+        if ch == '\\' {
+            // Skip the backslash and take the next character literally
+            if let Some(next_ch) = chars.next() {
+                result.push(next_ch);
+            }
+        } else {
+            result.push(ch);
+        }
+    }
+    result
+}
+
 fn complete_filenames(is_start: bool, word: &str, matches: &mut Vec<Pair>) {
     let (dir_path, partial_name) = match word.rfind('/') {
         Some(last_slash) => (&word[..=last_slash], &word[last_slash + 1..]),
@@ -177,12 +224,15 @@ fn complete_filenames(is_start: bool, word: &str, matches: &mut Vec<Pair>) {
     let only_executable = (word.starts_with("./") || word.starts_with('/')) && is_start;
     let show_hidden = partial_name.starts_with('.');
 
+    // Unescape the partial name for matching against actual filenames
+    let unescaped_partial = unescape_for_completion(partial_name);
+
     let files: Vec<FileMatch> = fs::read_dir(&search_dir)
         .into_iter()
         .flatten()
         .flatten()
         .filter_map(|entry| FileMatch::from_entry(entry, &search_dir, show_hidden))
-        .filter(|f| f.name.starts_with(partial_name))
+        .filter(|f| f.name.starts_with(&unescaped_partial))
         .filter(|f| !only_executable || f.is_executable || f.is_dir)
         .collect();
 
@@ -361,5 +411,58 @@ mod tests {
         assert!(displays.contains(&".env"));
         assert!(displays.contains(&".bashrc"));
         assert!(displays.contains(&".config/"));
+    }
+
+    #[tokio::test]
+    async fn test_complete_files_with_spaces() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        // Create two files with spaces in names
+        fs::File::create(temp_path.join("some file.txt")).unwrap();
+        fs::File::create(temp_path.join("some fact.txt")).unwrap();
+
+        let completer = ShellCompleter::new(HashSet::new());
+        let history = DefaultHistory::new();
+
+        // Test 1: completion of "s" should suggest both files
+        let line = format!("cat {}/s", temp_path.display());
+        let pos = line.len();
+        let (_start, matches) = completer
+            .complete(&line, pos, &Context::new(&history))
+            .unwrap();
+        assert_eq!(matches.len(), 2);
+
+        // Test 2: completion of "some\ fi" (escaped space) should complete to full path
+        let line = format!("cat {}/some\\ fi", temp_path.display());
+        let pos = line.len();
+        let (_start, matches) = completer
+            .complete(&line, pos, &Context::new(&history))
+            .unwrap();
+        assert_eq!(matches.len(), 1);
+        assert_eq!(
+            matches[0].replacement,
+            format!("{}/some\\ file.txt", temp_path.display())
+        );
+
+        // Test 3: completion of "some\ fa" (escaped space) should complete to full path
+        let line = format!("cat {}/some\\ fa", temp_path.display());
+        let pos = line.len();
+        let (_start, matches) = completer
+            .complete(&line, pos, &Context::new(&history))
+            .unwrap();
+        assert_eq!(matches.len(), 1);
+        assert_eq!(
+            matches[0].replacement,
+            format!("{}/some\\ fact.txt", temp_path.display())
+        );
+
+        // Test 4: completion of "some\ fx" (escaped space) should return no matches
+        let line = format!("cat {}/some\\ fx", temp_path.display());
+        let pos = line.len();
+        let (_start, matches) = completer
+            .complete(&line, pos, &Context::new(&history))
+            .unwrap();
+        assert_eq!(matches.len(), 0);
     }
 }
