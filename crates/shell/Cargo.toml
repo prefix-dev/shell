@@ -43,6 +43,9 @@ windows-sys = { version = "0.59.0", features = ["Win32_Foundation", "Win32_Syste
 ctrlc = "3.4.5"
 libc = "0.2.170"
 
+[dev-dependencies]
+tempfile = "3.14.0"
+
 [package.metadata.release]
 # Dont publish the binary
 release = false

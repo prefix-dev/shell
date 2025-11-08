@@ -251,3 +251,107 @@ impl Highlighter for ShellCompleter {
 impl Validator for ShellCompleter {}
 
 impl Helper for ShellCompleter {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rustyline::history::DefaultHistory;
+    use std::fs;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_complete_hidden_files_when_starting_with_dot() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        // Create some test files and directories
+        fs::File::create(temp_path.join(".gitignore")).unwrap();
+        fs::create_dir(temp_path.join(".github")).unwrap();
+        fs::File::create(temp_path.join(".hidden_file")).unwrap();
+        fs::File::create(temp_path.join("visible_file.txt")).unwrap();
+
+        // Test completion with "." prefix
+        let completer = ShellCompleter::new(HashSet::new());
+        let history = DefaultHistory::new();
+        let line = format!("cat {}/.gi", temp_path.display());
+        let pos = line.len();
+        let (_start, matches) = completer.complete(&line, pos, &Context::new(&history)).unwrap();
+
+        // Should find .gitignore and .github/
+        assert_eq!(matches.len(), 2);
+        let displays: Vec<&str> = matches.iter().map(|m| m.display.as_str()).collect();
+        assert!(displays.contains(&".github/"));
+        assert!(displays.contains(&".gitignore"));
+    }
+
+    #[test]
+    fn test_skip_hidden_files_when_not_starting_with_dot() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        // Create some test files and directories
+        fs::File::create(temp_path.join(".gitignore")).unwrap();
+        fs::create_dir(temp_path.join(".github")).unwrap();
+        fs::File::create(temp_path.join("visible_file.txt")).unwrap();
+        fs::File::create(temp_path.join("another_file.txt")).unwrap();
+
+        // Test completion without "." prefix
+        let completer = ShellCompleter::new(HashSet::new());
+        let history = DefaultHistory::new();
+        let line = format!("cat {}/", temp_path.display());
+        let pos = line.len();
+        let (_start, matches) = completer.complete(&line, pos, &Context::new(&history)).unwrap();
+
+        // Should only find visible files, not hidden ones
+        let displays: Vec<&str> = matches.iter().map(|m| m.display.as_str()).collect();
+        assert!(!displays.iter().any(|d| d.starts_with('.')));
+        assert!(displays.len() >= 2); // Should have at least the two visible files
+    }
+
+    #[test]
+    fn test_complete_github_directory() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        // Create .github directory and other dot files
+        fs::create_dir(temp_path.join(".github")).unwrap();
+        fs::File::create(temp_path.join(".gitignore")).unwrap();
+        fs::File::create(temp_path.join(".git_keep")).unwrap();
+
+        // Test completion with ".gith" prefix
+        let completer = ShellCompleter::new(HashSet::new());
+        let history = DefaultHistory::new();
+        let line = format!("cd {}/.gith", temp_path.display());
+        let pos = line.len();
+        let (_start, matches) = completer.complete(&line, pos, &Context::new(&history)).unwrap();
+
+        // Should find .github/
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].display, ".github/");
+    }
+
+    #[test]
+    fn test_complete_all_hidden_with_dot() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        // Create several hidden files
+        fs::File::create(temp_path.join(".env")).unwrap();
+        fs::File::create(temp_path.join(".bashrc")).unwrap();
+        fs::create_dir(temp_path.join(".config")).unwrap();
+
+        // Test completion with just "." prefix
+        let completer = ShellCompleter::new(HashSet::new());
+        let history = DefaultHistory::new();
+        let line = format!("ls {}/.", temp_path.display());
+        let pos = line.len();
+        let (_start, matches) = completer.complete(&line, pos, &Context::new(&history)).unwrap();
+
+        // Should find all hidden files
+        assert!(matches.len() >= 3);
+        let displays: Vec<&str> = matches.iter().map(|m| m.display.as_str()).collect();
+        assert!(displays.contains(&".env"));
+        assert!(displays.contains(&".bashrc"));
+        assert!(displays.contains(&".config/"));
+    }
+}
