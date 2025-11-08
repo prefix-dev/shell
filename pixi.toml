@@ -1,0 +1,14 @@
+[workspace]
+authors = ["The prefix-dev/shell team <hi@prefix.dev>"]
+channels = ["conda-forge"]
+name = "shell"
+platforms = ["win-64"]
+version = "0.3.0"
+preview = ["pixi-build"]
+
+[tasks]
+build = "cargo build"
+run = "cargo run"
+
+[dependencies]
+rust = ">=1.90.0,<1.91"

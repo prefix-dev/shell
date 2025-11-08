@@ -1,0 +1,18 @@
+[workspace]
+authors = ["The prefix-dev/shell team <hi@prefix.dev>"]
+channels = ["conda-forge"]
+name = "shell"
+platforms = ["win-64"]
+version = "0.3.0"
+preview = ["pixi-build"]
+
+[dependencies]
+rust = ">=1.90.0,<1.91"
+
+[package]
+name = "shell"
+version = "0.3.0"
+
+[package.build.backend]
+name = "pixi-build-rust"
+version = "==0.4.1"
