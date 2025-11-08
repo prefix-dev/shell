@@ -188,31 +188,13 @@ fn is_executable(entry: &fs::DirEntry) -> bool {
 }
 
 fn resolve_dir_path(dir_path: &str) -> PathBuf {
-    // On Windows, we need to distinguish between:
-    // 1. System paths like "C:\Users\..." where backslashes are path separators
-    // 2. User-typed paths like "some\ dir/" where backslashes are escape characters
-    //
-    // Windows absolute paths start with a drive letter (C:\) or UNC path (\\server\share)
-    let is_windows_absolute = cfg!(windows)
-        && (dir_path.len() >= 3 && dir_path.chars().nth(1) == Some(':') || // C:\...
-         dir_path.starts_with("\\\\")); // UNC path
+    // Unescape the directory path to handle spaces and other special characters
+    let unescaped = unescape_for_completion(dir_path);
 
-    // Only unescape user-typed relative paths to handle escaped spaces
-    // Don't unescape Windows absolute paths - their backslashes are path separators
-    let unescaped = if is_windows_absolute {
-        dir_path.to_string()
-    } else {
-        unescape_for_completion(dir_path)
-    };
-
-    if dir_path.starts_with('/') || is_windows_absolute {
+    if dir_path.starts_with('/') {
         PathBuf::from(unescaped)
     } else if let Some(stripped) = dir_path.strip_prefix('~') {
-        let unescaped_stripped = if is_windows_absolute {
-            stripped.to_string()
-        } else {
-            unescape_for_completion(stripped)
-        };
+        let unescaped_stripped = unescape_for_completion(stripped);
         dirs::home_dir()
             .map(|h| {
                 h.join(
@@ -336,7 +318,13 @@ mod tests {
     use super::*;
     use rustyline::history::DefaultHistory;
     use std::fs;
+    use std::path::Path;
     use tempfile::TempDir;
+
+    // Helper function to convert a path to a shell-escaped string
+    fn path_to_escaped_string(path: &Path) -> String {
+        escape_for_shell(&path.display().to_string())
+    }
 
     #[tokio::test]
     async fn test_complete_hidden_files_when_starting_with_dot() {
@@ -352,7 +340,8 @@ mod tests {
         // Test completion with "." prefix
         let completer = ShellCompleter::new(HashSet::new());
         let history = DefaultHistory::new();
-        let line = format!("cat {}/.gi", temp_path.display());
+        let escaped_path = path_to_escaped_string(temp_path);
+        let line = format!("cat {}/.gi", escaped_path);
         let pos = line.len();
         let (_start, matches) = completer
             .complete(&line, pos, &Context::new(&history))
@@ -379,7 +368,8 @@ mod tests {
         // Test completion without "." prefix
         let completer = ShellCompleter::new(HashSet::new());
         let history = DefaultHistory::new();
-        let line = format!("cat {}/", temp_path.display());
+        let escaped_path = path_to_escaped_string(temp_path);
+        let line = format!("cat {}/", escaped_path);
         let pos = line.len();
         let (_start, matches) = completer
             .complete(&line, pos, &Context::new(&history))
@@ -404,7 +394,8 @@ mod tests {
         // Test completion with ".gith" prefix
         let completer = ShellCompleter::new(HashSet::new());
         let history = DefaultHistory::new();
-        let line = format!("cd {}/.gith", temp_path.display());
+        let escaped_path = path_to_escaped_string(temp_path);
+        let line = format!("cd {}/.gith", escaped_path);
         let pos = line.len();
         let (_start, matches) = completer
             .complete(&line, pos, &Context::new(&history))
@@ -428,7 +419,8 @@ mod tests {
         // Test completion with just "." prefix
         let completer = ShellCompleter::new(HashSet::new());
         let history = DefaultHistory::new();
-        let line = format!("ls {}/.", temp_path.display());
+        let escaped_path = path_to_escaped_string(temp_path);
+        let line = format!("ls {}/.", escaped_path);
         let pos = line.len();
         let (_start, matches) = completer
             .complete(&line, pos, &Context::new(&history))
@@ -453,9 +445,10 @@ mod tests {
 
         let completer = ShellCompleter::new(HashSet::new());
         let history = DefaultHistory::new();
+        let escaped_path = path_to_escaped_string(temp_path);
 
         // Test 1: completion of "s" should suggest both files
-        let line = format!("cat {}/s", temp_path.display());
+        let line = format!("cat {}/s", escaped_path);
         let pos = line.len();
         let (_start, matches) = completer
             .complete(&line, pos, &Context::new(&history))
@@ -463,7 +456,7 @@ mod tests {
         assert_eq!(matches.len(), 2);
 
         // Test 2: completion of "some\ fi" (escaped space) should complete to full path
-        let line = format!("cat {}/some\\ fi", temp_path.display());
+        let line = format!("cat {}/some\\ fi", escaped_path);
         let pos = line.len();
         let (_start, matches) = completer
             .complete(&line, pos, &Context::new(&history))
@@ -471,11 +464,11 @@ mod tests {
         assert_eq!(matches.len(), 1);
         assert_eq!(
             matches[0].replacement,
-            format!("{}/some\\ file.txt", temp_path.display())
+            format!("{}/some\\ file.txt", escaped_path)
         );
 
         // Test 3: completion of "some\ fa" (escaped space) should complete to full path
-        let line = format!("cat {}/some\\ fa", temp_path.display());
+        let line = format!("cat {}/some\\ fa", escaped_path);
         let pos = line.len();
         let (_start, matches) = completer
             .complete(&line, pos, &Context::new(&history))
@@ -483,11 +476,11 @@ mod tests {
         assert_eq!(matches.len(), 1);
         assert_eq!(
             matches[0].replacement,
-            format!("{}/some\\ fact.txt", temp_path.display())
+            format!("{}/some\\ fact.txt", escaped_path)
         );
 
         // Test 4: completion of "some\ fx" (escaped space) should return no matches
-        let line = format!("cat {}/some\\ fx", temp_path.display());
+        let line = format!("cat {}/some\\ fx", escaped_path);
         let pos = line.len();
         let (_start, matches) = completer
             .complete(&line, pos, &Context::new(&history))
@@ -507,9 +500,10 @@ mod tests {
 
         let completer = ShellCompleter::new(HashSet::new());
         let history = DefaultHistory::new();
+        let escaped_path = path_to_escaped_string(temp_path);
 
         // Test 1: completion of "some\ d" should suggest the directory
-        let line = format!("cd {}/some\\ d", temp_path.display());
+        let line = format!("cd {}/some\\ d", escaped_path);
         let pos = line.len();
         let (_start, matches) = completer
             .complete(&line, pos, &Context::new(&history))
@@ -517,11 +511,11 @@ mod tests {
         assert_eq!(matches.len(), 1);
         assert_eq!(
             matches[0].replacement,
-            format!("{}/some\\ dir/", temp_path.display())
+            format!("{}/some\\ dir/", escaped_path)
         );
 
         // Test 2: completion of "some\ dir/f" should suggest both files
-        let line = format!("cat {}/some\\ dir/f", temp_path.display());
+        let line = format!("cat {}/some\\ dir/f", escaped_path);
         let pos = line.len();
         let (_start, matches) = completer
             .complete(&line, pos, &Context::new(&history))
@@ -529,7 +523,7 @@ mod tests {
         assert_eq!(matches.len(), 2);
 
         // Test 3: completion of "some\ dir/file1" should complete to file1.txt
-        let line = format!("cat {}/some\\ dir/file1", temp_path.display());
+        let line = format!("cat {}/some\\ dir/file1", escaped_path);
         let pos = line.len();
         let (_start, matches) = completer
             .complete(&line, pos, &Context::new(&history))
@@ -537,7 +531,7 @@ mod tests {
         assert_eq!(matches.len(), 1);
         assert_eq!(
             matches[0].replacement,
-            format!("{}/some\\ dir/file1.txt", temp_path.display())
+            format!("{}/some\\ dir/file1.txt", escaped_path)
         );
     }
 }
