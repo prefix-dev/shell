@@ -85,7 +85,7 @@ struct FileMatch {
 }
 
 impl FileMatch {
-    fn from_entry(entry: fs::DirEntry, base_path: &Path) -> Option<Self> {
+    fn from_entry(entry: fs::DirEntry, base_path: &Path, show_hidden: bool) -> Option<Self> {
         let metadata = match entry.metadata() {
             Ok(m) => m,
             Err(_) => return None,
@@ -93,8 +93,8 @@ impl FileMatch {
 
         let name = entry.file_name().into_string().ok()?;
 
-        // Skip hidden files
-        if name.starts_with('.') {
+        // Skip hidden files unless explicitly requested
+        if !show_hidden && name.starts_with('.') {
             return None;
         }
 
@@ -175,12 +175,13 @@ fn complete_filenames(is_start: bool, word: &str, matches: &mut Vec<Pair>) {
 
     let search_dir = resolve_dir_path(dir_path);
     let only_executable = (word.starts_with("./") || word.starts_with('/')) && is_start;
+    let show_hidden = partial_name.starts_with('.');
 
     let files: Vec<FileMatch> = fs::read_dir(&search_dir)
         .into_iter()
         .flatten()
         .flatten()
-        .filter_map(|entry| FileMatch::from_entry(entry, &search_dir))
+        .filter_map(|entry| FileMatch::from_entry(entry, &search_dir, show_hidden))
         .filter(|f| f.name.starts_with(partial_name))
         .filter(|f| !only_executable || f.is_executable || f.is_dir)
         .collect();
