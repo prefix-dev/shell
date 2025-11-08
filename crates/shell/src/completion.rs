@@ -259,8 +259,8 @@ mod tests {
     use std::fs;
     use tempfile::TempDir;
 
-    #[test]
-    fn test_complete_hidden_files_when_starting_with_dot() {
+    #[tokio::test]
+    async fn test_complete_hidden_files_when_starting_with_dot() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path();
 
@@ -284,8 +284,8 @@ mod tests {
         assert!(displays.contains(&".gitignore"));
     }
 
-    #[test]
-    fn test_skip_hidden_files_when_not_starting_with_dot() {
+    #[tokio::test]
+    async fn test_skip_hidden_files_when_not_starting_with_dot() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path();
 
@@ -308,8 +308,8 @@ mod tests {
         assert!(displays.len() >= 2); // Should have at least the two visible files
     }
 
-    #[test]
-    fn test_complete_github_directory() {
+    #[tokio::test]
+    async fn test_complete_github_directory() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path();
 
@@ -330,8 +330,8 @@ mod tests {
         assert_eq!(matches[0].display, ".github/");
     }
 
-    #[test]
-    fn test_complete_all_hidden_with_dot() {
+    #[tokio::test]
+    async fn test_complete_all_hidden_with_dot() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path();
 
