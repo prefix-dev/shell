@@ -188,13 +188,31 @@ fn is_executable(entry: &fs::DirEntry) -> bool {
 }
 
 fn resolve_dir_path(dir_path: &str) -> PathBuf {
-    // Unescape the directory path to handle spaces and other special characters
-    let unescaped = unescape_for_completion(dir_path);
+    // On Windows, we need to distinguish between:
+    // 1. System paths like "C:\Users\..." where backslashes are path separators
+    // 2. User-typed paths like "some\ dir/" where backslashes are escape characters
+    //
+    // Windows absolute paths start with a drive letter (C:\) or UNC path (\\server\share)
+    let is_windows_absolute = cfg!(windows)
+        && (dir_path.len() >= 3 && dir_path.chars().nth(1) == Some(':') || // C:\...
+         dir_path.starts_with("\\\\")); // UNC path
 
-    if dir_path.starts_with('/') {
+    // Only unescape user-typed relative paths to handle escaped spaces
+    // Don't unescape Windows absolute paths - their backslashes are path separators
+    let unescaped = if is_windows_absolute {
+        dir_path.to_string()
+    } else {
+        unescape_for_completion(dir_path)
+    };
+
+    if dir_path.starts_with('/') || is_windows_absolute {
         PathBuf::from(unescaped)
     } else if let Some(stripped) = dir_path.strip_prefix('~') {
-        let unescaped_stripped = unescape_for_completion(stripped);
+        let unescaped_stripped = if is_windows_absolute {
+            stripped.to_string()
+        } else {
+            unescape_for_completion(stripped)
+        };
         dirs::home_dir()
             .map(|h| {
                 h.join(
