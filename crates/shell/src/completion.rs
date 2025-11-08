@@ -187,14 +187,18 @@ fn is_executable(entry: &fs::DirEntry) -> bool {
 }
 
 fn resolve_dir_path(dir_path: &str) -> PathBuf {
+    // Unescape the directory path to handle spaces and other special characters
+    let unescaped = unescape_for_completion(dir_path);
+
     if dir_path.starts_with('/') {
-        PathBuf::from(dir_path)
+        PathBuf::from(unescaped)
     } else if let Some(stripped) = dir_path.strip_prefix('~') {
+        let unescaped_stripped = unescape_for_completion(stripped);
         dirs::home_dir()
-            .map(|h| h.join(stripped.strip_prefix('/').unwrap_or(stripped)))
-            .unwrap_or_else(|| PathBuf::from(dir_path))
+            .map(|h| h.join(unescaped_stripped.strip_prefix('/').unwrap_or(&unescaped_stripped)))
+            .unwrap_or_else(|| PathBuf::from(unescaped))
     } else {
-        PathBuf::from(".").join(dir_path)
+        PathBuf::from(".").join(unescaped)
     }
 }
 
@@ -464,5 +468,51 @@ mod tests {
             .complete(&line, pos, &Context::new(&history))
             .unwrap();
         assert_eq!(matches.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_complete_files_in_directory_with_spaces() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        // Create a directory with a space in its name
+        fs::create_dir(temp_path.join("some dir")).unwrap();
+        fs::File::create(temp_path.join("some dir/file1.txt")).unwrap();
+        fs::File::create(temp_path.join("some dir/file2.txt")).unwrap();
+
+        let completer = ShellCompleter::new(HashSet::new());
+        let history = DefaultHistory::new();
+
+        // Test 1: completion of "some\ d" should suggest the directory
+        let line = format!("cd {}/some\\ d", temp_path.display());
+        let pos = line.len();
+        let (_start, matches) = completer
+            .complete(&line, pos, &Context::new(&history))
+            .unwrap();
+        assert_eq!(matches.len(), 1);
+        assert_eq!(
+            matches[0].replacement,
+            format!("{}/some\\ dir/", temp_path.display())
+        );
+
+        // Test 2: completion of "some\ dir/f" should suggest both files
+        let line = format!("cat {}/some\\ dir/f", temp_path.display());
+        let pos = line.len();
+        let (_start, matches) = completer
+            .complete(&line, pos, &Context::new(&history))
+            .unwrap();
+        assert_eq!(matches.len(), 2);
+
+        // Test 3: completion of "some\ dir/file1" should complete to file1.txt
+        let line = format!("cat {}/some\\ dir/file1", temp_path.display());
+        let pos = line.len();
+        let (_start, matches) = completer
+            .complete(&line, pos, &Context::new(&history))
+            .unwrap();
+        assert_eq!(matches.len(), 1);
+        assert_eq!(
+            matches[0].replacement,
+            format!("{}/some\\ dir/file1.txt", temp_path.display())
+        );
     }
 }
