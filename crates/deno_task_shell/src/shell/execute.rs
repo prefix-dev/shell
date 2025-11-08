@@ -1180,7 +1180,7 @@ async fn execute_pipe_sequence(
 
     let (all_handles, changes): (Vec<_>, Vec<_>) = results
         .into_iter()
-        .map(|r| (r.into_handles_and_changes()))
+        .map(|r| r.into_handles_and_changes())
         .unzip();
     let all_handles: Vec<JoinHandle<i32>> =
         all_handles.into_iter().flatten().collect();
@@ -1881,7 +1881,7 @@ fn evaluate_word_parts(
     eval_glob: EvaluateGlob,
     stdin: ShellPipeReader,
     stderr: ShellPipeWriter,
-) -> LocalBoxFuture<Result<WordPartsResult, EvaluateWordTextError>> {
+) -> LocalBoxFuture<'_, Result<WordPartsResult, EvaluateWordTextError>> {
     fn text_parts_to_string(parts: Vec<TextPart>) -> String {
         let mut result =
             String::with_capacity(parts.iter().map(|p| p.as_str().len()).sum());
@@ -1992,7 +1992,7 @@ fn evaluate_word_parts(
         state: &mut ShellState,
         stdin: ShellPipeReader,
         stderr: ShellPipeWriter,
-    ) -> LocalBoxFuture<Result<WordPartsResult, EvaluateWordTextError>> {
+    ) -> LocalBoxFuture<'_, Result<WordPartsResult, EvaluateWordTextError>> {
         // recursive async, so requires boxing
         async move {
             let mut result = WordPartsResult::new(Vec::new(), Vec::new());

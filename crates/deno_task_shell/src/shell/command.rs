@@ -74,7 +74,7 @@ enum CommandName {
 
 struct ResolvedCommand<'a> {
     command_name: CommandName,
-    args: Cow<'a, Vec<String>>,
+    args: Cow<'a, [String]>,
 }
 
 #[derive(Error, Debug)]
@@ -112,7 +112,7 @@ impl FailedShebangError {
 async fn resolve_command<'a>(
     command_name: &UnresolvedCommandName,
     context: &mut ShellCommandContext,
-    original_args: &'a Vec<String>,
+    original_args: &'a [String],
 ) -> Result<ResolvedCommand<'a>, ResolveCommandError> {
     let command_path = match resolve_command_path(
         &command_name.name,
