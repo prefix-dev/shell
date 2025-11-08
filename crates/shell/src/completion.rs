@@ -63,7 +63,8 @@ fn extract_word(line: &str, pos: usize) -> (usize, &str) {
         let ch = bytes[i] as char;
 
         // Check for word boundary characters
-        if ch == ' ' || ch == '|' || ch == '&' || ch == ';' || ch == '<' || ch == '>' || ch == '\t' {
+        if ch == ' ' || ch == '|' || ch == '&' || ch == ';' || ch == '<' || ch == '>' || ch == '\t'
+        {
             // Count preceding backslashes to see if this character is escaped
             let mut num_backslashes = 0;
             let mut j = i;
@@ -195,7 +196,13 @@ fn resolve_dir_path(dir_path: &str) -> PathBuf {
     } else if let Some(stripped) = dir_path.strip_prefix('~') {
         let unescaped_stripped = unescape_for_completion(stripped);
         dirs::home_dir()
-            .map(|h| h.join(unescaped_stripped.strip_prefix('/').unwrap_or(&unescaped_stripped)))
+            .map(|h| {
+                h.join(
+                    unescaped_stripped
+                        .strip_prefix('/')
+                        .unwrap_or(&unescaped_stripped),
+                )
+            })
             .unwrap_or_else(|| PathBuf::from(unescaped))
     } else {
         PathBuf::from(".").join(unescaped)
