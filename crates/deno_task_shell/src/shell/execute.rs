@@ -1992,7 +1992,8 @@ fn evaluate_word_parts(
         state: &mut ShellState,
         stdin: ShellPipeReader,
         stderr: ShellPipeWriter,
-    ) -> LocalBoxFuture<'_, Result<WordPartsResult, EvaluateWordTextError>> {
+    ) -> LocalBoxFuture<'_, Result<WordPartsResult, EvaluateWordTextError>>
+    {
         // recursive async, so requires boxing
         async move {
             let mut result = WordPartsResult::new(Vec::new(), Vec::new());
