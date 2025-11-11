@@ -9,24 +9,24 @@ INT = { ("+" | "-")? ~ ASCII_DIGIT+ }
 // Basic tokens
 QUOTED_WORD = { DOUBLE_QUOTED | SINGLE_QUOTED }
 
-UNQUOTED_PENDING_WORD = ${ 
-    (TILDE_PREFIX ~ (!(OPERATOR | WHITESPACE | NEWLINE) ~ (
-        EXIT_STATUS | 
-        UNQUOTED_ESCAPE_CHAR | 
+UNQUOTED_PENDING_WORD = ${
+    (TILDE_PREFIX ~ (BRACE_EXPANSION | !(OPERATOR | WHITESPACE | NEWLINE) ~ (
+        EXIT_STATUS |
+        UNQUOTED_ESCAPE_CHAR |
         "$" ~ ARITHMETIC_EXPRESSION |
-        SUB_COMMAND | 
-        VARIABLE_EXPANSION | 
-        UNQUOTED_CHAR | 
+        SUB_COMMAND |
+        VARIABLE_EXPANSION |
+        UNQUOTED_CHAR |
         QUOTED_WORD
     ))*)
-    | 
-    (!(OPERATOR | WHITESPACE | NEWLINE) ~ (
-        EXIT_STATUS | 
-        UNQUOTED_ESCAPE_CHAR | 
+    |
+    (BRACE_EXPANSION | !(OPERATOR | WHITESPACE | NEWLINE) ~ (
+        EXIT_STATUS |
+        UNQUOTED_ESCAPE_CHAR |
         "$" ~ ARITHMETIC_EXPRESSION |
-        SUB_COMMAND | 
-        VARIABLE_EXPANSION | 
-        UNQUOTED_CHAR | 
+        SUB_COMMAND |
+        VARIABLE_EXPANSION |
+        UNQUOTED_CHAR |
         QUOTED_WORD
     ))+
 }
@@ -90,6 +90,26 @@ VARIABLE_EXPANSION = ${
         SPECIAL_PARAM |
         VARIABLE
     )
+}
+
+BRACE_EXPANSION = ${
+    "{" ~ (BRACE_SEQUENCE | BRACE_LIST) ~ "}"
+}
+
+BRACE_SEQUENCE = ${
+    BRACE_ELEMENT ~ ".." ~ BRACE_ELEMENT ~ (".." ~ BRACE_STEP)?
+}
+
+BRACE_LIST = ${
+    BRACE_ELEMENT ~ ("," ~ BRACE_ELEMENT)+
+}
+
+BRACE_ELEMENT = ${
+    (!(OPERATOR | WHITESPACE | NEWLINE | "," | "}" | "{" | "." | "$" | "\\" | "\"" | "'") ~ ANY)*
+}
+
+BRACE_STEP = ${
+    ("+" | "-")? ~ ASCII_DIGIT+
 }
 
 SPECIAL_PARAM = ${ ARGNUM | "@" | "#" | "?" | "$" | "*" }
