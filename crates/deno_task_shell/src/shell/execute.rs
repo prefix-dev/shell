@@ -15,55 +15,21 @@ use thiserror::Error;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
-use crate::parser::AssignmentOp;
-use crate::parser::BinaryOp;
-use crate::parser::CaseClause;
-use crate::parser::Condition;
-use crate::parser::ConditionInner;
-use crate::parser::ElsePart;
-use crate::parser::ForLoop;
-use crate::parser::IoFile;
-use crate::parser::RedirectOpInput;
-use crate::parser::RedirectOpOutput;
-use crate::parser::UnaryOp;
-use crate::parser::VariableModifier;
-use crate::parser::WhileLoop;
-use crate::shell::commands::ShellCommand;
-use crate::shell::commands::ShellCommandContext;
-use crate::shell::types::pipe;
-use crate::shell::types::ArithmeticResult;
-use crate::shell::types::ArithmeticValue;
-use crate::shell::types::EnvChange;
-use crate::shell::types::ExecuteResult;
-use crate::shell::types::FutureExecuteResult;
-use crate::shell::types::ShellPipeReader;
-use crate::shell::types::ShellPipeWriter;
-use crate::shell::types::ShellState;
+use crate::parser::{
+  Arithmetic, ArithmeticPart, AssignmentOp, BinaryArithmeticOp, BinaryOp,
+  CaseClause, Command, CommandInner, Condition, ConditionInner, ElsePart,
+  ForLoop, IfClause, IoFile, PipeSequence, PipeSequenceOperator, Pipeline,
+  PipelineInner, Redirect, RedirectFd, RedirectOp, RedirectOpInput,
+  RedirectOpOutput, Sequence, SequentialList, SimpleCommand, UnaryArithmeticOp,
+  UnaryOp, VariableModifier, WhileLoop, Word, WordPart,
+};
+use crate::shell::commands::{ShellCommand, ShellCommandContext};
+use crate::shell::types::{
+  pipe, ArithmeticResult, ArithmeticValue, EnvChange, ExecuteResult,
+  FutureExecuteResult, ShellPipeReader, ShellPipeWriter, ShellState, Text,
+  TextPart, WordPartsResult, WordResult,
+};
 use crate::shell::types::TextPart::Text as OtherText;
-
-use crate::parser::Arithmetic;
-use crate::parser::ArithmeticPart;
-use crate::parser::BinaryArithmeticOp;
-use crate::parser::Command;
-use crate::parser::CommandInner;
-use crate::parser::IfClause;
-use crate::parser::PipeSequence;
-use crate::parser::PipeSequenceOperator;
-use crate::parser::Pipeline;
-use crate::parser::PipelineInner;
-use crate::parser::Redirect;
-use crate::parser::RedirectFd;
-use crate::parser::RedirectOp;
-use crate::parser::Sequence;
-use crate::parser::SequentialList;
-use crate::parser::SimpleCommand;
-use crate::parser::UnaryArithmeticOp;
-use crate::parser::Word;
-use crate::parser::WordPart;
-use crate::shell::types::Text;
-use crate::shell::types::TextPart;
-use crate::shell::types::WordPartsResult;
-use crate::shell::types::WordResult;
 
 use super::command::execute_unresolved_command_name;
 use super::command::UnresolvedCommandName;
@@ -1027,12 +993,7 @@ async fn evaluate_arithmetic_part(
         ArithmeticPart::UnaryArithmeticExpr { operator, operand } => {
             let val =
                 Box::pin(evaluate_arithmetic_part(operand, state)).await?;
-            apply_unary_op(*operator, val)
-        }
-        ArithmeticPart::PostArithmeticExpr { operand, .. } => {
-            let val =
-                Box::pin(evaluate_arithmetic_part(operand, state)).await?;
-            Ok(val)
+            apply_unary_op(state, *operator, val, operand)
         }
         ArithmeticPart::Variable(name) => state
             .get_var(name)
@@ -1120,19 +1081,15 @@ fn apply_conditional_binary_op(
 }
 
 fn apply_unary_op(
-    op: UnaryArithmeticOp,
-    val: ArithmeticResult,
+  state: &mut ShellState,
+  op: UnaryArithmeticOp,
+  val: ArithmeticResult,
+  operand: &ArithmeticPart,
 ) -> Result<ArithmeticResult, Error> {
-    match op {
-        UnaryArithmeticOp::Plus => Ok(val),
-        UnaryArithmeticOp::Minus => val.checked_neg(),
-        UnaryArithmeticOp::LogicalNot => Ok(if val.is_zero() {
-            ArithmeticResult::new(ArithmeticValue::Integer(1))
-        } else {
-            ArithmeticResult::new(ArithmeticValue::Integer(0))
-        }),
-        UnaryArithmeticOp::BitwiseNot => val.checked_not(),
-    }
+  let result = val.unary_op(operand, op)?;
+  let result_clone = result.clone();
+  state.apply_changes(&result_clone.changes);
+  Ok(result)
 }
 
 async fn execute_pipe_sequence(
