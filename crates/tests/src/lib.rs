@@ -1573,6 +1573,33 @@ which myfunc
         .await;
 }
 
+#[tokio::test]
+async fn test_reserved_substring() {
+    // Test that there is no panic (prefix-dev/shell#256)
+    TestBuilder::new()
+        .command(r#"fiqwertymnbvc bla"#)
+        .assert_exit_code(127)
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"forplmoknib bla"#)
+        .assert_exit_code(127)
+        .run()
+        .await;
+}
+
+#[tokio::test]
+async fn test_comma_unquoted() {
+    // Allow `,` in unquoted words
+    TestBuilder::new()
+        .command("echo a,b,c")
+        .assert_exit_code(0)
+        .assert_stdout("a,b,c\n")
+        .run()
+        .await;
+}
+
 #[cfg(test)]
 fn no_such_file_error_text() -> &'static str {
     if cfg!(windows) {

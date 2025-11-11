@@ -153,7 +153,7 @@ EXIT_STATUS = ${ "$?" }
 // Operators
 OPERATOR = _{
     AND_IF | OR_IF | DSEMI | DLESS | DGREAT | LESSAND | GREATAND | LESSGREAT | DLESSDASH | CLOBBER |
-    "," |"(" | ")" | "{" | "}" | ";" | "&" | "|" | "<" | ">"
+    "(" | ")" | "{" | "}" | ";" | "&" | "|" | "<" | ">"
 }
 
 // Reserved words
@@ -177,10 +177,10 @@ Stdout = ${ "|" ~ !"|" ~ !"&"}
 StdoutStderr = { "|&" }
 
 RESERVED_WORD = _{
-    If | Then | Else | Elif | Fi | Do | Done |
+    (If | Then | Else | Elif | Fi | Done | Do |
     Case | Esac | While | Until | For |
     Lbrace | Rbrace | Bang | In |
-    StdoutStderr | Stdout
+    StdoutStderr | Stdout) ~ &(WHITESPACE | NEWLINE | EOI)
 }
 
 // Main grammar rules

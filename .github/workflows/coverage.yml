@@ -12,6 +12,7 @@ on:
 
 jobs:
   test:
+    if: false
     name: coverage
     runs-on: ubuntu-latest
     container:

@@ -30,7 +30,7 @@ impl ArgKind<'_> {
     }
 }
 
-pub fn parse_arg_kinds(flags: &[String]) -> Vec<ArgKind> {
+pub fn parse_arg_kinds(flags: &[String]) -> Vec<ArgKind<'_>> {
     let mut result = Vec::new();
     let mut had_dash_dash = false;
     for arg in flags {

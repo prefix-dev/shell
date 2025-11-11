@@ -1337,6 +1337,7 @@ dependencies = [
  "miette",
  "parse_datetime 0.8.0",
  "rustyline",
+ "tempfile",
  "tokio",
  "uu_date",
  "uu_ls",
