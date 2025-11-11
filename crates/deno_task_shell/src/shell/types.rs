@@ -13,6 +13,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use futures::future::LocalBoxFuture;
 use miette::Error;
@@ -296,6 +297,9 @@ impl ShellState {
             EnvChange::SetShellOptions(option, value) => {
                 self.set_shell_option(*option, *value);
             }
+            EnvChange::AddFunction(name, func) => {
+                self.add_function(name.clone(), (**func).clone());
+            }
         }
     }
 
@@ -366,7 +370,7 @@ impl ShellState {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, PartialOrd)]
+#[derive(Debug, Clone)]
 pub enum EnvChange {
     /// `export ENV_VAR=VALUE`
     SetEnvVar(String, String),
@@ -382,6 +386,77 @@ pub enum EnvChange {
     Cd(PathBuf),
     /// `set -ex`
     SetShellOptions(ShellOptions, bool),
+    /// Add a user-defined function
+    AddFunction(String, Arc<Function>),
+}
+
+// Manual implementations for PartialEq and PartialOrd to handle Arc<Function>
+impl PartialEq for EnvChange {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (EnvChange::SetEnvVar(a1, b1), EnvChange::SetEnvVar(a2, b2)) => {
+                a1 == a2 && b1 == b2
+            }
+            (
+                EnvChange::SetShellVar(a1, b1),
+                EnvChange::SetShellVar(a2, b2),
+            ) => a1 == a2 && b1 == b2,
+            (
+                EnvChange::AliasCommand(a1, b1),
+                EnvChange::AliasCommand(a2, b2),
+            ) => a1 == a2 && b1 == b2,
+            (EnvChange::UnAliasCommand(a1), EnvChange::UnAliasCommand(a2)) => {
+                a1 == a2
+            }
+            (EnvChange::UnsetVar(a1), EnvChange::UnsetVar(a2)) => a1 == a2,
+            (EnvChange::Cd(a1), EnvChange::Cd(a2)) => a1 == a2,
+            (
+                EnvChange::SetShellOptions(a1, b1),
+                EnvChange::SetShellOptions(a2, b2),
+            ) => a1 == a2 && b1 == b2,
+            (
+                EnvChange::AddFunction(a1, b1),
+                EnvChange::AddFunction(a2, b2),
+            ) => a1 == a2 && **b1 == **b2,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for EnvChange {}
+
+impl PartialOrd for EnvChange {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for EnvChange {
+    fn cmp(&self, other: &Self) -> Ordering {
+        // Simple ordering based on variant - using discriminant comparison
+        use EnvChange::*;
+        let self_idx = match self {
+            SetEnvVar(..) => 0,
+            SetShellVar(..) => 1,
+            AliasCommand(..) => 2,
+            UnAliasCommand(..) => 3,
+            UnsetVar(..) => 4,
+            Cd(..) => 5,
+            SetShellOptions(..) => 6,
+            AddFunction(..) => 7,
+        };
+        let other_idx = match other {
+            SetEnvVar(..) => 0,
+            SetShellVar(..) => 1,
+            AliasCommand(..) => 2,
+            UnAliasCommand(..) => 3,
+            UnsetVar(..) => 4,
+            Cd(..) => 5,
+            SetShellOptions(..) => 6,
+            AddFunction(..) => 7,
+        };
+        self_idx.cmp(&other_idx)
+    }
 }
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Debug, PartialOrd)]

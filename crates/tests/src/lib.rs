@@ -1463,6 +1463,116 @@ async fn test_set() {
         .await;
 }
 
+#[tokio::test]
+async fn functions() {
+    // Basic function definition and call
+    TestBuilder::new()
+        .command(
+            r#"
+greet() {
+    echo "Hello, World!"
+}
+greet
+"#,
+        )
+        .assert_stdout("Hello, World!\n")
+        .run()
+        .await;
+
+    // Function with parameters
+    TestBuilder::new()
+        .command(
+            r#"
+show_params() {
+    echo "First: $1"
+    echo "Second: $2"
+}
+show_params "foo" "bar"
+"#,
+        )
+        .assert_stdout("First: foo\nSecond: bar\n")
+        .run()
+        .await;
+
+    // Function with 'function' keyword
+    TestBuilder::new()
+        .command(
+            r#"
+function my_function {
+    echo "Using function keyword"
+}
+my_function
+"#,
+        )
+        .assert_stdout("Using function keyword\n")
+        .run()
+        .await;
+
+    // Function with 'function' keyword and parentheses
+    TestBuilder::new()
+        .command(
+            r#"
+function another_function() {
+    echo "Function with parens"
+}
+another_function
+"#,
+        )
+        .assert_stdout("Function with parens\n")
+        .run()
+        .await;
+
+    // Multiple functions in sequence
+    TestBuilder::new()
+        .command(
+            r#"
+myfunc1() {
+    echo "First function"
+}
+myfunc2() {
+    echo "Second function"
+}
+myfunc1
+myfunc2
+"#,
+        )
+        .assert_stdout("First function\nSecond function\n")
+        .run()
+        .await;
+
+    // Function overriding
+    TestBuilder::new()
+        .command(
+            r#"
+test_override() {
+    echo "First version"
+}
+test_override
+test_override() {
+    echo "Second version"
+}
+test_override
+"#,
+        )
+        .assert_stdout("First version\nSecond version\n")
+        .run()
+        .await;
+
+    // Test 'which' command with functions
+    TestBuilder::new()
+        .command(
+            r#"
+myfunc() {
+    echo "test"
+}
+which myfunc
+"#,
+        )
+        .assert_stdout("<user function>\n")
+        .run()
+        .await;
+}
+
 #[cfg(test)]
 fn no_such_file_error_text() -> &'static str {
     if cfg!(windows) {

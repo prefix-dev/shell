@@ -928,8 +928,8 @@ fn parse_command(pair: Pair<Rule>) -> Result<Command> {
 
 fn parse_function_definition(pair: Pair<Rule>) -> Result<Command> {
     let mut inner = pair.into_inner();
-    
-    // Handle both styles: 
+
+    // Handle both styles:
     // 1. name() { body }
     // 2. function name { body } or function name() { body }
     let (name, body_pair) = if inner.peek().unwrap().as_rule() == Rule::fname {
@@ -969,7 +969,8 @@ fn parse_function_definition(pair: Pair<Rule>) -> Result<Command> {
         }
     }
     // Parse the actual compound_list
-    let compound_list = body_inner.next()
+    let compound_list = body_inner
+        .next()
         .ok_or_else(|| miette!("Expected compound list in function body"))?;
     let mut body_items = Vec::new();
 
