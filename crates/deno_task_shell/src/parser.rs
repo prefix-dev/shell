@@ -419,6 +419,15 @@ pub enum VariableModifier {
 }
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
+#[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
+#[derive(Debug, PartialEq, Eq, Clone, Error)]
+#[error("Invalid brace expansion")]
+pub enum BraceExpansion {
+    List(Vec<String>),
+    Sequence { start: String, end: String, step: Option<i32> },
+}
+
+#[cfg_attr(feature = "serialization", derive(serde::Serialize))]
 #[cfg_attr(
     feature = "serialization",
     serde(rename_all = "camelCase", tag = "kind", content = "value")
@@ -439,6 +448,8 @@ pub enum WordPart {
     Arithmetic(Arithmetic),
     #[error("Invalid exit status")]
     ExitStatus,
+    #[error("Invalid brace expansion")]
+    BraceExpansion(BraceExpansion),
 }
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
@@ -1432,6 +1443,10 @@ fn parse_word(pair: Pair<Rule>) -> Result<Word> {
                             parse_variable_expansion(part)?;
                         parts.push(variable_expansion);
                     }
+                    Rule::BRACE_EXPANSION => {
+                        let brace_expansion = parse_brace_expansion(part)?;
+                        parts.push(WordPart::BraceExpansion(brace_expansion));
+                    }
                     Rule::QUOTED_WORD => {
                         let quoted = parse_quoted_word(part)?;
                         parts.push(quoted);
@@ -1820,6 +1835,35 @@ fn parse_variable_expansion(part: Pair<Rule>) -> Result<WordPart> {
         None
     };
     Ok(WordPart::Variable(variable_name, parsed_modifier))
+}
+
+fn parse_brace_expansion(pair: Pair<Rule>) -> Result<BraceExpansion> {
+    let inner = pair.into_inner().next()
+        .ok_or_else(|| miette!("Expected brace expansion content"))?;
+
+    match inner.as_rule() {
+        Rule::BRACE_LIST => {
+            let elements: Vec<String> = inner.into_inner()
+                .map(|elem| elem.as_str().to_string())
+                .collect();
+            Ok(BraceExpansion::List(elements))
+        }
+        Rule::BRACE_SEQUENCE => {
+            let mut parts = inner.into_inner();
+            let start = parts.next()
+                .ok_or_else(|| miette!("Expected sequence start"))?
+                .as_str().to_string();
+            let end = parts.next()
+                .ok_or_else(|| miette!("Expected sequence end"))?
+                .as_str().to_string();
+            let step = parts.next().map(|s| {
+                s.as_str().parse::<i32>()
+                    .unwrap_or(1)
+            });
+            Ok(BraceExpansion::Sequence { start, end, step })
+        }
+        _ => Err(miette!("Unexpected rule in brace expansion: {:?}", inner.as_rule()))
+    }
 }
 
 fn parse_tilde_prefix(pair: Pair<Rule>) -> Result<WordPart> {
