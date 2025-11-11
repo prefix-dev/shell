@@ -433,7 +433,9 @@ impl ExecuteResult {
             ExecuteResult::Exit(_, changes, handles) => (handles, changes),
             ExecuteResult::Continue(_, changes, handles) => (handles, changes),
             ExecuteResult::Break(_, changes, handles) => (handles, changes),
-            ExecuteResult::LoopContinue(_, changes, handles) => (handles, changes),
+            ExecuteResult::LoopContinue(_, changes, handles) => {
+                (handles, changes)
+            }
         }
     }
 

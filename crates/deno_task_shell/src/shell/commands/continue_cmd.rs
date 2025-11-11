@@ -19,7 +19,9 @@ impl ShellCommand for ContinueCommand {
         mut context: ShellCommandContext,
     ) -> LocalBoxFuture<'static, ExecuteResult> {
         let result = match execute_continue(context.args) {
-            Ok(code) => ExecuteResult::LoopContinue(code, Vec::new(), Vec::new()),
+            Ok(code) => {
+                ExecuteResult::LoopContinue(code, Vec::new(), Vec::new())
+            }
             Err(err) => {
                 context
                     .stderr
@@ -77,10 +79,7 @@ mod test {
         assert_eq!(parse_args(vec!["1".to_string()]).unwrap(), 1);
         assert_eq!(parse_args(vec!["2".to_string()]).unwrap(), 2);
         assert_eq!(
-            parse_args(vec!["0".to_string()])
-                .err()
-                .unwrap()
-                .to_string(),
+            parse_args(vec!["0".to_string()]).err().unwrap().to_string(),
             "loop count out of range"
         );
         assert_eq!(

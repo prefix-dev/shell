@@ -214,7 +214,11 @@ pub fn execute_sequential_list(
                         was_break = true;
                         break;
                     }
-                    ExecuteResult::LoopContinue(exit_code, changes, handles) => {
+                    ExecuteResult::LoopContinue(
+                        exit_code,
+                        changes,
+                        handles,
+                    ) => {
                         state.apply_changes(&changes);
                         state.set_shell_var("?", &exit_code.to_string());
                         final_changes.extend(changes);
@@ -253,7 +257,11 @@ pub fn execute_sequential_list(
         } else if was_break {
             ExecuteResult::Break(final_exit_code, final_changes, async_handles)
         } else if was_loop_continue {
-            ExecuteResult::LoopContinue(final_exit_code, final_changes, async_handles)
+            ExecuteResult::LoopContinue(
+                final_exit_code,
+                final_changes,
+                async_handles,
+            )
         } else {
             ExecuteResult::Continue(
                 final_exit_code,
@@ -337,7 +345,9 @@ fn execute_sequence(
                 let (exit_code, mut async_handles) = match first_result {
                     ExecuteResult::Exit(_, _, _) => return first_result,
                     ExecuteResult::Break(_, _, _) => return first_result,
-                    ExecuteResult::LoopContinue(_, _, _) => return first_result,
+                    ExecuteResult::LoopContinue(_, _, _) => {
+                        return first_result
+                    }
                     ExecuteResult::Continue(
                         exit_code,
                         sub_changes,
@@ -377,15 +387,27 @@ fn execute_sequence(
                             async_handles.extend(sub_handles);
                             ExecuteResult::Exit(code, changes, async_handles)
                         }
-                        ExecuteResult::Break(code, sub_changes, sub_handles) => {
+                        ExecuteResult::Break(
+                            code,
+                            sub_changes,
+                            sub_handles,
+                        ) => {
                             changes.extend(sub_changes);
                             async_handles.extend(sub_handles);
                             ExecuteResult::Break(code, changes, async_handles)
                         }
-                        ExecuteResult::LoopContinue(code, sub_changes, sub_handles) => {
+                        ExecuteResult::LoopContinue(
+                            code,
+                            sub_changes,
+                            sub_handles,
+                        ) => {
                             changes.extend(sub_changes);
                             async_handles.extend(sub_handles);
-                            ExecuteResult::LoopContinue(code, changes, async_handles)
+                            ExecuteResult::LoopContinue(
+                                code,
+                                changes,
+                                async_handles,
+                            )
                         }
                         ExecuteResult::Continue(
                             exit_code,
@@ -778,7 +800,11 @@ async fn execute_while_clause(
                             last_exit_code = code;
                             break;
                         }
-                        ExecuteResult::LoopContinue(code, env_changes, handles) => {
+                        ExecuteResult::LoopContinue(
+                            code,
+                            env_changes,
+                            handles,
+                        ) => {
                             state.apply_changes(&env_changes);
                             changes.extend(env_changes);
                             async_handles.extend(handles);
@@ -1392,7 +1418,9 @@ async fn execute_if_clause(
                     }
                     ExecuteResult::LoopContinue(code, env_changes, handles) => {
                         changes.extend(env_changes);
-                        return ExecuteResult::LoopContinue(code, changes, handles);
+                        return ExecuteResult::LoopContinue(
+                            code, changes, handles,
+                        );
                     }
                     ExecuteResult::Continue(code, env_changes, handles) => {
                         changes.extend(env_changes);
@@ -1428,13 +1456,21 @@ async fn execute_if_clause(
                                     code, changes, handles,
                                 );
                             }
-                            ExecuteResult::Break(code, env_changes, handles) => {
+                            ExecuteResult::Break(
+                                code,
+                                env_changes,
+                                handles,
+                            ) => {
                                 changes.extend(env_changes);
                                 return ExecuteResult::Break(
                                     code, changes, handles,
                                 );
                             }
-                            ExecuteResult::LoopContinue(code, env_changes, handles) => {
+                            ExecuteResult::LoopContinue(
+                                code,
+                                env_changes,
+                                handles,
+                            ) => {
                                 changes.extend(env_changes);
                                 return ExecuteResult::LoopContinue(
                                     code, changes, handles,
