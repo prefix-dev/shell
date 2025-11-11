@@ -424,7 +424,11 @@ pub enum VariableModifier {
 #[error("Invalid brace expansion")]
 pub enum BraceExpansion {
     List(Vec<String>),
-    Sequence { start: String, end: String, step: Option<i32> },
+    Sequence {
+        start: String,
+        end: String,
+        step: Option<i32>,
+    },
 }
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
@@ -1838,31 +1842,39 @@ fn parse_variable_expansion(part: Pair<Rule>) -> Result<WordPart> {
 }
 
 fn parse_brace_expansion(pair: Pair<Rule>) -> Result<BraceExpansion> {
-    let inner = pair.into_inner().next()
+    let inner = pair
+        .into_inner()
+        .next()
         .ok_or_else(|| miette!("Expected brace expansion content"))?;
 
     match inner.as_rule() {
         Rule::BRACE_LIST => {
-            let elements: Vec<String> = inner.into_inner()
+            let elements: Vec<String> = inner
+                .into_inner()
                 .map(|elem| elem.as_str().to_string())
                 .collect();
             Ok(BraceExpansion::List(elements))
         }
         Rule::BRACE_SEQUENCE => {
             let mut parts = inner.into_inner();
-            let start = parts.next()
+            let start = parts
+                .next()
                 .ok_or_else(|| miette!("Expected sequence start"))?
-                .as_str().to_string();
-            let end = parts.next()
+                .as_str()
+                .to_string();
+            let end = parts
+                .next()
                 .ok_or_else(|| miette!("Expected sequence end"))?
-                .as_str().to_string();
-            let step = parts.next().map(|s| {
-                s.as_str().parse::<i32>()
-                    .unwrap_or(1)
-            });
+                .as_str()
+                .to_string();
+            let step =
+                parts.next().map(|s| s.as_str().parse::<i32>().unwrap_or(1));
             Ok(BraceExpansion::Sequence { start, end, step })
         }
-        _ => Err(miette!("Unexpected rule in brace expansion: {:?}", inner.as_rule()))
+        _ => Err(miette!(
+            "Unexpected rule in brace expansion: {:?}",
+            inner.as_rule()
+        )),
     }
 }
 

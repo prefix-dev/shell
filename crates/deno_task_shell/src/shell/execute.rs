@@ -1877,11 +1877,11 @@ pub enum IsQuoted {
 }
 
 /// Expands a brace expansion into a vector of strings
-fn expand_braces(brace_expansion: &BraceExpansion) -> Result<Vec<String>, Error> {
+fn expand_braces(
+    brace_expansion: &BraceExpansion,
+) -> Result<Vec<String>, Error> {
     match brace_expansion {
-        BraceExpansion::List(elements) => {
-            Ok(elements.clone())
-        }
+        BraceExpansion::List(elements) => Ok(elements.clone()),
         BraceExpansion::Sequence { start, end, step } => {
             expand_sequence(start, end, step.as_ref())
         }
@@ -1889,18 +1889,21 @@ fn expand_braces(brace_expansion: &BraceExpansion) -> Result<Vec<String>, Error>
 }
 
 /// Expands a sequence like {1..10} or {a..z} or {1..10..2}
-fn expand_sequence(start: &str, end: &str, step: Option<&i32>) -> Result<Vec<String>, Error> {
+fn expand_sequence(
+    start: &str,
+    end: &str,
+    step: Option<&i32>,
+) -> Result<Vec<String>, Error> {
     // Try to parse as integers first
-    if let (Ok(start_num), Ok(end_num)) = (start.parse::<i32>(), end.parse::<i32>()) {
+    if let (Ok(start_num), Ok(end_num)) =
+        (start.parse::<i32>(), end.parse::<i32>())
+    {
         let is_reverse = start_num > end_num;
-        let mut step_val = step.copied().unwrap_or(if is_reverse { -1 } else { 1 });
+        let mut step_val =
+            step.copied().unwrap_or(if is_reverse { -1 } else { 1 });
 
-        // If step is provided and direction is reverse, negate the step
-        if step.is_some() && is_reverse && step_val > 0 {
-            step_val = -step_val;
-        }
-        // If step is provided and direction is forward, ensure step is positive
-        else if step.is_some() && !is_reverse && step_val < 0 {
+        // If step is provided and its sign doesn't match the direction, flip it
+        if step.is_some() && (is_reverse != (step_val < 0)) {
             step_val = -step_val;
         }
 
@@ -1929,14 +1932,14 @@ fn expand_sequence(start: &str, end: &str, step: Option<&i32>) -> Result<Vec<Str
         let start_char = start.chars().next().unwrap();
         let end_char = end.chars().next().unwrap();
         let is_reverse = start_char > end_char;
-        let mut step_val = step.copied().unwrap_or(if is_reverse { -1 } else { 1 });
+        let mut step_val =
+            step.copied().unwrap_or(if is_reverse { -1 } else { 1 });
 
         // If step is provided and direction is reverse, negate the step
-        if step.is_some() && is_reverse && step_val > 0 {
-            step_val = -step_val;
-        }
-        // If step is provided and direction is forward, ensure step is positive
-        else if step.is_some() && !is_reverse && step_val < 0 {
+        // Or if step is provided and direction is forward, ensure step is positive
+        if step.is_some() && (is_reverse && step_val > 0)
+            || (!is_reverse && step_val < 0)
+        {
             step_val = -step_val;
         }
 
@@ -1961,8 +1964,7 @@ fn expand_sequence(start: &str, end: &str, step: Option<&i32>) -> Result<Vec<Str
             }
         }
         Ok(result)
-    }
-    else {
+    } else {
         // If it's not a valid sequence, return it as-is (bash behavior)
         Ok(vec![format!("{{{}..{}}}", start, end)])
     }
@@ -2197,9 +2199,10 @@ fn evaluate_word_parts(
                         WordPart::BraceExpansion(brace_expansion) => {
                             let expanded = expand_braces(&brace_expansion)?;
                             Ok(Some(Text::new(
-                                expanded.into_iter()
-                                    .map(|s| TextPart::Text(s))
-                                    .collect()
+                                expanded
+                                    .into_iter()
+                                    .map(TextPart::Text)
+                                    .collect(),
                             )))
                         }
                     };
