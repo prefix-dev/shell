@@ -667,6 +667,13 @@ async fn execute_command(
                 }
             }
         }
+        CommandInner::FunctionType(function) => {
+            changes.push(EnvChange::AddFunction(
+                function.name.clone(),
+                std::sync::Arc::new(function.clone()),
+            ));
+            ExecuteResult::Continue(0, changes, Vec::new())
+        }
     }
 }
 
@@ -1520,6 +1527,47 @@ async fn execute_simple_command(
             return err.into_exit_code(&mut stderr);
         }
     };
+
+    if !args.is_empty() {
+        let command_name = &args[0];
+        if let Some(body) = state.get_function(command_name).cloned() {
+            // Set $0 to function name and $1, $2, etc. to arguments
+            let mut function_changes = vec![EnvChange::SetShellVar(
+                "0".to_string(),
+                command_name.clone().to_string(),
+            )];
+            for (i, arg) in args.iter().skip(1).enumerate() {
+                function_changes.push(EnvChange::SetShellVar(
+                    (i + 1).to_string(),
+                    arg.clone().to_string(),
+                ));
+            }
+
+            state.apply_changes(&function_changes);
+            changes.extend(function_changes);
+
+            let result = execute_sequential_list(
+                body.body.clone(),
+                state.clone(),
+                stdin,
+                stdout,
+                stderr,
+                AsyncCommandBehavior::Yield,
+            )
+            .await;
+
+            match result {
+                ExecuteResult::Exit(code, env_changes, handles) => {
+                    changes.extend(env_changes);
+                    return ExecuteResult::Exit(code, changes, handles);
+                }
+                ExecuteResult::Continue(code, env_changes, handles) => {
+                    changes.extend(env_changes);
+                    return ExecuteResult::Continue(code, changes, handles);
+                }
+            }
+        }
+    }
 
     let mut state = state.clone();
     for env_var in command.env_vars {

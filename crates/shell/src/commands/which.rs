@@ -28,6 +28,11 @@ fn execute_which(context: &mut ShellCommandContext) -> Result<(), i32> {
         return Ok(());
     }
 
+    if context.state.get_function(arg).is_some() {
+        context.stdout.write_line("<user function>").ok();
+        return Ok(());
+    }
+
     if context.state.resolve_custom_command(arg).is_some() {
         context.stdout.write_line("<builtin function>").ok();
         return Ok(());
