@@ -1122,7 +1122,6 @@ impl ArithmeticResult {
             }
         };
 
-<<<<<<< HEAD
         let mut changes = self.changes.clone();
         changes.extend(other.changes.clone());
 

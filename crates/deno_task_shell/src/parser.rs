@@ -1735,7 +1735,10 @@ fn unary_pre_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
   let second = inner.next().ok_or_else(|| miette!("Expected operand"))?;
   let operand = match second.as_rule() {
     Rule::parentheses_expr => {
-      let inner = second.into_inner().next().unwrap();
+      let inner = second
+        .into_inner()
+        .next()
+        .ok_or_else(|| miette!("Expected expression in parentheses"))?;
       let parts = parse_arithmetic_sequence(inner)?;
       Ok(ArithmeticPart::ParenthesesExpr(Box::new(Arithmetic {
         parts,
@@ -1752,6 +1755,14 @@ fn unary_pre_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
   match first.as_rule() {
     Rule::pre_arithmetic_op => {
       let op = parse_pre_arithmetic_op(first)?;
+      // Validate that increment/decrement are only applied to variables or expressions
+      if matches!(op, PreArithmeticOp::Increment | PreArithmeticOp::Decrement) {
+        if matches!(operand, ArithmeticPart::Number(_)) {
+          return Err(miette!(
+            "Increment/decrement operators cannot be applied to literal numbers"
+          ));
+        }
+      }
       Ok(ArithmeticPart::UnaryArithmeticExpr {
         operator: UnaryArithmeticOp::Pre(op),
         operand: Box::new(operand),
@@ -1780,7 +1791,10 @@ fn unary_post_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
 
   let operand = match first.as_rule() {
     Rule::parentheses_expr => {
-      let inner = first.into_inner().next().unwrap();
+      let inner = first
+        .into_inner()
+        .next()
+        .ok_or_else(|| miette!("Expected expression in parentheses"))?;
       let parts = parse_arithmetic_sequence(inner)?;
       Ok(ArithmeticPart::ParenthesesExpr(Box::new(Arithmetic {
         parts,
@@ -1793,6 +1807,14 @@ fn unary_post_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
       first.as_rule()
     )),
   }?;
+
+  // Validate that increment/decrement are only applied to variables or expressions
+  if matches!(operand, ArithmeticPart::Number(_)) {
+    return Err(miette!(
+      "Increment/decrement operators cannot be applied to literal numbers"
+    ));
+  }
+
   let op = parse_post_arithmetic_op(second)?;
   Ok(ArithmeticPart::UnaryArithmeticExpr {
     operator: UnaryArithmeticOp::Post(op),
@@ -1832,6 +1854,66 @@ fn parse_post_arithmetic_op(pair: Pair<Rule>) -> Result<PostArithmeticOp> {
       first.as_rule()
     )),
   }
+}
+
+fn parse_variable_expansion(part: Pair<Rule>) -> Result<WordPart> {
+    let mut inner = part.into_inner();
+    let variable = inner
+        .next()
+        .ok_or_else(|| miette!("Expected variable name"))?;
+    let variable_name = variable.as_str().to_string();
+
+    let modifier = inner.next();
+    let parsed_modifier = if let Some(modifier) = modifier {
+        match modifier.as_rule() {
+            Rule::VAR_SUBSTRING => {
+                let mut numbers = modifier.into_inner();
+                let begin: Word = if let Some(n) = numbers.next() {
+                    parse_word(n)?
+                } else {
+                    return Err(miette!(
+                        "Expected a number for substring begin"
+                    ));
+                };
+
+                let length = if let Some(len_word) = numbers.next() {
+                    Some(parse_word(len_word)?)
+                } else {
+                    None
+                };
+                Some(Box::new(VariableModifier::Substring { begin, length }))
+            }
+            Rule::VAR_DEFAULT_VALUE => {
+                let value = if let Some(val) = modifier.into_inner().next() {
+                    parse_word(val)?
+                } else {
+                    Word::new_empty()
+                };
+                Some(Box::new(VariableModifier::DefaultValue(value)))
+            }
+            Rule::VAR_ASSIGN_DEFAULT => {
+                let value = modifier.into_inner().next().unwrap();
+                Some(Box::new(VariableModifier::AssignDefault(parse_word(
+                    value,
+                )?)))
+            }
+            Rule::VAR_ALTERNATE_VALUE => {
+                let value = modifier.into_inner().next().unwrap();
+                Some(Box::new(VariableModifier::AlternateValue(parse_word(
+                    value,
+                )?)))
+            }
+            _ => {
+                return Err(miette!(
+                    "Unexpected rule in variable expansion modifier: {:?}",
+                    modifier.as_rule()
+                ));
+            }
+        }
+    } else {
+        None
+    };
+    Ok(WordPart::Variable(variable_name, parsed_modifier))
 }
 
 fn parse_tilde_prefix(pair: Pair<Rule>) -> Result<WordPart> {
