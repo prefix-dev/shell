@@ -47,6 +47,8 @@ pub async fn execute(
     let changes = match &result {
         ExecuteResult::Exit(_, changes, _) => changes,
         ExecuteResult::Continue(_, changes, _) => changes,
+        ExecuteResult::Break(_, changes, _) => changes,
+        ExecuteResult::LoopContinue(_, changes, _) => changes,
     };
     // set CWD to the last command's CWD
     state.apply_changes(changes);

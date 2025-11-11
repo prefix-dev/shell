@@ -1,8 +1,10 @@
 // Copyright 2018-2024 the Deno authors. MIT license.
 
 mod args;
+mod break_cmd;
 mod cat;
 mod cd;
+mod continue_cmd;
 mod cp_mv;
 mod echo;
 mod executable;
@@ -35,12 +37,20 @@ use super::types::ShellState;
 pub fn builtin_commands() -> HashMap<String, Rc<dyn ShellCommand>> {
     HashMap::from([
         (
+            "break".to_string(),
+            Rc::new(break_cmd::BreakCommand) as Rc<dyn ShellCommand>,
+        ),
+        (
             "cat".to_string(),
             Rc::new(cat::CatCommand) as Rc<dyn ShellCommand>,
         ),
         (
             "cd".to_string(),
             Rc::new(cd::CdCommand) as Rc<dyn ShellCommand>,
+        ),
+        (
+            "continue".to_string(),
+            Rc::new(continue_cmd::ContinueCommand) as Rc<dyn ShellCommand>,
         ),
         (
             "cp".to_string(),
