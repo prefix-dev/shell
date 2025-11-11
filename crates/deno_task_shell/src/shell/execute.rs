@@ -16,20 +16,20 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 use crate::parser::{
-  Arithmetic, ArithmeticPart, AssignmentOp, BinaryArithmeticOp, BinaryOp,
-  CaseClause, Command, CommandInner, Condition, ConditionInner, ElsePart,
-  ForLoop, IfClause, IoFile, PipeSequence, PipeSequenceOperator, Pipeline,
-  PipelineInner, Redirect, RedirectFd, RedirectOp, RedirectOpInput,
-  RedirectOpOutput, Sequence, SequentialList, SimpleCommand, UnaryArithmeticOp,
-  UnaryOp, VariableModifier, WhileLoop, Word, WordPart,
+    Arithmetic, ArithmeticPart, AssignmentOp, BinaryArithmeticOp, BinaryOp,
+    CaseClause, Command, CommandInner, Condition, ConditionInner, ElsePart,
+    ForLoop, IfClause, IoFile, PipeSequence, PipeSequenceOperator, Pipeline,
+    PipelineInner, Redirect, RedirectFd, RedirectOp, RedirectOpInput,
+    RedirectOpOutput, Sequence, SequentialList, SimpleCommand,
+    UnaryArithmeticOp, UnaryOp, VariableModifier, WhileLoop, Word, WordPart,
 };
 use crate::shell::commands::{ShellCommand, ShellCommandContext};
-use crate::shell::types::{
-  pipe, ArithmeticResult, ArithmeticValue, EnvChange, ExecuteResult,
-  FutureExecuteResult, ShellPipeReader, ShellPipeWriter, ShellState, Text,
-  TextPart, WordPartsResult, WordResult,
-};
 use crate::shell::types::TextPart::Text as OtherText;
+use crate::shell::types::{
+    pipe, ArithmeticResult, ArithmeticValue, EnvChange, ExecuteResult,
+    FutureExecuteResult, ShellPipeReader, ShellPipeWriter, ShellState, Text,
+    TextPart, WordPartsResult, WordResult,
+};
 
 use super::command::execute_unresolved_command_name;
 use super::command::UnresolvedCommandName;
@@ -1081,15 +1081,15 @@ fn apply_conditional_binary_op(
 }
 
 fn apply_unary_op(
-  state: &mut ShellState,
-  op: UnaryArithmeticOp,
-  val: ArithmeticResult,
-  operand: &ArithmeticPart,
+    state: &mut ShellState,
+    op: UnaryArithmeticOp,
+    val: ArithmeticResult,
+    operand: &ArithmeticPart,
 ) -> Result<ArithmeticResult, Error> {
-  let result = val.unary_op(operand, op)?;
-  let result_clone = result.clone();
-  state.apply_changes(&result_clone.changes);
-  Ok(result)
+    let result = val.unary_op(operand, op)?;
+    let result_clone = result.clone();
+    state.apply_changes(&result_clone.changes);
+    Ok(result)
 }
 
 async fn execute_pipe_sequence(

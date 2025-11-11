@@ -453,41 +453,41 @@ pub struct Arithmetic {
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 #[error("Invalid arithmetic part")]
 pub enum ArithmeticPart {
-  #[error("Invalid parentheses expression")]
-  ParenthesesExpr(Box<Arithmetic>),
-  #[error("Invalid variable assignment")]
-  VariableAssignment {
-    name: String,
-    op: AssignmentOp,
-    value: Box<ArithmeticPart>,
-  },
-  #[error("Invalid triple conditional expression")]
-  TripleConditionalExpr {
-    condition: Box<ArithmeticPart>,
-    true_expr: Box<ArithmeticPart>,
-    false_expr: Box<ArithmeticPart>,
-  },
-  #[error("Invalid binary arithmetic expression")]
-  BinaryArithmeticExpr {
-    left: Box<ArithmeticPart>,
-    operator: BinaryArithmeticOp,
-    right: Box<ArithmeticPart>,
-  },
-  #[error("Invalid binary conditional expression")]
-  BinaryConditionalExpr {
-    left: Box<ArithmeticPart>,
-    operator: BinaryOp,
-    right: Box<ArithmeticPart>,
-  },
-  #[error("Invalid unary arithmetic expression")]
-  UnaryArithmeticExpr {
-    operator: UnaryArithmeticOp,
-    operand: Box<ArithmeticPart>,
-  },
-  #[error("Invalid variable")]
-  Variable(String),
-  #[error("Invalid number")]
-  Number(String),
+    #[error("Invalid parentheses expression")]
+    ParenthesesExpr(Box<Arithmetic>),
+    #[error("Invalid variable assignment")]
+    VariableAssignment {
+        name: String,
+        op: AssignmentOp,
+        value: Box<ArithmeticPart>,
+    },
+    #[error("Invalid triple conditional expression")]
+    TripleConditionalExpr {
+        condition: Box<ArithmeticPart>,
+        true_expr: Box<ArithmeticPart>,
+        false_expr: Box<ArithmeticPart>,
+    },
+    #[error("Invalid binary arithmetic expression")]
+    BinaryArithmeticExpr {
+        left: Box<ArithmeticPart>,
+        operator: BinaryArithmeticOp,
+        right: Box<ArithmeticPart>,
+    },
+    #[error("Invalid binary conditional expression")]
+    BinaryConditionalExpr {
+        left: Box<ArithmeticPart>,
+        operator: BinaryOp,
+        right: Box<ArithmeticPart>,
+    },
+    #[error("Invalid unary arithmetic expression")]
+    UnaryArithmeticExpr {
+        operator: UnaryArithmeticOp,
+        operand: Box<ArithmeticPart>,
+    },
+    #[error("Invalid variable")]
+    Variable(String),
+    #[error("Invalid number")]
+    Number(String),
 }
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
@@ -530,12 +530,12 @@ pub enum AssignmentOp {
 #[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
 #[derive(Debug, Clone, PartialEq, Eq, Copy)]
 pub enum PreArithmeticOp {
-  Increment,  // ++
-  Decrement,  // --
-  Plus,       // +
-  Minus,      // -
-  LogicalNot, // !
-  BitwiseNot, // ~
+    Increment,  // ++
+    Decrement,  // --
+    Plus,       // +
+    Minus,      // -
+    LogicalNot, // !
+    BitwiseNot, // ~
 }
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
@@ -550,8 +550,8 @@ pub enum PostArithmeticOp {
 #[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
 #[derive(Debug, Clone, PartialEq, Eq, Copy)]
 pub enum UnaryArithmeticOp {
-  Pre(PreArithmeticOp),
-  Post(PostArithmeticOp),
+    Pre(PreArithmeticOp),
+    Post(PostArithmeticOp),
 }
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
@@ -1712,148 +1712,154 @@ fn parse_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
 }
 
 fn parse_unary_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
-  let mut inner = pair.into_inner();
-  let first = inner
-    .next()
-    .ok_or_else(|| miette!("Expected unary operator"))?;
+    let mut inner = pair.into_inner();
+    let first = inner
+        .next()
+        .ok_or_else(|| miette!("Expected unary operator"))?;
 
-  match first.as_rule() {
-    Rule::unary_pre_arithmetic_expr => unary_pre_arithmetic_expr(first),
-    Rule::unary_post_arithmetic_expr => unary_post_arithmetic_expr(first),
-    _ => Err(miette!(
-      "Unexpected rule in unary arithmetic expression: {:?}",
-      first.as_rule()
-    )),
-  }
+    match first.as_rule() {
+        Rule::unary_pre_arithmetic_expr => unary_pre_arithmetic_expr(first),
+        Rule::unary_post_arithmetic_expr => unary_post_arithmetic_expr(first),
+        _ => Err(miette!(
+            "Unexpected rule in unary arithmetic expression: {:?}",
+            first.as_rule()
+        )),
+    }
 }
 
 fn unary_pre_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
-  let mut inner = pair.into_inner();
-  let first = inner
-    .next()
-    .ok_or_else(|| miette!("Expected unary pre operator"))?;
-  let second = inner.next().ok_or_else(|| miette!("Expected operand"))?;
-  let operand = match second.as_rule() {
-    Rule::parentheses_expr => {
-      let inner = second
-        .into_inner()
+    let mut inner = pair.into_inner();
+    let first = inner
         .next()
-        .ok_or_else(|| miette!("Expected expression in parentheses"))?;
-      let parts = parse_arithmetic_sequence(inner)?;
-      Ok(ArithmeticPart::ParenthesesExpr(Box::new(Arithmetic {
-        parts,
-      })))
-    }
-    Rule::VARIABLE => Ok(ArithmeticPart::Variable(second.as_str().to_string())),
-    Rule::NUMBER => Ok(ArithmeticPart::Number(second.as_str().to_string())),
-    _ => Err(miette!(
-      "Unexpected rule in arithmetic expression: {:?}",
-      second.as_rule()
-    )),
-  }?;
+        .ok_or_else(|| miette!("Expected unary pre operator"))?;
+    let second = inner.next().ok_or_else(|| miette!("Expected operand"))?;
+    let operand = match second.as_rule() {
+        Rule::parentheses_expr => {
+            let inner = second
+                .into_inner()
+                .next()
+                .ok_or_else(|| miette!("Expected expression in parentheses"))?;
+            let parts = parse_arithmetic_sequence(inner)?;
+            Ok(ArithmeticPart::ParenthesesExpr(Box::new(Arithmetic {
+                parts,
+            })))
+        }
+        Rule::VARIABLE => {
+            Ok(ArithmeticPart::Variable(second.as_str().to_string()))
+        }
+        Rule::NUMBER => Ok(ArithmeticPart::Number(second.as_str().to_string())),
+        _ => Err(miette!(
+            "Unexpected rule in arithmetic expression: {:?}",
+            second.as_rule()
+        )),
+    }?;
 
-  match first.as_rule() {
-    Rule::pre_arithmetic_op => {
-      let op = parse_pre_arithmetic_op(first)?;
-      // Validate that increment/decrement are only applied to variables or expressions
-      if matches!(op, PreArithmeticOp::Increment | PreArithmeticOp::Decrement) {
-        if matches!(operand, ArithmeticPart::Number(_)) {
-          return Err(miette!(
+    match first.as_rule() {
+        Rule::pre_arithmetic_op => {
+            let op = parse_pre_arithmetic_op(first)?;
+            // Validate that increment/decrement are only applied to variables or expressions
+            if matches!(
+                op,
+                PreArithmeticOp::Increment | PreArithmeticOp::Decrement
+            ) && matches!(operand, ArithmeticPart::Number(_))
+            {
+                return Err(miette!(
             "Increment/decrement operators cannot be applied to literal numbers"
           ));
+            }
+            Ok(ArithmeticPart::UnaryArithmeticExpr {
+                operator: UnaryArithmeticOp::Pre(op),
+                operand: Box::new(operand),
+            })
         }
-      }
-      Ok(ArithmeticPart::UnaryArithmeticExpr {
-        operator: UnaryArithmeticOp::Pre(op),
-        operand: Box::new(operand),
-      })
+        Rule::post_arithmetic_op => {
+            let op = parse_post_arithmetic_op(first)?;
+            Ok(ArithmeticPart::UnaryArithmeticExpr {
+                operator: UnaryArithmeticOp::Post(op),
+                operand: Box::new(operand),
+            })
+        }
+        _ => Err(miette!(
+            "Unexpected rule in unary arithmetic operator: {:?}",
+            first.as_rule()
+        )),
     }
-    Rule::post_arithmetic_op => {
-      let op = parse_post_arithmetic_op(first)?;
-      Ok(ArithmeticPart::UnaryArithmeticExpr {
-        operator: UnaryArithmeticOp::Post(op),
-        operand: Box::new(operand),
-      })
-    }
-    _ => Err(miette!(
-      "Unexpected rule in unary arithmetic operator: {:?}",
-      first.as_rule()
-    )),
-  }
 }
 
 fn unary_post_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
-  let mut inner = pair.into_inner();
-  let first = inner
-    .next()
-    .ok_or_else(|| miette!("Expected unary post operator"))?;
-  let second = inner.next().ok_or_else(|| miette!("Expected operand"))?;
-
-  let operand = match first.as_rule() {
-    Rule::parentheses_expr => {
-      let inner = first
-        .into_inner()
+    let mut inner = pair.into_inner();
+    let first = inner
         .next()
-        .ok_or_else(|| miette!("Expected expression in parentheses"))?;
-      let parts = parse_arithmetic_sequence(inner)?;
-      Ok(ArithmeticPart::ParenthesesExpr(Box::new(Arithmetic {
-        parts,
-      })))
-    }
-    Rule::VARIABLE => Ok(ArithmeticPart::Variable(first.as_str().to_string())),
-    Rule::NUMBER => Ok(ArithmeticPart::Number(first.as_str().to_string())),
-    _ => Err(miette!(
-      "Unexpected rule in arithmetic expression: {:?}",
-      first.as_rule()
-    )),
-  }?;
+        .ok_or_else(|| miette!("Expected unary post operator"))?;
+    let second = inner.next().ok_or_else(|| miette!("Expected operand"))?;
 
-  // Validate that increment/decrement are only applied to variables or expressions
-  if matches!(operand, ArithmeticPart::Number(_)) {
-    return Err(miette!(
+    let operand = match first.as_rule() {
+        Rule::parentheses_expr => {
+            let inner = first
+                .into_inner()
+                .next()
+                .ok_or_else(|| miette!("Expected expression in parentheses"))?;
+            let parts = parse_arithmetic_sequence(inner)?;
+            Ok(ArithmeticPart::ParenthesesExpr(Box::new(Arithmetic {
+                parts,
+            })))
+        }
+        Rule::VARIABLE => {
+            Ok(ArithmeticPart::Variable(first.as_str().to_string()))
+        }
+        Rule::NUMBER => Ok(ArithmeticPart::Number(first.as_str().to_string())),
+        _ => Err(miette!(
+            "Unexpected rule in arithmetic expression: {:?}",
+            first.as_rule()
+        )),
+    }?;
+
+    // Validate that increment/decrement are only applied to variables or expressions
+    if matches!(operand, ArithmeticPart::Number(_)) {
+        return Err(miette!(
       "Increment/decrement operators cannot be applied to literal numbers"
     ));
-  }
+    }
 
-  let op = parse_post_arithmetic_op(second)?;
-  Ok(ArithmeticPart::UnaryArithmeticExpr {
-    operator: UnaryArithmeticOp::Post(op),
-    operand: Box::new(operand),
-  })
+    let op = parse_post_arithmetic_op(second)?;
+    Ok(ArithmeticPart::UnaryArithmeticExpr {
+        operator: UnaryArithmeticOp::Post(op),
+        operand: Box::new(operand),
+    })
 }
 
 fn parse_pre_arithmetic_op(pair: Pair<Rule>) -> Result<PreArithmeticOp> {
-  let first = pair
-    .into_inner()
-    .next()
-    .ok_or_else(|| miette!("Expected increment or decrement operator"))?;
-  match first.as_rule() {
-    Rule::increment => Ok(PreArithmeticOp::Increment),
-    Rule::decrement => Ok(PreArithmeticOp::Decrement),
-    Rule::unary_plus => Ok(PreArithmeticOp::Plus),
-    Rule::unary_minus => Ok(PreArithmeticOp::Minus),
-    Rule::logical_not => Ok(PreArithmeticOp::LogicalNot),
-    Rule::bitwise_not => Ok(PreArithmeticOp::BitwiseNot),
-    _ => Err(miette!(
-      "Unexpected rule in pre arithmetic operator: {:?}",
-      first.as_rule()
-    )),
-  }
+    let first = pair
+        .into_inner()
+        .next()
+        .ok_or_else(|| miette!("Expected increment or decrement operator"))?;
+    match first.as_rule() {
+        Rule::increment => Ok(PreArithmeticOp::Increment),
+        Rule::decrement => Ok(PreArithmeticOp::Decrement),
+        Rule::unary_plus => Ok(PreArithmeticOp::Plus),
+        Rule::unary_minus => Ok(PreArithmeticOp::Minus),
+        Rule::logical_not => Ok(PreArithmeticOp::LogicalNot),
+        Rule::bitwise_not => Ok(PreArithmeticOp::BitwiseNot),
+        _ => Err(miette!(
+            "Unexpected rule in pre arithmetic operator: {:?}",
+            first.as_rule()
+        )),
+    }
 }
 
 fn parse_post_arithmetic_op(pair: Pair<Rule>) -> Result<PostArithmeticOp> {
-  let first = pair
-    .into_inner()
-    .next()
-    .ok_or_else(|| miette!("Expected increment or decrement operator"))?;
-  match first.as_rule() {
-    Rule::increment => Ok(PostArithmeticOp::Increment),
-    Rule::decrement => Ok(PostArithmeticOp::Decrement),
-    _ => Err(miette!(
-      "Unexpected rule in post arithmetic operator: {:?}",
-      first.as_rule()
-    )),
-  }
+    let first = pair
+        .into_inner()
+        .next()
+        .ok_or_else(|| miette!("Expected increment or decrement operator"))?;
+    match first.as_rule() {
+        Rule::increment => Ok(PostArithmeticOp::Increment),
+        Rule::decrement => Ok(PostArithmeticOp::Decrement),
+        _ => Err(miette!(
+            "Unexpected rule in post arithmetic operator: {:?}",
+            first.as_rule()
+        )),
+    }
 }
 
 fn parse_variable_expansion(part: Pair<Rule>) -> Result<WordPart> {
