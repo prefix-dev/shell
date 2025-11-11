@@ -58,6 +58,12 @@ pub struct ShellState {
 pub fn set_terminal_title(title: &str) {
     // Only set title if we're in an interactive terminal session
     if std::io::stdout().is_terminal() {
+        let title = title.replace('\\', "/");
+        let title = if cfg!(unix) {
+            Path::new(&title).file_name().unwrap().to_str().unwrap()
+        } else {
+            &title
+        };
         // OSC 0 ; title BEL - works in most terminals
         print!("\x1B]0;{}\x07", title);
         // Ensure it's displayed immediately

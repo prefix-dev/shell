@@ -157,7 +157,17 @@ async fn interactive(state: Option<ShellState>, norc: bool, args: &[String]) -> 
             }
 
             let mut display_cwd = if let Some(stripped) = cwd.strip_prefix(home_str) {
-                format!("~{}", stripped.replace('\\', "/"))
+                if cfg!(unix) {
+                    format!(
+                        "~/{}",
+                        PathBuf::from(stripped.replace('\\', "/"))
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                    )
+                } else {
+                    format!("~{}", stripped.replace('\\', "/"))
+                }
             } else {
                 cwd.to_string()
             };
