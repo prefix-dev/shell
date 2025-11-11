@@ -52,3 +52,45 @@ Number: 5
 # 3
 # 4
 # 5
+
+# Test break in for loop
+> for i in 1 2 3 4 5; do
+>     if [[ $i == 3 ]]; then
+>         break
+>     fi
+>     echo $i
+> done
+1
+2
+
+# Test continue in for loop
+> for i in 1 2 3 4 5; do
+>     if [[ $i == 3 ]]; then
+>         continue
+>     fi
+>     echo $i
+> done
+1
+2
+4
+5
+
+# Test break in nested loop
+> for i in 1 2 3; do
+>     echo "outer: $i"
+>     for j in a b c; do
+>         echo "  inner: $j"
+>         if [[ $j == b ]]; then
+>             break
+>         fi
+>     done
+> done
+outer: 1
+  inner: a
+  inner: b
+outer: 2
+  inner: a
+  inner: b
+outer: 3
+  inner: a
+  inner: b

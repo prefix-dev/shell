@@ -391,6 +391,8 @@ pub const CANCELLATION_EXIT_CODE: i32 = 130;
 pub enum ExecuteResult {
     Exit(i32, Vec<EnvChange>, Vec<JoinHandle<i32>>),
     Continue(i32, Vec<EnvChange>, Vec<JoinHandle<i32>>),
+    Break(i32, Vec<EnvChange>, Vec<JoinHandle<i32>>),
+    LoopContinue(i32, Vec<EnvChange>, Vec<JoinHandle<i32>>),
 }
 
 impl ExecuteResult {
@@ -406,6 +408,8 @@ impl ExecuteResult {
         match self {
             ExecuteResult::Exit(code, _, handles) => (code, handles),
             ExecuteResult::Continue(code, _, handles) => (code, handles),
+            ExecuteResult::Break(code, _, handles) => (code, handles),
+            ExecuteResult::LoopContinue(code, _, handles) => (code, handles),
         }
     }
 
@@ -417,6 +421,8 @@ impl ExecuteResult {
         match self {
             ExecuteResult::Exit(_, changes, _) => changes,
             ExecuteResult::Continue(_, changes, _) => changes,
+            ExecuteResult::Break(_, changes, _) => changes,
+            ExecuteResult::LoopContinue(_, changes, _) => changes,
         }
     }
 
@@ -426,6 +432,10 @@ impl ExecuteResult {
         match self {
             ExecuteResult::Exit(_, changes, handles) => (handles, changes),
             ExecuteResult::Continue(_, changes, handles) => (handles, changes),
+            ExecuteResult::Break(_, changes, handles) => (handles, changes),
+            ExecuteResult::LoopContinue(_, changes, handles) => {
+                (handles, changes)
+            }
         }
     }
 
@@ -433,6 +443,8 @@ impl ExecuteResult {
         match self {
             ExecuteResult::Exit(code, _, _) => *code,
             ExecuteResult::Continue(code, _, _) => *code,
+            ExecuteResult::Break(code, _, _) => *code,
+            ExecuteResult::LoopContinue(code, _, _) => *code,
         }
     }
 }
