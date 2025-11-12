@@ -31,6 +31,8 @@ pub struct UnAliasCommand;
 
 pub struct SourceCommand;
 
+pub struct ClearCommand;
+
 pub fn get_commands() -> HashMap<String, Rc<dyn ShellCommand>> {
     HashMap::from([
         ("ls".to_string(), Rc::new(LsCommand) as Rc<dyn ShellCommand>),
@@ -167,16 +169,30 @@ impl ShellCommand for SourceCommand {
     }
 }
 
-pub struct ClearCommand;
-
 impl ShellCommand for ClearCommand {
-    fn execute(&self, _context: ShellCommandContext) -> LocalBoxFuture<'static, ExecuteResult> {
-        Box::pin(async move {
-            // ANSI escape sequence to clear screen and move cursor to top
-            print!("\x1B[2J\x1B[1;1H");
-            // Ensure output is flushed
-            std::io::Write::flush(&mut std::io::stdout()).unwrap();
-            ExecuteResult::Continue(0, vec![], vec![])
-        })
+    fn execute(&self, context: ShellCommandContext) -> LocalBoxFuture<'static, ExecuteResult> {
+        let result = execute_clear(context);
+        Box::pin(futures::future::ready(result))
     }
+}
+
+// Reference: https://invisible-island.net/ncurses/man/clear.1.html
+fn execute_clear(context: ShellCommandContext) -> ExecuteResult {
+    if context.args.is_empty() {
+        // ANSI escape sequence to clear screen and its scrollback buffer, if any.
+        // This is the default behavior.
+        print!("\x1Bc");
+    } else if context.args.len() == 1 && context.args[0] == "-x" {
+        // `-x` prevents `clear` from attempting to clear the scrollback buffer.
+        // ANSI escape sequence to clear screen and move cursor to top.
+        print!("\x1B[2J\x1B[1;1H");
+    } else {
+        let arg = context.args[0].chars().nth(1);
+        eprintln!("clear: illegal option -- {}", arg.unwrap());
+        // TODO: Print a usage message.
+        return ExecuteResult::from_exit_code(1);
+    }
+    // Ensure output is flushed
+    std::io::Write::flush(&mut std::io::stdout()).unwrap();
+    ExecuteResult::Continue(0, vec![], vec![])
 }
