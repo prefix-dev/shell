@@ -661,11 +661,20 @@ pub fn parse(input: &str) -> Result<SequentialList> {
         miette::Error::new(e.into_miette()).context("Failed to parse input")
     })?;
 
-    parse_file(pairs.next().unwrap())
+    parse_file(
+        pairs
+            .next()
+            .ok_or_else(|| miette!("Empty parse result"))?,
+    )
 }
 
 fn parse_file(pairs: Pair<Rule>) -> Result<SequentialList> {
-    parse_complete_command(pairs.into_inner().next().unwrap())
+    parse_complete_command(
+        pairs
+            .into_inner()
+            .next()
+            .ok_or_else(|| miette!("Expected complete command"))?,
+    )
 }
 
 fn parse_complete_command(pair: Pair<Rule>) -> Result<SequentialList> {
@@ -779,11 +788,18 @@ fn parse_term(
 fn parse_and_or(pair: Pair<Rule>) -> Result<Sequence> {
     assert!(pair.as_rule() == Rule::and_or);
     let mut items = pair.into_inner();
-    let first_item = items.next().unwrap();
+    let first_item = items
+        .next()
+        .ok_or_else(|| miette!("Expected item in and_or list"))?;
     let mut current = match first_item.as_rule() {
         Rule::ASSIGNMENT_WORD => parse_shell_var(first_item)?,
         Rule::pipeline => parse_pipeline(first_item)?,
-        _ => unreachable!(),
+        rule => {
+            return Err(miette!(
+                "Unexpected rule in and_or list: {:?}",
+                rule
+            ))
+        }
     };
 
     match items.next() {
@@ -796,10 +812,17 @@ fn parse_and_or(pair: Pair<Rule>) -> Result<Sequence> {
                 let op = match next_item.as_str() {
                     "&&" => BooleanListOperator::And,
                     "||" => BooleanListOperator::Or,
-                    _ => unreachable!(),
+                    other => {
+                        return Err(miette!(
+                            "Expected '&&' or '||', got '{}'",
+                            other
+                        ))
+                    }
                 };
 
-                let next_item = items.next().unwrap();
+                let next_item = items.next().ok_or_else(|| {
+                    miette!("Expected expression after boolean operator")
+                })?;
                 let next = parse_and_or(next_item)?;
                 current = Sequence::BooleanList(Box::new(BooleanList {
                     current,
@@ -1010,7 +1033,7 @@ fn parse_for_loop(pairs: Pair<Rule>) -> Result<ForLoop> {
 
     let wordlist = match inner.next() {
         Some(wordlist_pair) => parse_wordlist(wordlist_pair)?,
-        None => panic!("Expected wordlist in for loop"),
+        None => return Err(miette!("Expected wordlist in for loop")),
     };
 
     let body_pair = inner
@@ -1265,7 +1288,7 @@ fn parse_unary_conditional_expression(pair: Pair<Rule>) -> Result<Condition> {
             }
         },
         Rule::file_conditional_op => match operator.as_str() {
-            "-a" => UnaryOp::FileExists,
+            "-a" | "-e" => UnaryOp::FileExists,
             "-b" => UnaryOp::BlockSpecial,
             "-c" => UnaryOp::CharSpecial,
             "-d" => UnaryOp::Directory,
@@ -1276,6 +1299,7 @@ fn parse_unary_conditional_expression(pair: Pair<Rule>) -> Result<Condition> {
             "-p" => UnaryOp::NamedPipe,
             "-r" => UnaryOp::Readable,
             "-s" => UnaryOp::SizeNonZero,
+            "-t" => UnaryOp::TerminalFd,
             "-u" => UnaryOp::SetUserId,
             "-w" => UnaryOp::Writable,
             "-x" => UnaryOp::Executable,

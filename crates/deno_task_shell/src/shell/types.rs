@@ -1190,7 +1190,8 @@ impl From<String> for ArithmeticResult {
         } else if let Ok(float_val) = value.parse::<f64>() {
             ArithmeticResult::new(ArithmeticValue::Float(float_val))
         } else {
-            panic!("Invalid arithmetic result: {}", value);
+            // Treat unrecognized values as 0 (bash behavior for unset/non-numeric variables)
+            ArithmeticResult::new(ArithmeticValue::Integer(0))
         }
     }
 }

@@ -175,7 +175,7 @@ impl ShellCommand for ClearCommand {
             // ANSI escape sequence to clear screen and move cursor to top
             print!("\x1B[2J\x1B[1;1H");
             // Ensure output is flushed
-            std::io::Write::flush(&mut std::io::stdout()).unwrap();
+            let _ = std::io::Write::flush(&mut std::io::stdout());
             ExecuteResult::Continue(0, vec![], vec![])
         })
     }

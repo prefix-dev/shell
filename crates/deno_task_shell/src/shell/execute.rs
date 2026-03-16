@@ -982,7 +982,11 @@ async fn evaluate_arithmetic_part(
                         AssignmentOp::BitwiseOrAssign => {
                             val.checked_or(&parsed_var)
                         }
-                        _ => unreachable!(),
+                        AssignmentOp::Assign => {
+                            // Already handled above; this branch is unreachable
+                            // but we handle it gracefully
+                            Ok(val.clone())
+                        }
                     }?
                 }
             };
@@ -1370,6 +1374,116 @@ fn check_permission(path: &str, permission: FilePermission) -> bool {
     }
 }
 
+#[derive(Debug)]
+enum FileTypeCheck {
+    BlockSpecial,
+    CharSpecial,
+    NamedPipe,
+    Socket,
+}
+
+fn check_file_type(path: &str, file_type: FileTypeCheck) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::FileTypeExt;
+        fs::symlink_metadata(path)
+            .map(|m| {
+                let ft = m.file_type();
+                match file_type {
+                    FileTypeCheck::BlockSpecial => ft.is_block_device(),
+                    FileTypeCheck::CharSpecial => ft.is_char_device(),
+                    FileTypeCheck::NamedPipe => ft.is_fifo(),
+                    FileTypeCheck::Socket => ft.is_socket(),
+                }
+            })
+            .unwrap_or(false)
+    }
+
+    #[cfg(windows)]
+    {
+        // These file types don't exist on Windows
+        let _ = (path, file_type);
+        false
+    }
+}
+
+fn check_file_mode_bit(path: &str, bit: u32) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        fs::metadata(path)
+            .map(|m| (m.mode() & bit) != 0)
+            .unwrap_or(false)
+    }
+
+    #[cfg(windows)]
+    {
+        let _ = (path, bit);
+        false
+    }
+}
+
+fn check_terminal_fd(value: &str) -> bool {
+    use std::io::IsTerminal;
+    match value {
+        "0" => std::io::stdin().is_terminal(),
+        "1" => std::io::stdout().is_terminal(),
+        "2" => std::io::stderr().is_terminal(),
+        _ => false,
+    }
+}
+
+fn check_owned_by_euid(path: &str) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        fs::metadata(path)
+            .map(|m| m.uid() == unsafe { libc::geteuid() })
+            .unwrap_or(false)
+    }
+
+    #[cfg(windows)]
+    {
+        let _ = path;
+        // On Windows, approximate by checking file exists and is accessible
+        fs::metadata(path).is_ok()
+    }
+}
+
+fn check_owned_by_egid(path: &str) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        fs::metadata(path)
+            .map(|m| m.gid() == unsafe { libc::getegid() })
+            .unwrap_or(false)
+    }
+
+    #[cfg(windows)]
+    {
+        let _ = path;
+        false
+    }
+}
+
+fn check_modified_since_read(path: &str) -> bool {
+    // -N: true if file exists and has been modified since it was last read.
+    // We check if mtime > atime as an approximation.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        fs::metadata(path)
+            .map(|m| m.mtime() > m.atime())
+            .unwrap_or(false)
+    }
+
+    #[cfg(windows)]
+    {
+        let _ = path;
+        false
+    }
+}
+
 fn glob_pattern(pattern: &str) -> Result<glob::Pattern, glob::PatternError> {
     glob::Pattern::new(pattern)
 }
@@ -1463,41 +1577,80 @@ async fn evaluate_condition(
             let rhs =
                 evaluate_word(right, state, stdin.clone(), stderr.clone())
                     .await?;
+            // Resolve relative paths against the shell's CWD for file tests
+            let resolve_path = |p: &str| -> std::path::PathBuf {
+                let path = Path::new(p);
+                if path.is_absolute() {
+                    path.to_path_buf()
+                } else {
+                    state.cwd().join(path)
+                }
+            };
             Ok(match op {
-                Some(UnaryOp::FileExists) => Path::new(&rhs.value).exists(),
-                Some(UnaryOp::BlockSpecial) => todo!(),
-                Some(UnaryOp::CharSpecial) => todo!(),
-                Some(UnaryOp::Directory) => Path::new(&rhs.value).is_dir(),
-                Some(UnaryOp::RegularFile) => Path::new(&rhs.value).is_file(),
-                Some(UnaryOp::SetGroupId) => todo!(),
+                Some(UnaryOp::FileExists) => resolve_path(&rhs.value).exists(),
+                Some(UnaryOp::BlockSpecial) => {
+                    check_file_type(resolve_path(&rhs.value).to_str().unwrap_or(""), FileTypeCheck::BlockSpecial)
+                }
+                Some(UnaryOp::CharSpecial) => {
+                    check_file_type(resolve_path(&rhs.value).to_str().unwrap_or(""), FileTypeCheck::CharSpecial)
+                }
+                Some(UnaryOp::Directory) => resolve_path(&rhs.value).is_dir(),
+                Some(UnaryOp::RegularFile) => resolve_path(&rhs.value).is_file(),
+                Some(UnaryOp::SetGroupId) => {
+                    check_file_mode_bit(resolve_path(&rhs.value).to_str().unwrap_or(""), 0o2000)
+                }
                 Some(UnaryOp::SymbolicLink) => {
-                    Path::new(&rhs.value).is_symlink()
+                    resolve_path(&rhs.value).is_symlink()
                 }
-                Some(UnaryOp::StickyBit) => todo!(),
-                Some(UnaryOp::NamedPipe) => todo!(),
+                Some(UnaryOp::StickyBit) => {
+                    check_file_mode_bit(resolve_path(&rhs.value).to_str().unwrap_or(""), 0o1000)
+                }
+                Some(UnaryOp::NamedPipe) => {
+                    check_file_type(resolve_path(&rhs.value).to_str().unwrap_or(""), FileTypeCheck::NamedPipe)
+                }
                 Some(UnaryOp::Writable) => {
-                    check_permission(&rhs.value, FilePermission::Writable)
+                    check_permission(resolve_path(&rhs.value).to_str().unwrap_or(""), FilePermission::Writable)
                 }
-                Some(UnaryOp::SizeNonZero) => todo!(),
-                Some(UnaryOp::TerminalFd) => todo!(),
-                Some(UnaryOp::SetUserId) => todo!(),
+                Some(UnaryOp::SizeNonZero) => fs::metadata(resolve_path(&rhs.value))
+                    .map(|m| m.len() > 0)
+                    .unwrap_or(false),
+                Some(UnaryOp::TerminalFd) => {
+                    check_terminal_fd(&rhs.value)
+                }
+                Some(UnaryOp::SetUserId) => {
+                    check_file_mode_bit(resolve_path(&rhs.value).to_str().unwrap_or(""), 0o4000)
+                }
                 Some(UnaryOp::Readable) => {
-                    check_permission(&rhs.value, FilePermission::Readable)
+                    check_permission(resolve_path(&rhs.value).to_str().unwrap_or(""), FilePermission::Readable)
                 }
                 Some(UnaryOp::Executable) => {
-                    check_permission(&rhs.value, FilePermission::Executable)
+                    check_permission(resolve_path(&rhs.value).to_str().unwrap_or(""), FilePermission::Executable)
                 }
-                Some(UnaryOp::OwnedByEffectiveGroupId) => todo!(),
-                Some(UnaryOp::ModifiedSinceLastRead) => todo!(),
-                Some(UnaryOp::OwnedByEffectiveUserId) => todo!(),
-                Some(UnaryOp::Socket) => todo!(),
+                Some(UnaryOp::OwnedByEffectiveGroupId) => {
+                    check_owned_by_egid(resolve_path(&rhs.value).to_str().unwrap_or(""))
+                }
+                Some(UnaryOp::ModifiedSinceLastRead) => {
+                    check_modified_since_read(resolve_path(&rhs.value).to_str().unwrap_or(""))
+                }
+                Some(UnaryOp::OwnedByEffectiveUserId) => {
+                    check_owned_by_euid(resolve_path(&rhs.value).to_str().unwrap_or(""))
+                }
+                Some(UnaryOp::Socket) => {
+                    check_file_type(resolve_path(&rhs.value).to_str().unwrap_or(""), FileTypeCheck::Socket)
+                }
                 Some(UnaryOp::NonEmptyString) => !rhs.value.is_empty(),
                 Some(UnaryOp::EmptyString) => rhs.value.is_empty(),
                 Some(UnaryOp::VariableSet) => {
                     state.get_var(&rhs.value).is_some()
                 }
-                Some(UnaryOp::VariableNameReference) => todo!(),
-                None => todo!(),
+                Some(UnaryOp::VariableNameReference) => {
+                    // Nameref is a bash 4.3+ feature; treat as false for now
+                    false
+                }
+                None => {
+                    // No operator means implicit -n (non-empty string test)
+                    !rhs.value.is_empty()
+                }
             }
             .into())
         }

@@ -1490,6 +1490,141 @@ async fn test_comma_unquoted() {
         .await;
 }
 
+#[tokio::test]
+async fn file_test_operators() {
+    // -f: regular file
+    TestBuilder::new()
+        .file("testfile.txt", "hello")
+        .command(r#"if [[ -f testfile.txt ]]; then echo "yes"; else echo "no"; fi"#)
+        .assert_stdout("yes\n")
+        .run()
+        .await;
+
+    // -f: not a regular file (directory)
+    TestBuilder::new()
+        .directory("testdir")
+        .command(r#"if [[ -f testdir ]]; then echo "yes"; else echo "no"; fi"#)
+        .assert_stdout("no\n")
+        .run()
+        .await;
+
+    // -d: directory
+    TestBuilder::new()
+        .directory("testdir")
+        .command(r#"if [[ -d testdir ]]; then echo "yes"; else echo "no"; fi"#)
+        .assert_stdout("yes\n")
+        .run()
+        .await;
+
+    // -e: file exists
+    TestBuilder::new()
+        .file("testfile.txt", "hello")
+        .command(r#"if [[ -e testfile.txt ]]; then echo "yes"; else echo "no"; fi"#)
+        .assert_stdout("yes\n")
+        .run()
+        .await;
+
+    // -e: file does not exist
+    TestBuilder::new()
+        .command(r#"if [[ -e nonexistent ]]; then echo "yes"; else echo "no"; fi"#)
+        .assert_stdout("no\n")
+        .run()
+        .await;
+
+    // -s: file has size > 0
+    TestBuilder::new()
+        .file("nonempty.txt", "data")
+        .command(r#"if [[ -s nonempty.txt ]]; then echo "yes"; else echo "no"; fi"#)
+        .assert_stdout("yes\n")
+        .run()
+        .await;
+
+    // -s: empty file
+    TestBuilder::new()
+        .file("empty.txt", "")
+        .command(r#"if [[ -s empty.txt ]]; then echo "yes"; else echo "no"; fi"#)
+        .assert_stdout("no\n")
+        .run()
+        .await;
+
+    // -r: readable file
+    TestBuilder::new()
+        .file("readable.txt", "data")
+        .command(r#"if [[ -r readable.txt ]]; then echo "yes"; else echo "no"; fi"#)
+        .assert_stdout("yes\n")
+        .run()
+        .await;
+
+    // -w: writable file
+    TestBuilder::new()
+        .file("writable.txt", "data")
+        .command(r#"if [[ -w writable.txt ]]; then echo "yes"; else echo "no"; fi"#)
+        .assert_stdout("yes\n")
+        .run()
+        .await;
+
+    // -n: non-empty string
+    TestBuilder::new()
+        .command(r#"if [[ -n "hello" ]]; then echo "yes"; else echo "no"; fi"#)
+        .assert_stdout("yes\n")
+        .run()
+        .await;
+
+    // -n: empty string
+    TestBuilder::new()
+        .command(r#"if [[ -n "" ]]; then echo "yes"; else echo "no"; fi"#)
+        .assert_stdout("no\n")
+        .run()
+        .await;
+
+    // -z: empty string
+    TestBuilder::new()
+        .command(r#"if [[ -z "" ]]; then echo "yes"; else echo "no"; fi"#)
+        .assert_stdout("yes\n")
+        .run()
+        .await;
+
+    // -z: non-empty string
+    TestBuilder::new()
+        .command(r#"if [[ -z "hello" ]]; then echo "yes"; else echo "no"; fi"#)
+        .assert_stdout("no\n")
+        .run()
+        .await;
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn file_test_operators_unix() {
+    // -x: executable file
+    TestBuilder::new()
+        .file("script.sh", "#!/bin/sh\necho hi")
+        .command(r#"chmod +x script.sh && if [[ -x script.sh ]]; then echo "yes"; else echo "no"; fi"#)
+        .assert_stdout("yes\n")
+        .run()
+        .await;
+
+    // -s: nonexistent file (should be false)
+    TestBuilder::new()
+        .command(r#"if [[ -s nonexistent ]]; then echo "yes"; else echo "no"; fi"#)
+        .assert_stdout("no\n")
+        .run()
+        .await;
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn file_test_operators_owned() {
+    // -O: file owned by effective user ID (files we create should be owned by us)
+    TestBuilder::new()
+        .file("myfile.txt", "data")
+        .command(
+            r#"if [[ -O myfile.txt ]]; then echo "yes"; else echo "no"; fi"#,
+        )
+        .assert_stdout("yes\n")
+        .run()
+        .await;
+}
+
 #[cfg(test)]
 fn no_such_file_error_text() -> &'static str {
     if cfg!(windows) {

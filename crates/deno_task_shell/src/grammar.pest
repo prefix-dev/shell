@@ -347,8 +347,8 @@ unary_conditional_expression = !{
 }
 
 file_conditional_op = !{
-    "-a" | "-b" | "-c" | "-d" | "-e" | "-f" | "-g" | "-h" | "-k" | 
-    "-p" | "-r" | "-s" | "-u" | "-w" | "-x" | "-G" | "-L" | 
+    "-a" | "-b" | "-c" | "-d" | "-e" | "-f" | "-g" | "-h" | "-k" |
+    "-p" | "-r" | "-s" | "-t" | "-u" | "-w" | "-x" | "-G" | "-L" |
     "-N" | "-O" | "-S"
 }
 
