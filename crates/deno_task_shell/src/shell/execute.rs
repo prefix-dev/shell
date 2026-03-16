@@ -68,7 +68,9 @@ use crate::shell::types::WordResult;
 use super::command::execute_unresolved_command_name;
 use super::command::UnresolvedCommandName;
 use super::types::ConditionalResult;
+use super::types::BREAK_EXIT_CODE;
 use super::types::CANCELLATION_EXIT_CODE;
+use super::types::CONTINUE_EXIT_CODE;
 
 /// Executes a `SequentialList` of commands in a deno_task_shell environment.
 ///
@@ -718,6 +720,13 @@ async fn execute_while_clause(
                             state.apply_changes(&env_changes);
                             changes.extend(env_changes);
                             async_handles.extend(handles);
+                            if code == BREAK_EXIT_CODE {
+                                last_exit_code = 0;
+                                break;
+                            } else if code == CONTINUE_EXIT_CODE {
+                                last_exit_code = 0;
+                                continue;
+                            }
                             last_exit_code = code;
                             break;
                         }
@@ -888,6 +897,13 @@ async fn execute_for_clause(
             ExecuteResult::Exit(code, env_changes, handles) => {
                 changes.extend(env_changes);
                 async_handles.extend(handles);
+                if code == BREAK_EXIT_CODE {
+                    last_exit_code = 0;
+                    break;
+                } else if code == CONTINUE_EXIT_CODE {
+                    last_exit_code = 0;
+                    continue;
+                }
                 last_exit_code = code;
                 break;
             }

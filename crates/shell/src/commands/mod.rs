@@ -7,6 +7,7 @@ use uu_ls::uumain as uu_ls;
 
 use crate::execute;
 
+pub mod command_cmd;
 pub mod date;
 pub mod printenv;
 pub mod set;
@@ -15,6 +16,8 @@ pub mod touch;
 pub mod uname;
 pub mod which;
 
+pub use command_cmd::CommandCommand;
+pub use command_cmd::TypeCommand;
 pub use date::DateCommand;
 pub use printenv::PrintEnvCommand;
 pub use set::SetCommand;
@@ -81,6 +84,14 @@ pub fn get_commands() -> HashMap<String, Rc<dyn ShellCommand>> {
         (
             "time".to_string(),
             Rc::new(TimeCommand) as Rc<dyn ShellCommand>,
+        ),
+        (
+            "command".to_string(),
+            Rc::new(CommandCommand) as Rc<dyn ShellCommand>,
+        ),
+        (
+            "type".to_string(),
+            Rc::new(TypeCommand) as Rc<dyn ShellCommand>,
         ),
     ])
 }

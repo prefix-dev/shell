@@ -387,6 +387,12 @@ pub type FutureExecuteResult = LocalBoxFuture<'static, ExecuteResult>;
 // SIGINT (2) + 128
 pub const CANCELLATION_EXIT_CODE: i32 = 130;
 
+// Internal sentinel exit codes for loop control flow.
+// These are used to signal break/continue through ExecuteResult::Exit
+// and are caught by loop execution functions.
+pub const BREAK_EXIT_CODE: i32 = -100;
+pub const CONTINUE_EXIT_CODE: i32 = -101;
+
 #[derive(Debug)]
 pub enum ExecuteResult {
     Exit(i32, Vec<EnvChange>, Vec<JoinHandle<i32>>),
