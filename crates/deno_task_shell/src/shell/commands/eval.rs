@@ -29,9 +29,10 @@ impl ShellCommand for EvalCommand {
             let parsed = match parser::parse(&input) {
                 Ok(list) => list,
                 Err(err) => {
-                    let _ = context.stderr.clone().write_line(&format!(
-                        "eval: {err}"
-                    ));
+                    let _ = context
+                        .stderr
+                        .clone()
+                        .write_line(&format!("eval: {err}"));
                     return ExecuteResult::Continue(2, Vec::new(), Vec::new());
                 }
             };

@@ -57,8 +57,8 @@ fn execute_uname(context: &mut ShellCommandContext) -> Result<(), String> {
         os: matches.get_flag(options::OS),
     };
 
-    let uname = UNameOutput::new(&options)
-        .map_err(|e| format!("uname: failed to get system info: {e}"))?;
+    let uname =
+        UNameOutput::new(&options).map_err(|e| format!("uname: failed to get system info: {e}"))?;
     context
         .stdout
         .write_line(display(&uname).trim_end())

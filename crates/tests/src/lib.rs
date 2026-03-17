@@ -1598,7 +1598,9 @@ async fn file_test_operators_unix() {
     // -x: executable file
     TestBuilder::new()
         .file("script.sh", "#!/bin/sh\necho hi")
-        .command(r#"chmod +x script.sh && if [[ -x script.sh ]]; then echo "yes"; else echo "no"; fi"#)
+        .command(
+            r#"chmod +x script.sh && if [[ -x script.sh ]]; then echo "yes"; else echo "no"; fi"#,
+        )
         .assert_stdout("yes\n")
         .run()
         .await;
@@ -1617,9 +1619,7 @@ async fn file_test_operators_owned() {
     // -O: file owned by effective user ID (files we create should be owned by us)
     TestBuilder::new()
         .file("myfile.txt", "data")
-        .command(
-            r#"if [[ -O myfile.txt ]]; then echo "yes"; else echo "no"; fi"#,
-        )
+        .command(r#"if [[ -O myfile.txt ]]; then echo "yes"; else echo "no"; fi"#)
         .assert_stdout("yes\n")
         .run()
         .await;

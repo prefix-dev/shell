@@ -10,7 +10,10 @@ impl ShellCommand for CommandCommand {
 
         // Check for -v flag (command -v name)
         if args.first().map(|s| s.as_str()) == Some("-v") {
-            return Box::pin(futures::future::ready(execute_command_v(&args[1..], context)));
+            return Box::pin(futures::future::ready(execute_command_v(
+                &args[1..],
+                context,
+            )));
         }
 
         // Without -v, `command name args...` runs the command bypassing aliases.
@@ -36,10 +39,7 @@ impl ShellCommand for CommandCommand {
     }
 }
 
-fn execute_command_v(
-    names: &[String],
-    mut context: ShellCommandContext,
-) -> ExecuteResult {
+fn execute_command_v(names: &[String], mut context: ShellCommandContext) -> ExecuteResult {
     if names.is_empty() {
         return ExecuteResult::Continue(1, Vec::new(), Vec::new());
     }
@@ -92,9 +92,10 @@ fn execute_type(args: &[String], context: &mut ShellCommandContext) -> ExecuteRe
     for name in args {
         // Check aliases
         if let Some(alias) = context.state.alias_map().get(name) {
-            let _ = context
-                .stdout
-                .write_line(&format!("{} is aliased to `{}`", name, alias.join(" ")));
+            let _ =
+                context
+                    .stdout
+                    .write_line(&format!("{} is aliased to `{}`", name, alias.join(" ")));
             continue;
         }
 

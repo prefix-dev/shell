@@ -60,7 +60,9 @@ impl ShellCommand for LocalCommand {
         }
 
         Box::pin(futures::future::ready(ExecuteResult::Continue(
-            0, changes, Vec::new(),
+            0,
+            changes,
+            Vec::new(),
         )))
     }
 }

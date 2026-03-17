@@ -5,7 +5,6 @@ use futures::{future::LocalBoxFuture, FutureExt};
 
 use uu_ls::uumain as uu_ls;
 
-
 pub mod command_cmd;
 pub mod date;
 pub mod printenv;
@@ -168,10 +167,10 @@ impl ShellCommand for SourceCommand {
             let contents = match fs::read_to_string(&script_file) {
                 Ok(c) => c,
                 Err(err) => {
-                    let _ = context.stderr.clone().write_line(&format!(
-                        "source: {}: {err}",
-                        script_file.display()
-                    ));
+                    let _ = context
+                        .stderr
+                        .clone()
+                        .write_line(&format!("source: {}: {err}", script_file.display()));
                     return ExecuteResult::Continue(1, Vec::new(), Vec::new());
                 }
             };
@@ -179,10 +178,7 @@ impl ShellCommand for SourceCommand {
             let parsed = match deno_task_shell::parser::parse(&contents) {
                 Ok(list) => list,
                 Err(err) => {
-                    let _ = context
-                        .stderr
-                        .clone()
-                        .write_line(&format!("source: {err}"));
+                    let _ = context.stderr.clone().write_line(&format!("source: {err}"));
                     return ExecuteResult::Continue(2, Vec::new(), Vec::new());
                 }
             };

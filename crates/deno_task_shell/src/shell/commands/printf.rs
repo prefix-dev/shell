@@ -35,7 +35,11 @@ fn execute_printf(
     ExecuteResult::Continue(0, Vec::new(), Vec::new())
 }
 
-fn format_string(format: &str, params: &[String], param_idx: &mut usize) -> String {
+fn format_string(
+    format: &str,
+    params: &[String],
+    param_idx: &mut usize,
+) -> String {
     let mut result = String::new();
     let mut chars = format.chars().peekable();
 
@@ -95,7 +99,12 @@ fn format_string(format: &str, params: &[String], param_idx: &mut usize) -> Stri
                     let mut spec = String::new();
                     // Flags
                     while let Some(&ch) = chars.peek() {
-                        if ch == '-' || ch == '+' || ch == ' ' || ch == '0' || ch == '#' {
+                        if ch == '-'
+                            || ch == '+'
+                            || ch == ' '
+                            || ch == '0'
+                            || ch == '#'
+                        {
                             spec.push(ch);
                             chars.next();
                         } else {
@@ -140,9 +149,17 @@ fn format_string(format: &str, params: &[String], param_idx: &mut usize) -> Stri
                                 };
                                 if let Some(w) = width {
                                     if spec.starts_with('-') {
-                                        result.push_str(&format!("{:<width$}", s, width = w));
+                                        result.push_str(&format!(
+                                            "{:<width$}",
+                                            s,
+                                            width = w
+                                        ));
                                     } else {
-                                        result.push_str(&format!("{:>width$}", s, width = w));
+                                        result.push_str(&format!(
+                                            "{:>width$}",
+                                            s,
+                                            width = w
+                                        ));
                                     }
                                 } else {
                                     result.push_str(s);
@@ -158,11 +175,23 @@ fn format_string(format: &str, params: &[String], param_idx: &mut usize) -> Stri
                                 let zero_pad = spec.starts_with('0');
                                 if let Some(w) = width {
                                     if zero_pad {
-                                        result.push_str(&format!("{:0>width$}", val, width = w));
+                                        result.push_str(&format!(
+                                            "{:0>width$}",
+                                            val,
+                                            width = w
+                                        ));
                                     } else if spec.starts_with('-') {
-                                        result.push_str(&format!("{:<width$}", val, width = w));
+                                        result.push_str(&format!(
+                                            "{:<width$}",
+                                            val,
+                                            width = w
+                                        ));
                                     } else {
-                                        result.push_str(&format!("{:>width$}", val, width = w));
+                                        result.push_str(&format!(
+                                            "{:>width$}",
+                                            val,
+                                            width = w
+                                        ));
                                     }
                                 } else {
                                     result.push_str(&val.to_string());
@@ -184,7 +213,11 @@ fn format_string(format: &str, params: &[String], param_idx: &mut usize) -> Stri
                         Some('f') => {
                             let val: f64 = param.parse().unwrap_or(0.0);
                             let precision = parse_precision(&spec).unwrap_or(6);
-                            result.push_str(&format!("{:.prec$}", val, prec = precision));
+                            result.push_str(&format!(
+                                "{:.prec$}",
+                                val,
+                                prec = precision
+                            ));
                         }
                         Some('c') => {
                             if let Some(ch) = param.chars().next() {
@@ -300,10 +333,7 @@ mod test {
     #[test]
     fn test_printf_integer_format() {
         let mut idx = 0;
-        assert_eq!(
-            format_string("%d", &["42".to_string()], &mut idx),
-            "42"
-        );
+        assert_eq!(format_string("%d", &["42".to_string()], &mut idx), "42");
     }
 
     #[test]
@@ -336,10 +366,7 @@ mod test {
     #[test]
     fn test_printf_hex() {
         let mut idx = 0;
-        assert_eq!(
-            format_string("%x", &["255".to_string()], &mut idx),
-            "ff"
-        );
+        assert_eq!(format_string("%x", &["255".to_string()], &mut idx), "ff");
     }
 
     #[test]

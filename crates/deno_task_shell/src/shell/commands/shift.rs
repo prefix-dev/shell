@@ -36,24 +36,22 @@ impl ShellCommand for ShiftCommand {
         // Collect current positional parameters
         let mut positional: Vec<String> = Vec::new();
         let mut i = 1;
-        loop {
-            match context.state.get_var(&i.to_string()) {
-                Some(val) => {
-                    positional.push(val.clone());
-                    i += 1;
-                }
-                None => break,
-            }
+        while let Some(val) = context.state.get_var(&i.to_string()) {
+            positional.push(val.clone());
+            i += 1;
         }
 
         let total = positional.len();
         if n > total {
-            let _ = context.stderr.clone().write_line(&format!(
-                "shift: {n}: shift count out of range"
-            ));
-            return Box::pin(futures::future::ready(
-                ExecuteResult::Continue(1, Vec::new(), Vec::new()),
-            ));
+            let _ = context
+                .stderr
+                .clone()
+                .write_line(&format!("shift: {n}: shift count out of range"));
+            return Box::pin(futures::future::ready(ExecuteResult::Continue(
+                1,
+                Vec::new(),
+                Vec::new(),
+            )));
         }
 
         let mut changes = Vec::new();
@@ -79,7 +77,9 @@ impl ShellCommand for ShiftCommand {
         ));
 
         Box::pin(futures::future::ready(ExecuteResult::Continue(
-            0, changes, Vec::new(),
+            0,
+            changes,
+            Vec::new(),
         )))
     }
 }

@@ -328,7 +328,7 @@ fn parse_date(ref_time: DateTime<Local>, s: &str) -> Result<FileTime> {
                             Local
                                 .from_local_datetime(&naive_dt)
                                 .earliest()
-                                .unwrap_or_else(|| ref_time)
+                                .unwrap_or(ref_time)
                         })
                 },
                 |off| DateTime::<Local>::from_naive_utc_and_offset(naive_dt, off),

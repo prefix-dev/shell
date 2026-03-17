@@ -674,10 +674,8 @@ async fn execute_command(
         }
         CommandInner::Function(func_def) => {
             // Function definition: register the function in the state
-            let change = EnvChange::DefineFunction(
-                func_def.name.clone(),
-                func_def.body,
-            );
+            let change =
+                EnvChange::DefineFunction(func_def.name.clone(), func_def.body);
             state.apply_change(&change);
             changes.push(change);
             ExecuteResult::Continue(0, changes, Vec::new())
@@ -1630,56 +1628,70 @@ async fn evaluate_condition(
             };
             Ok(match op {
                 Some(UnaryOp::FileExists) => resolve_path(&rhs.value).exists(),
-                Some(UnaryOp::BlockSpecial) => {
-                    check_file_type(resolve_path(&rhs.value).to_str().unwrap_or(""), FileTypeCheck::BlockSpecial)
-                }
-                Some(UnaryOp::CharSpecial) => {
-                    check_file_type(resolve_path(&rhs.value).to_str().unwrap_or(""), FileTypeCheck::CharSpecial)
-                }
+                Some(UnaryOp::BlockSpecial) => check_file_type(
+                    resolve_path(&rhs.value).to_str().unwrap_or(""),
+                    FileTypeCheck::BlockSpecial,
+                ),
+                Some(UnaryOp::CharSpecial) => check_file_type(
+                    resolve_path(&rhs.value).to_str().unwrap_or(""),
+                    FileTypeCheck::CharSpecial,
+                ),
                 Some(UnaryOp::Directory) => resolve_path(&rhs.value).is_dir(),
-                Some(UnaryOp::RegularFile) => resolve_path(&rhs.value).is_file(),
-                Some(UnaryOp::SetGroupId) => {
-                    check_file_mode_bit(resolve_path(&rhs.value).to_str().unwrap_or(""), 0o2000)
+                Some(UnaryOp::RegularFile) => {
+                    resolve_path(&rhs.value).is_file()
                 }
+                Some(UnaryOp::SetGroupId) => check_file_mode_bit(
+                    resolve_path(&rhs.value).to_str().unwrap_or(""),
+                    0o2000,
+                ),
                 Some(UnaryOp::SymbolicLink) => {
                     resolve_path(&rhs.value).is_symlink()
                 }
-                Some(UnaryOp::StickyBit) => {
-                    check_file_mode_bit(resolve_path(&rhs.value).to_str().unwrap_or(""), 0o1000)
+                Some(UnaryOp::StickyBit) => check_file_mode_bit(
+                    resolve_path(&rhs.value).to_str().unwrap_or(""),
+                    0o1000,
+                ),
+                Some(UnaryOp::NamedPipe) => check_file_type(
+                    resolve_path(&rhs.value).to_str().unwrap_or(""),
+                    FileTypeCheck::NamedPipe,
+                ),
+                Some(UnaryOp::Writable) => check_permission(
+                    resolve_path(&rhs.value).to_str().unwrap_or(""),
+                    FilePermission::Writable,
+                ),
+                Some(UnaryOp::SizeNonZero) => {
+                    fs::metadata(resolve_path(&rhs.value))
+                        .map(|m| m.len() > 0)
+                        .unwrap_or(false)
                 }
-                Some(UnaryOp::NamedPipe) => {
-                    check_file_type(resolve_path(&rhs.value).to_str().unwrap_or(""), FileTypeCheck::NamedPipe)
-                }
-                Some(UnaryOp::Writable) => {
-                    check_permission(resolve_path(&rhs.value).to_str().unwrap_or(""), FilePermission::Writable)
-                }
-                Some(UnaryOp::SizeNonZero) => fs::metadata(resolve_path(&rhs.value))
-                    .map(|m| m.len() > 0)
-                    .unwrap_or(false),
-                Some(UnaryOp::TerminalFd) => {
-                    check_terminal_fd(&rhs.value)
-                }
-                Some(UnaryOp::SetUserId) => {
-                    check_file_mode_bit(resolve_path(&rhs.value).to_str().unwrap_or(""), 0o4000)
-                }
-                Some(UnaryOp::Readable) => {
-                    check_permission(resolve_path(&rhs.value).to_str().unwrap_or(""), FilePermission::Readable)
-                }
-                Some(UnaryOp::Executable) => {
-                    check_permission(resolve_path(&rhs.value).to_str().unwrap_or(""), FilePermission::Executable)
-                }
-                Some(UnaryOp::OwnedByEffectiveGroupId) => {
-                    check_owned_by_egid(resolve_path(&rhs.value).to_str().unwrap_or(""))
-                }
+                Some(UnaryOp::TerminalFd) => check_terminal_fd(&rhs.value),
+                Some(UnaryOp::SetUserId) => check_file_mode_bit(
+                    resolve_path(&rhs.value).to_str().unwrap_or(""),
+                    0o4000,
+                ),
+                Some(UnaryOp::Readable) => check_permission(
+                    resolve_path(&rhs.value).to_str().unwrap_or(""),
+                    FilePermission::Readable,
+                ),
+                Some(UnaryOp::Executable) => check_permission(
+                    resolve_path(&rhs.value).to_str().unwrap_or(""),
+                    FilePermission::Executable,
+                ),
+                Some(UnaryOp::OwnedByEffectiveGroupId) => check_owned_by_egid(
+                    resolve_path(&rhs.value).to_str().unwrap_or(""),
+                ),
                 Some(UnaryOp::ModifiedSinceLastRead) => {
-                    check_modified_since_read(resolve_path(&rhs.value).to_str().unwrap_or(""))
+                    check_modified_since_read(
+                        resolve_path(&rhs.value).to_str().unwrap_or(""),
+                    )
                 }
-                Some(UnaryOp::OwnedByEffectiveUserId) => {
-                    check_owned_by_euid(resolve_path(&rhs.value).to_str().unwrap_or(""))
-                }
-                Some(UnaryOp::Socket) => {
-                    check_file_type(resolve_path(&rhs.value).to_str().unwrap_or(""), FileTypeCheck::Socket)
-                }
+                Some(UnaryOp::OwnedByEffectiveUserId) => check_owned_by_euid(
+                    resolve_path(&rhs.value).to_str().unwrap_or(""),
+                ),
+                Some(UnaryOp::Socket) => check_file_type(
+                    resolve_path(&rhs.value).to_str().unwrap_or(""),
+                    FileTypeCheck::Socket,
+                ),
                 Some(UnaryOp::NonEmptyString) => !rhs.value.is_empty(),
                 Some(UnaryOp::EmptyString) => rhs.value.is_empty(),
                 Some(UnaryOp::VariableSet) => {
@@ -1893,9 +1905,7 @@ fn execute_shell_function(
         for (key, old_val) in &saved_positional {
             match old_val {
                 Some(val) => state.set_shell_var(key, val),
-                None => {
-                    state.apply_change(&EnvChange::UnsetVar(key.clone()))
-                }
+                None => state.apply_change(&EnvChange::UnsetVar(key.clone())),
             }
         }
         match &saved_hash {
@@ -1921,9 +1931,7 @@ fn execute_shell_function(
                     .iter()
                     .rev()
                     .find_map(|c| match c {
-                        EnvChange::SetShellVar(name, val)
-                            if name == "?" =>
-                        {
+                        EnvChange::SetShellVar(name, val) if name == "?" => {
                             val.parse::<i32>().ok()
                         }
                         _ => None,
@@ -1932,8 +1940,7 @@ fn execute_shell_function(
                 ExecuteResult::Continue(actual_code, changes, handles)
             }
             ExecuteResult::Exit(code, changes, handles)
-                if code == BREAK_EXIT_CODE
-                    || code == CONTINUE_EXIT_CODE =>
+                if code == BREAK_EXIT_CODE || code == CONTINUE_EXIT_CODE =>
             {
                 // break/continue should not escape function scope
                 ExecuteResult::Continue(0, changes, handles)

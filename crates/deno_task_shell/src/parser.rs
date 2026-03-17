@@ -672,11 +672,7 @@ pub fn parse(input: &str) -> Result<SequentialList> {
         miette::Error::new(e.into_miette()).context("Failed to parse input")
     })?;
 
-    parse_file(
-        pairs
-            .next()
-            .ok_or_else(|| miette!("Empty parse result"))?,
-    )
+    parse_file(pairs.next().ok_or_else(|| miette!("Empty parse result"))?)
 }
 
 fn parse_file(pairs: Pair<Rule>) -> Result<SequentialList> {
@@ -806,10 +802,7 @@ fn parse_and_or(pair: Pair<Rule>) -> Result<Sequence> {
         Rule::ASSIGNMENT_WORD => parse_shell_var(first_item)?,
         Rule::pipeline => parse_pipeline(first_item)?,
         rule => {
-            return Err(miette!(
-                "Unexpected rule in and_or list: {:?}",
-                rule
-            ))
+            return Err(miette!("Unexpected rule in and_or list: {:?}", rule))
         }
     };
 

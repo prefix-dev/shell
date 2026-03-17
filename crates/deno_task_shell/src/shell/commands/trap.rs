@@ -75,12 +75,15 @@ impl ShellCommand for TrapCommand {
 
         // Validate signal names/numbers
         if args.len() < 2 {
-            let _ = context.stderr.clone().write_line(
-                "trap: usage: trap [-lp] [[arg] signal_spec ...]",
-            );
-            return Box::pin(futures::future::ready(
-                ExecuteResult::Continue(2, Vec::new(), Vec::new()),
-            ));
+            let _ = context
+                .stderr
+                .clone()
+                .write_line("trap: usage: trap [-lp] [[arg] signal_spec ...]");
+            return Box::pin(futures::future::ready(ExecuteResult::Continue(
+                2,
+                Vec::new(),
+                Vec::new(),
+            )));
         }
 
         // Validate that the signal specs are recognized
@@ -98,9 +101,7 @@ impl ShellCommand for TrapCommand {
         // Accept the trap command silently for compatibility.
         // Full signal handling would require storing handlers in ShellState
         // and invoking them during signal delivery.
-        Box::pin(futures::future::ready(
-            ExecuteResult::from_exit_code(0),
-        ))
+        Box::pin(futures::future::ready(ExecuteResult::from_exit_code(0)))
     }
 }
 

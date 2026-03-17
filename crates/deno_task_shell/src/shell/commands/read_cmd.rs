@@ -92,14 +92,13 @@ fn execute_read(mut context: ShellCommandContext) -> ExecuteResult {
     if var_names.len() == 1 {
         // Single variable gets the entire line (trimmed of leading/trailing whitespace)
         let value = line.trim().to_string();
-        changes.push(EnvChange::SetShellVar(
-            var_names[0].clone(),
-            value,
-        ));
+        changes.push(EnvChange::SetShellVar(var_names[0].clone(), value));
     } else {
         // Multiple variables: split by whitespace
         let trimmed = line.trim_start();
-        let parts: Vec<&str> = trimmed.splitn(var_names.len(), char::is_whitespace).collect();
+        let parts: Vec<&str> = trimmed
+            .splitn(var_names.len(), char::is_whitespace)
+            .collect();
 
         for (idx, var_name) in var_names.iter().enumerate() {
             let value = if idx < parts.len() {

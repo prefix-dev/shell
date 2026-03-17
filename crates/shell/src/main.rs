@@ -261,10 +261,8 @@ fn get_script_content(
             Ok((content, Some(path.display().to_string())))
         }
         (_, Some(cmd)) => Ok((cmd, None)),
-        (None, None) => {
-            return Err(miette::miette!(
-                "Either a script file or command must be provided"
-            ))
-        }
+        (None, None) => Err(miette::miette!(
+            "Either a script file or command must be provided"
+        )),
     }
 }

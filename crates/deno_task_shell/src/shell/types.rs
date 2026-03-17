@@ -406,23 +406,29 @@ impl PartialOrd for EnvChange {
             (EnvChange::SetEnvVar(a1, a2), EnvChange::SetEnvVar(b1, b2)) => {
                 (a1, a2).partial_cmp(&(b1, b2))
             }
-            (EnvChange::SetShellVar(a1, a2), EnvChange::SetShellVar(b1, b2)) => {
-                (a1, a2).partial_cmp(&(b1, b2))
-            }
-            (EnvChange::AliasCommand(a1, a2), EnvChange::AliasCommand(b1, b2)) => {
-                (a1, a2).partial_cmp(&(b1, b2))
-            }
+            (
+                EnvChange::SetShellVar(a1, a2),
+                EnvChange::SetShellVar(b1, b2),
+            ) => (a1, a2).partial_cmp(&(b1, b2)),
+            (
+                EnvChange::AliasCommand(a1, a2),
+                EnvChange::AliasCommand(b1, b2),
+            ) => (a1, a2).partial_cmp(&(b1, b2)),
             (EnvChange::UnAliasCommand(a), EnvChange::UnAliasCommand(b)) => {
                 a.partial_cmp(b)
             }
-            (EnvChange::UnsetVar(a), EnvChange::UnsetVar(b)) => a.partial_cmp(b),
-            (EnvChange::Cd(a), EnvChange::Cd(b)) => a.partial_cmp(b),
-            (EnvChange::SetShellOptions(a1, a2), EnvChange::SetShellOptions(b1, b2)) => {
-                (a1, a2).partial_cmp(&(b1, b2))
-            }
-            (EnvChange::DefineFunction(a, _), EnvChange::DefineFunction(b, _)) => {
+            (EnvChange::UnsetVar(a), EnvChange::UnsetVar(b)) => {
                 a.partial_cmp(b)
             }
+            (EnvChange::Cd(a), EnvChange::Cd(b)) => a.partial_cmp(b),
+            (
+                EnvChange::SetShellOptions(a1, a2),
+                EnvChange::SetShellOptions(b1, b2),
+            ) => (a1, a2).partial_cmp(&(b1, b2)),
+            (
+                EnvChange::DefineFunction(a, _),
+                EnvChange::DefineFunction(b, _),
+            ) => a.partial_cmp(b),
             _ => None,
         }
     }
