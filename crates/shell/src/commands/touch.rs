@@ -319,7 +319,18 @@ fn parse_date(ref_time: DateTime<Local>, s: &str) -> Result<FileTime> {
     match dtparse::parse(s) {
         Ok((naive_dt, offset)) => {
             let dt = offset.map_or_else(
-                || Local.from_local_datetime(&naive_dt).unwrap(),
+                || {
+                    Local
+                        .from_local_datetime(&naive_dt)
+                        .single()
+                        .unwrap_or_else(|| {
+                            // Fallback for ambiguous local times (e.g., DST transitions)
+                            Local
+                                .from_local_datetime(&naive_dt)
+                                .earliest()
+                                .unwrap_or(ref_time)
+                        })
+                },
                 |off| DateTime::<Local>::from_naive_utc_and_offset(naive_dt, off),
             );
             Ok(datetime_to_filetime(&dt))

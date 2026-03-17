@@ -1490,6 +1490,549 @@ async fn test_comma_unquoted() {
         .await;
 }
 
+#[tokio::test]
+async fn file_test_operators() {
+    // -f: regular file
+    TestBuilder::new()
+        .file("testfile.txt", "hello")
+        .command(r#"if [[ -f testfile.txt ]]; then echo "yes"; else echo "no"; fi"#)
+        .assert_stdout("yes\n")
+        .run()
+        .await;
+
+    // -f: not a regular file (directory)
+    TestBuilder::new()
+        .directory("testdir")
+        .command(r#"if [[ -f testdir ]]; then echo "yes"; else echo "no"; fi"#)
+        .assert_stdout("no\n")
+        .run()
+        .await;
+
+    // -d: directory
+    TestBuilder::new()
+        .directory("testdir")
+        .command(r#"if [[ -d testdir ]]; then echo "yes"; else echo "no"; fi"#)
+        .assert_stdout("yes\n")
+        .run()
+        .await;
+
+    // -e: file exists
+    TestBuilder::new()
+        .file("testfile.txt", "hello")
+        .command(r#"if [[ -e testfile.txt ]]; then echo "yes"; else echo "no"; fi"#)
+        .assert_stdout("yes\n")
+        .run()
+        .await;
+
+    // -e: file does not exist
+    TestBuilder::new()
+        .command(r#"if [[ -e nonexistent ]]; then echo "yes"; else echo "no"; fi"#)
+        .assert_stdout("no\n")
+        .run()
+        .await;
+
+    // -s: file has size > 0
+    TestBuilder::new()
+        .file("nonempty.txt", "data")
+        .command(r#"if [[ -s nonempty.txt ]]; then echo "yes"; else echo "no"; fi"#)
+        .assert_stdout("yes\n")
+        .run()
+        .await;
+
+    // -s: empty file
+    TestBuilder::new()
+        .file("empty.txt", "")
+        .command(r#"if [[ -s empty.txt ]]; then echo "yes"; else echo "no"; fi"#)
+        .assert_stdout("no\n")
+        .run()
+        .await;
+
+    // -r: readable file
+    TestBuilder::new()
+        .file("readable.txt", "data")
+        .command(r#"if [[ -r readable.txt ]]; then echo "yes"; else echo "no"; fi"#)
+        .assert_stdout("yes\n")
+        .run()
+        .await;
+
+    // -w: writable file
+    TestBuilder::new()
+        .file("writable.txt", "data")
+        .command(r#"if [[ -w writable.txt ]]; then echo "yes"; else echo "no"; fi"#)
+        .assert_stdout("yes\n")
+        .run()
+        .await;
+
+    // -n: non-empty string
+    TestBuilder::new()
+        .command(r#"if [[ -n "hello" ]]; then echo "yes"; else echo "no"; fi"#)
+        .assert_stdout("yes\n")
+        .run()
+        .await;
+
+    // -n: empty string
+    TestBuilder::new()
+        .command(r#"if [[ -n "" ]]; then echo "yes"; else echo "no"; fi"#)
+        .assert_stdout("no\n")
+        .run()
+        .await;
+
+    // -z: empty string
+    TestBuilder::new()
+        .command(r#"if [[ -z "" ]]; then echo "yes"; else echo "no"; fi"#)
+        .assert_stdout("yes\n")
+        .run()
+        .await;
+
+    // -z: non-empty string
+    TestBuilder::new()
+        .command(r#"if [[ -z "hello" ]]; then echo "yes"; else echo "no"; fi"#)
+        .assert_stdout("no\n")
+        .run()
+        .await;
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn file_test_operators_unix() {
+    // -x: executable file
+    TestBuilder::new()
+        .file("script.sh", "#!/bin/sh\necho hi")
+        .command(
+            r#"chmod +x script.sh && if [[ -x script.sh ]]; then echo "yes"; else echo "no"; fi"#,
+        )
+        .assert_stdout("yes\n")
+        .run()
+        .await;
+
+    // -s: nonexistent file (should be false)
+    TestBuilder::new()
+        .command(r#"if [[ -s nonexistent ]]; then echo "yes"; else echo "no"; fi"#)
+        .assert_stdout("no\n")
+        .run()
+        .await;
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn file_test_operators_owned() {
+    // -O: file owned by effective user ID (files we create should be owned by us)
+    TestBuilder::new()
+        .file("myfile.txt", "data")
+        .command(r#"if [[ -O myfile.txt ]]; then echo "yes"; else echo "no"; fi"#)
+        .assert_stdout("yes\n")
+        .run()
+        .await;
+}
+
+#[tokio::test]
+async fn test_break_continue() {
+    // simple break stops the loop
+    TestBuilder::new()
+        .command("for i in 1 2 3; do echo $i; break; done")
+        .assert_stdout("1\n")
+        .run()
+        .await;
+
+    // break in for loop with condition
+    TestBuilder::new()
+        .command("for i in 1 2 3 4 5; do\nif [[ $i == 3 ]]; then break; fi\necho $i\ndone")
+        .assert_stdout("1\n2\n")
+        .run()
+        .await;
+
+    // continue in for loop
+    TestBuilder::new()
+        .command("for i in 1 2 3 4 5; do\nif [[ $i == 3 ]]; then continue; fi\necho $i\ndone")
+        .assert_stdout("1\n2\n4\n5\n")
+        .run()
+        .await;
+
+    // break in while loop
+    TestBuilder::new()
+        .command("X=0; while [[ $X -lt 10 ]]; do\nX=$((X + 1))\nif [[ $X == 3 ]]; then break; fi\necho $X\ndone")
+        .assert_stdout("1\n2\n")
+        .run()
+        .await;
+
+    // continue in while loop
+    TestBuilder::new()
+        .command("X=0; while [[ $X -lt 5 ]]; do\nX=$((X + 1))\nif [[ $X == 3 ]]; then continue; fi\necho $X\ndone")
+        .assert_stdout("1\n2\n4\n5\n")
+        .run()
+        .await;
+}
+
+#[tokio::test]
+async fn test_colon_command() {
+    // colon is a no-op that returns 0
+    TestBuilder::new()
+        .command(": && echo yes")
+        .assert_stdout("yes\n")
+        .run()
+        .await;
+
+    // colon with arguments (still succeeds)
+    TestBuilder::new()
+        .command(": some args here && echo yes")
+        .assert_stdout("yes\n")
+        .run()
+        .await;
+}
+
+#[tokio::test]
+async fn test_printf() {
+    // basic string
+    TestBuilder::new()
+        .command(r#"printf "hello\n""#)
+        .assert_stdout("hello\n")
+        .run()
+        .await;
+
+    // format string substitution
+    TestBuilder::new()
+        .command(r#"printf "%s is %d\n" answer 42"#)
+        .assert_stdout("answer is 42\n")
+        .run()
+        .await;
+
+    // no trailing newline by default
+    TestBuilder::new()
+        .command(r#"printf "no newline""#)
+        .assert_stdout("no newline")
+        .run()
+        .await;
+
+    // hex format
+    TestBuilder::new()
+        .command(r#"printf "%x\n" 255"#)
+        .assert_stdout("ff\n")
+        .run()
+        .await;
+
+    // percent escape
+    TestBuilder::new()
+        .command(r#"printf "100%%\n""#)
+        .assert_stdout("100%\n")
+        .run()
+        .await;
+}
+
+#[tokio::test]
+async fn test_read() {
+    // read from stdin into default REPLY variable
+    TestBuilder::new()
+        .command("read && echo $REPLY")
+        .stdin("hello world\n")
+        .assert_stdout("hello world\n")
+        .run()
+        .await;
+
+    // read into named variable
+    TestBuilder::new()
+        .command("read NAME && echo $NAME")
+        .stdin("John\n")
+        .assert_stdout("John\n")
+        .run()
+        .await;
+
+    // read into multiple variables
+    TestBuilder::new()
+        .command("read A B C && echo $A && echo $B && echo $C")
+        .stdin("one two three four\n")
+        .assert_stdout("one\ntwo\nthree four\n")
+        .run()
+        .await;
+
+    // read returns 1 on EOF with no input
+    TestBuilder::new()
+        .command("read VAR")
+        .stdin("")
+        .assert_exit_code(1)
+        .run()
+        .await;
+}
+
+#[tokio::test]
+async fn test_command_builtin() {
+    // command -v should find builtins
+    TestBuilder::new()
+        .command("command -v echo")
+        .assert_stdout("echo\n")
+        .run()
+        .await;
+
+    // command -v on non-existent command should fail
+    TestBuilder::new()
+        .command("command -v nonexistent_cmd_12345")
+        .assert_exit_code(1)
+        .check_stdout(false)
+        .run()
+        .await;
+}
+
+#[tokio::test]
+async fn test_type_builtin() {
+    // type should identify builtins
+    TestBuilder::new()
+        .command("type echo")
+        .assert_stdout("echo is a shell builtin\n")
+        .run()
+        .await;
+
+    // type on non-existent command should fail
+    TestBuilder::new()
+        .command("type nonexistent_cmd_12345")
+        .assert_exit_code(1)
+        .check_stdout(false)
+        .run()
+        .await;
+}
+
+#[tokio::test]
+async fn test_eval() {
+    // eval should parse and execute a string as a command
+    TestBuilder::new()
+        .command("eval 'echo hello world'")
+        .assert_stdout("hello world\n")
+        .run()
+        .await;
+
+    // eval with variable expansion
+    TestBuilder::new()
+        .command("X=42 && eval 'echo $X'")
+        .assert_stdout("42\n")
+        .run()
+        .await;
+
+    // eval with empty string
+    TestBuilder::new()
+        .command("eval ''")
+        .assert_exit_code(0)
+        .run()
+        .await;
+
+    // eval with no args
+    TestBuilder::new()
+        .command("eval")
+        .assert_exit_code(0)
+        .run()
+        .await;
+
+    // eval with multiple args (joined by space)
+    TestBuilder::new()
+        .command("eval echo hello")
+        .assert_stdout("hello\n")
+        .run()
+        .await;
+}
+
+#[tokio::test]
+async fn test_source() {
+    // source a file that echoes
+    TestBuilder::new()
+        .file("test.sh", "echo sourced")
+        .command("source test.sh")
+        .assert_stdout("sourced\n")
+        .run()
+        .await;
+
+    // source a file that sets a variable
+    TestBuilder::new()
+        .file("test.sh", "X=from_source")
+        .command("source test.sh && echo $X")
+        .assert_stdout("from_source\n")
+        .run()
+        .await;
+
+    // dot command (alias for source)
+    TestBuilder::new()
+        .file("test.sh", "echo dotted")
+        .command(". test.sh")
+        .assert_stdout("dotted\n")
+        .run()
+        .await;
+
+    // source non-existent file
+    TestBuilder::new()
+        .command("source nonexistent_file.sh")
+        .assert_exit_code(1)
+        .check_stdout(false)
+        .run()
+        .await;
+
+    // source with no args
+    TestBuilder::new()
+        .command("source")
+        .assert_exit_code(2)
+        .check_stdout(false)
+        .run()
+        .await;
+}
+
+#[tokio::test]
+async fn test_local_builtin() {
+    // local should set a shell variable
+    TestBuilder::new()
+        .command("local X=hello && echo $X")
+        .assert_stdout("hello\n")
+        .run()
+        .await;
+
+    // local with multiple vars
+    TestBuilder::new()
+        .command("local A=1 B=2 && echo $A $B")
+        .assert_stdout("1 2\n")
+        .run()
+        .await;
+
+    // local with invalid identifier
+    TestBuilder::new()
+        .command("local 1bad=val")
+        .assert_exit_code(1)
+        .check_stdout(false)
+        .run()
+        .await;
+}
+
+#[tokio::test]
+async fn test_return_builtin() {
+    // return exits with specified code
+    TestBuilder::new()
+        .command("return 0")
+        .assert_exit_code(0)
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("return 42")
+        .assert_exit_code(42)
+        .run()
+        .await;
+
+    // return stops execution (in sourced script context)
+    TestBuilder::new()
+        .file("ret.sh", "echo before\nreturn 5\necho after")
+        .command("source ret.sh")
+        .assert_exit_code(5)
+        .check_stdout(false)
+        .run()
+        .await;
+}
+
+#[tokio::test]
+async fn test_trap_builtin() {
+    // trap -l should list signals
+    TestBuilder::new()
+        .command("trap -l")
+        .assert_exit_code(0)
+        .check_stdout(false)
+        .run()
+        .await;
+
+    // trap with handler and signal
+    TestBuilder::new()
+        .command("trap 'echo caught' INT")
+        .assert_exit_code(0)
+        .run()
+        .await;
+
+    // trap with invalid signal
+    TestBuilder::new()
+        .command("trap 'echo x' INVALIDSIG")
+        .assert_exit_code(1)
+        .check_stdout(false)
+        .run()
+        .await;
+
+    // trap with no args
+    TestBuilder::new()
+        .command("trap")
+        .assert_exit_code(0)
+        .run()
+        .await;
+}
+
+#[tokio::test]
+async fn test_shift_builtin() {
+    // shift without positional params should fail (nothing to shift)
+    TestBuilder::new()
+        .command("shift")
+        .assert_exit_code(1)
+        .check_stdout(false)
+        .run()
+        .await;
+}
+
+#[tokio::test]
+async fn test_function_definitions() {
+    // Basic function definition and call
+    TestBuilder::new()
+        .command("greet() { echo hello; } && greet")
+        .assert_stdout("hello\n")
+        .run()
+        .await;
+
+    // Function with regular variable in body
+    TestBuilder::new()
+        .command("X=world && show() { echo $X; } && show")
+        .assert_stdout("world\n")
+        .run()
+        .await;
+
+    // Function with multiple args
+    TestBuilder::new()
+        .command("add() { echo $1 $2 $3; } && add a b c")
+        .assert_stdout("a b c\n")
+        .run()
+        .await;
+
+    // Function with $# (argument count)
+    TestBuilder::new()
+        .command("count() { echo $#; } && count a b c")
+        .assert_stdout("3\n")
+        .run()
+        .await;
+
+    // Function with return value
+    TestBuilder::new()
+        .command("fail() { return 42; } && fail || echo $?")
+        .assert_stdout("42\n")
+        .run()
+        .await;
+
+    // Function that modifies variables (env changes propagate)
+    TestBuilder::new()
+        .command("setvar() { X=hello; } && setvar && echo $X")
+        .assert_stdout("hello\n")
+        .run()
+        .await;
+
+    // Nested function calls
+    TestBuilder::new()
+        .command("inner() { echo inner; } && outer() { inner; echo outer; } && outer")
+        .assert_stdout("inner\nouter\n")
+        .run()
+        .await;
+
+    // TODO: Function with conditional - needs grammar fix for `fi;` inside brace groups
+    // TestBuilder::new()
+    //     .command("check() { if [ $1 = yes ]; then echo yes; else echo no; fi; } && check yes && check no")
+    //     .assert_stdout("yes\nno\n")
+    //     .run()
+    //     .await;
+}
+
+#[tokio::test]
+async fn test_brace_group() {
+    // Brace group as compound command
+    TestBuilder::new()
+        .command("{ echo hello; echo world; }")
+        .assert_stdout("hello\nworld\n")
+        .run()
+        .await;
+}
+
 #[cfg(test)]
 fn no_such_file_error_text() -> &'static str {
     if cfg!(windows) {

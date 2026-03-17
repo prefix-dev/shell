@@ -77,9 +77,9 @@ FILE_NAME_PENDING_WORD = ${
     ))+
 }
 
-UNQUOTED_ESCAPE_CHAR = ${ ("\\" ~ "$" | "$" ~ !"(" ~  !"{" ~ !VARIABLE) | "\\" ~ (" " | "`" | "\"" | "(" | ")") }
-QUOTED_ESCAPE_CHAR = ${ "\\" ~ "$" | "$" ~ !"(" ~ !"{" ~ !(ASCII_DIGIT | VARIABLE) | "\\" ~ ("`" | "\"" | "(" | ")" | "'") }
-PARAMETER_ESCAPE_CHAR = ${ "\\" ~ "$" | "$" ~ !"(" ~ !"{" ~ !VARIABLE | "\\" ~ "}" }
+UNQUOTED_ESCAPE_CHAR = ${ ("\\" ~ "$" | "$" ~ !"(" ~  !"{" ~ !VARIABLE ~ !SPECIAL_PARAM) | "\\" ~ (" " | "`" | "\"" | "(" | ")") }
+QUOTED_ESCAPE_CHAR = ${ "\\" ~ "$" | "$" ~ !"(" ~ !"{" ~ !VARIABLE ~ !SPECIAL_PARAM | "\\" ~ ("`" | "\"" | "(" | ")" | "'") }
+PARAMETER_ESCAPE_CHAR = ${ "\\" ~ "$" | "$" ~ !"(" ~ !"{" ~ !VARIABLE ~ !SPECIAL_PARAM | "\\" ~ "}" }
 
 UNQUOTED_CHAR = ${ ("\\" ~ " ") | !("]]" | "[[" | "(" | ")" | "<" | ">" | "|" | "&" | ";" | "\"" | "'" | "$") ~ ANY }
 QUOTED_CHAR = ${ !"\"" ~ ANY }
@@ -192,8 +192,8 @@ pipe_sequence = !{ command ~ ((StdoutStderr | Stdout) ~ linebreak ~ pipe_sequenc
 
 command = !{
     compound_command ~ redirect_list? |
-    simple_command |
-    function_definition
+    function_definition |
+    simple_command
 }
 
 compound_command = {
@@ -347,8 +347,8 @@ unary_conditional_expression = !{
 }
 
 file_conditional_op = !{
-    "-a" | "-b" | "-c" | "-d" | "-e" | "-f" | "-g" | "-h" | "-k" | 
-    "-p" | "-r" | "-s" | "-u" | "-w" | "-x" | "-G" | "-L" | 
+    "-a" | "-b" | "-c" | "-d" | "-e" | "-f" | "-g" | "-h" | "-k" |
+    "-p" | "-r" | "-s" | "-t" | "-u" | "-w" | "-x" | "-G" | "-L" |
     "-N" | "-O" | "-S"
 }
 

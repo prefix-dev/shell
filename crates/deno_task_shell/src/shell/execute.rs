@@ -68,7 +68,10 @@ use crate::shell::types::WordResult;
 use super::command::execute_unresolved_command_name;
 use super::command::UnresolvedCommandName;
 use super::types::ConditionalResult;
+use super::types::BREAK_EXIT_CODE;
 use super::types::CANCELLATION_EXIT_CODE;
+use super::types::CONTINUE_EXIT_CODE;
+use super::types::RETURN_EXIT_CODE;
 
 /// Executes a `SequentialList` of commands in a deno_task_shell environment.
 ///
@@ -137,6 +140,21 @@ pub async fn execute_with_pipes(
     .await;
 
     match result {
+        ExecuteResult::Exit(code, ref changes, _)
+            if code == RETURN_EXIT_CODE =>
+        {
+            // Extract actual return code from $? in changes
+            changes
+                .iter()
+                .rev()
+                .find_map(|c| match c {
+                    EnvChange::SetShellVar(name, val) if name == "?" => {
+                        val.parse::<i32>().ok()
+                    }
+                    _ => None,
+                })
+                .unwrap_or(0)
+        }
         ExecuteResult::Exit(code, _, _) => code,
         ExecuteResult::Continue(exit_code, _, _) => exit_code,
     }
@@ -654,6 +672,14 @@ async fn execute_command(
             execute_case_clause(case_clause, &mut state, stdin, stdout, stderr)
                 .await
         }
+        CommandInner::Function(func_def) => {
+            // Function definition: register the function in the state
+            let change =
+                EnvChange::DefineFunction(func_def.name.clone(), func_def.body);
+            state.apply_change(&change);
+            changes.push(change);
+            ExecuteResult::Continue(0, changes, Vec::new())
+        }
         CommandInner::ArithmeticExpression(arithmetic) => {
             // The state can be changed
             match execute_arithmetic_expression(arithmetic, &mut state).await {
@@ -718,6 +744,13 @@ async fn execute_while_clause(
                             state.apply_changes(&env_changes);
                             changes.extend(env_changes);
                             async_handles.extend(handles);
+                            if code == BREAK_EXIT_CODE {
+                                last_exit_code = 0;
+                                break;
+                            } else if code == CONTINUE_EXIT_CODE {
+                                last_exit_code = 0;
+                                continue;
+                            }
                             last_exit_code = code;
                             break;
                         }
@@ -888,6 +921,13 @@ async fn execute_for_clause(
             ExecuteResult::Exit(code, env_changes, handles) => {
                 changes.extend(env_changes);
                 async_handles.extend(handles);
+                if code == BREAK_EXIT_CODE {
+                    last_exit_code = 0;
+                    break;
+                } else if code == CONTINUE_EXIT_CODE {
+                    last_exit_code = 0;
+                    continue;
+                }
                 last_exit_code = code;
                 break;
             }
@@ -982,7 +1022,11 @@ async fn evaluate_arithmetic_part(
                         AssignmentOp::BitwiseOrAssign => {
                             val.checked_or(&parsed_var)
                         }
-                        _ => unreachable!(),
+                        AssignmentOp::Assign => {
+                            // Already handled above; this branch is unreachable
+                            // but we handle it gracefully
+                            Ok(val.clone())
+                        }
                     }?
                 }
             };
@@ -1370,6 +1414,116 @@ fn check_permission(path: &str, permission: FilePermission) -> bool {
     }
 }
 
+#[derive(Debug)]
+enum FileTypeCheck {
+    BlockSpecial,
+    CharSpecial,
+    NamedPipe,
+    Socket,
+}
+
+fn check_file_type(path: &str, file_type: FileTypeCheck) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::FileTypeExt;
+        fs::symlink_metadata(path)
+            .map(|m| {
+                let ft = m.file_type();
+                match file_type {
+                    FileTypeCheck::BlockSpecial => ft.is_block_device(),
+                    FileTypeCheck::CharSpecial => ft.is_char_device(),
+                    FileTypeCheck::NamedPipe => ft.is_fifo(),
+                    FileTypeCheck::Socket => ft.is_socket(),
+                }
+            })
+            .unwrap_or(false)
+    }
+
+    #[cfg(windows)]
+    {
+        // These file types don't exist on Windows
+        let _ = (path, file_type);
+        false
+    }
+}
+
+fn check_file_mode_bit(path: &str, bit: u32) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        fs::metadata(path)
+            .map(|m| (m.mode() & bit) != 0)
+            .unwrap_or(false)
+    }
+
+    #[cfg(windows)]
+    {
+        let _ = (path, bit);
+        false
+    }
+}
+
+fn check_terminal_fd(value: &str) -> bool {
+    use std::io::IsTerminal;
+    match value {
+        "0" => std::io::stdin().is_terminal(),
+        "1" => std::io::stdout().is_terminal(),
+        "2" => std::io::stderr().is_terminal(),
+        _ => false,
+    }
+}
+
+fn check_owned_by_euid(path: &str) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        fs::metadata(path)
+            .map(|m| m.uid() == unsafe { libc::geteuid() })
+            .unwrap_or(false)
+    }
+
+    #[cfg(windows)]
+    {
+        let _ = path;
+        // On Windows, approximate by checking file exists and is accessible
+        fs::metadata(path).is_ok()
+    }
+}
+
+fn check_owned_by_egid(path: &str) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        fs::metadata(path)
+            .map(|m| m.gid() == unsafe { libc::getegid() })
+            .unwrap_or(false)
+    }
+
+    #[cfg(windows)]
+    {
+        let _ = path;
+        false
+    }
+}
+
+fn check_modified_since_read(path: &str) -> bool {
+    // -N: true if file exists and has been modified since it was last read.
+    // We check if mtime > atime as an approximation.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        fs::metadata(path)
+            .map(|m| m.mtime() > m.atime())
+            .unwrap_or(false)
+    }
+
+    #[cfg(windows)]
+    {
+        let _ = path;
+        false
+    }
+}
+
 fn glob_pattern(pattern: &str) -> Result<glob::Pattern, glob::PatternError> {
     glob::Pattern::new(pattern)
 }
@@ -1463,41 +1617,94 @@ async fn evaluate_condition(
             let rhs =
                 evaluate_word(right, state, stdin.clone(), stderr.clone())
                     .await?;
+            // Resolve relative paths against the shell's CWD for file tests
+            let resolve_path = |p: &str| -> std::path::PathBuf {
+                let path = Path::new(p);
+                if path.is_absolute() {
+                    path.to_path_buf()
+                } else {
+                    state.cwd().join(path)
+                }
+            };
             Ok(match op {
-                Some(UnaryOp::FileExists) => Path::new(&rhs.value).exists(),
-                Some(UnaryOp::BlockSpecial) => todo!(),
-                Some(UnaryOp::CharSpecial) => todo!(),
-                Some(UnaryOp::Directory) => Path::new(&rhs.value).is_dir(),
-                Some(UnaryOp::RegularFile) => Path::new(&rhs.value).is_file(),
-                Some(UnaryOp::SetGroupId) => todo!(),
+                Some(UnaryOp::FileExists) => resolve_path(&rhs.value).exists(),
+                Some(UnaryOp::BlockSpecial) => check_file_type(
+                    resolve_path(&rhs.value).to_str().unwrap_or(""),
+                    FileTypeCheck::BlockSpecial,
+                ),
+                Some(UnaryOp::CharSpecial) => check_file_type(
+                    resolve_path(&rhs.value).to_str().unwrap_or(""),
+                    FileTypeCheck::CharSpecial,
+                ),
+                Some(UnaryOp::Directory) => resolve_path(&rhs.value).is_dir(),
+                Some(UnaryOp::RegularFile) => {
+                    resolve_path(&rhs.value).is_file()
+                }
+                Some(UnaryOp::SetGroupId) => check_file_mode_bit(
+                    resolve_path(&rhs.value).to_str().unwrap_or(""),
+                    0o2000,
+                ),
                 Some(UnaryOp::SymbolicLink) => {
-                    Path::new(&rhs.value).is_symlink()
+                    resolve_path(&rhs.value).is_symlink()
                 }
-                Some(UnaryOp::StickyBit) => todo!(),
-                Some(UnaryOp::NamedPipe) => todo!(),
-                Some(UnaryOp::Writable) => {
-                    check_permission(&rhs.value, FilePermission::Writable)
+                Some(UnaryOp::StickyBit) => check_file_mode_bit(
+                    resolve_path(&rhs.value).to_str().unwrap_or(""),
+                    0o1000,
+                ),
+                Some(UnaryOp::NamedPipe) => check_file_type(
+                    resolve_path(&rhs.value).to_str().unwrap_or(""),
+                    FileTypeCheck::NamedPipe,
+                ),
+                Some(UnaryOp::Writable) => check_permission(
+                    resolve_path(&rhs.value).to_str().unwrap_or(""),
+                    FilePermission::Writable,
+                ),
+                Some(UnaryOp::SizeNonZero) => {
+                    fs::metadata(resolve_path(&rhs.value))
+                        .map(|m| m.len() > 0)
+                        .unwrap_or(false)
                 }
-                Some(UnaryOp::SizeNonZero) => todo!(),
-                Some(UnaryOp::TerminalFd) => todo!(),
-                Some(UnaryOp::SetUserId) => todo!(),
-                Some(UnaryOp::Readable) => {
-                    check_permission(&rhs.value, FilePermission::Readable)
+                Some(UnaryOp::TerminalFd) => check_terminal_fd(&rhs.value),
+                Some(UnaryOp::SetUserId) => check_file_mode_bit(
+                    resolve_path(&rhs.value).to_str().unwrap_or(""),
+                    0o4000,
+                ),
+                Some(UnaryOp::Readable) => check_permission(
+                    resolve_path(&rhs.value).to_str().unwrap_or(""),
+                    FilePermission::Readable,
+                ),
+                Some(UnaryOp::Executable) => check_permission(
+                    resolve_path(&rhs.value).to_str().unwrap_or(""),
+                    FilePermission::Executable,
+                ),
+                Some(UnaryOp::OwnedByEffectiveGroupId) => check_owned_by_egid(
+                    resolve_path(&rhs.value).to_str().unwrap_or(""),
+                ),
+                Some(UnaryOp::ModifiedSinceLastRead) => {
+                    check_modified_since_read(
+                        resolve_path(&rhs.value).to_str().unwrap_or(""),
+                    )
                 }
-                Some(UnaryOp::Executable) => {
-                    check_permission(&rhs.value, FilePermission::Executable)
-                }
-                Some(UnaryOp::OwnedByEffectiveGroupId) => todo!(),
-                Some(UnaryOp::ModifiedSinceLastRead) => todo!(),
-                Some(UnaryOp::OwnedByEffectiveUserId) => todo!(),
-                Some(UnaryOp::Socket) => todo!(),
+                Some(UnaryOp::OwnedByEffectiveUserId) => check_owned_by_euid(
+                    resolve_path(&rhs.value).to_str().unwrap_or(""),
+                ),
+                Some(UnaryOp::Socket) => check_file_type(
+                    resolve_path(&rhs.value).to_str().unwrap_or(""),
+                    FileTypeCheck::Socket,
+                ),
                 Some(UnaryOp::NonEmptyString) => !rhs.value.is_empty(),
                 Some(UnaryOp::EmptyString) => rhs.value.is_empty(),
                 Some(UnaryOp::VariableSet) => {
                     state.get_var(&rhs.value).is_some()
                 }
-                Some(UnaryOp::VariableNameReference) => todo!(),
-                None => todo!(),
+                Some(UnaryOp::VariableNameReference) => {
+                    // Nameref is a bash 4.3+ feature; treat as false for now
+                    false
+                }
+                None => {
+                    // No operator means implicit -n (non-empty string test)
+                    !rhs.value.is_empty()
+                }
             }
             .into())
         }
@@ -1619,15 +1826,130 @@ fn execute_command_args(
         };
         match command_context.state.resolve_custom_command(&command_name) {
             Some(command) => command.execute(command_context),
-            None => execute_unresolved_command_name(
-                UnresolvedCommandName {
-                    name: command_name,
-                    base_dir: command_context.state.cwd().to_path_buf(),
-                },
-                command_context,
-            ),
+            None => {
+                // Check for shell functions before external commands
+                if let Some(func_body) =
+                    command_context.state.get_function(&command_name).cloned()
+                {
+                    execute_shell_function(
+                        func_body,
+                        command_context.args,
+                        command_context.state,
+                        command_context.stdin,
+                        command_context.stdout,
+                        command_context.stderr,
+                    )
+                } else {
+                    execute_unresolved_command_name(
+                        UnresolvedCommandName {
+                            name: command_name,
+                            base_dir: command_context.state.cwd().to_path_buf(),
+                        },
+                        command_context,
+                    )
+                }
+            }
         }
     }
+}
+
+fn execute_shell_function(
+    body: crate::parser::SequentialList,
+    args: Vec<String>,
+    mut state: ShellState,
+    stdin: ShellPipeReader,
+    stdout: ShellPipeWriter,
+    stderr: ShellPipeWriter,
+) -> FutureExecuteResult {
+    async move {
+        // Save existing positional parameters
+        let mut saved_positional: Vec<(String, Option<String>)> = Vec::new();
+        let old_count = state
+            .get_var("#")
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(0);
+        for i in 1..=old_count.max(args.len()) {
+            let key = i.to_string();
+            saved_positional.push((key.clone(), state.get_var(&key).cloned()));
+        }
+        let saved_hash = state.get_var("#").cloned();
+        let saved_at = state.get_var("@").cloned();
+        let saved_star = state.get_var("*").cloned();
+
+        // Set new positional parameters from function arguments
+        state.set_shell_var("#", &args.len().to_string());
+        let joined = args.join(" ");
+        state.set_shell_var("@", &joined);
+        state.set_shell_var("*", &joined);
+        for (i, arg) in args.iter().enumerate() {
+            state.set_shell_var(&(i + 1).to_string(), arg);
+        }
+        // Unset any excess positional params from previous context
+        for i in (args.len() + 1)..=old_count {
+            // Can't unset shell vars directly, set to empty and remove
+            state.apply_change(&EnvChange::UnsetVar(i.to_string()));
+        }
+
+        // Execute the function body
+        let result = execute_sequential_list(
+            body,
+            state.clone(),
+            stdin,
+            stdout,
+            stderr,
+            AsyncCommandBehavior::Yield,
+        )
+        .await;
+
+        // Restore positional parameters
+        for (key, old_val) in &saved_positional {
+            match old_val {
+                Some(val) => state.set_shell_var(key, val),
+                None => state.apply_change(&EnvChange::UnsetVar(key.clone())),
+            }
+        }
+        match &saved_hash {
+            Some(val) => state.set_shell_var("#", val),
+            None => state.apply_change(&EnvChange::UnsetVar("#".to_string())),
+        }
+        match &saved_at {
+            Some(val) => state.set_shell_var("@", val),
+            None => state.apply_change(&EnvChange::UnsetVar("@".to_string())),
+        }
+        match &saved_star {
+            Some(val) => state.set_shell_var("*", val),
+            None => state.apply_change(&EnvChange::UnsetVar("*".to_string())),
+        }
+
+        // Handle return exit code - convert to Continue with actual return value
+        match result {
+            ExecuteResult::Exit(code, changes, handles)
+                if code == RETURN_EXIT_CODE =>
+            {
+                // Extract the actual return code from $? in changes
+                let actual_code = changes
+                    .iter()
+                    .rev()
+                    .find_map(|c| match c {
+                        EnvChange::SetShellVar(name, val) if name == "?" => {
+                            val.parse::<i32>().ok()
+                        }
+                        _ => None,
+                    })
+                    .unwrap_or(0);
+                ExecuteResult::Continue(actual_code, changes, handles)
+            }
+            ExecuteResult::Exit(code, changes, handles)
+                if code == BREAK_EXIT_CODE || code == CONTINUE_EXIT_CODE =>
+            {
+                // break/continue should not escape function scope
+                ExecuteResult::Continue(0, changes, handles)
+            }
+            // Normal exit or cancellation - propagate as-is
+            other => other,
+        }
+    }
+    .boxed_local()
 }
 
 pub async fn evaluate_args(

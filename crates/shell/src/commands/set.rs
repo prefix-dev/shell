@@ -16,7 +16,7 @@ impl ShellCommand for SetCommand {
         let result = match execute_set(context.args) {
             Ok((code, env_changes)) => ExecuteResult::Continue(code, env_changes, Vec::new()),
             Err(err) => {
-                context.stderr.write_line(&format!("set: {err}")).unwrap();
+                let _ = context.stderr.write_line(&format!("set: {err}"));
                 ExecuteResult::Exit(2, Vec::new(), Vec::new())
             }
         };
