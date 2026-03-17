@@ -71,6 +71,7 @@ use super::types::ConditionalResult;
 use super::types::BREAK_EXIT_CODE;
 use super::types::CANCELLATION_EXIT_CODE;
 use super::types::CONTINUE_EXIT_CODE;
+use super::types::RETURN_EXIT_CODE;
 
 /// Executes a `SequentialList` of commands in a deno_task_shell environment.
 ///
@@ -139,6 +140,21 @@ pub async fn execute_with_pipes(
     .await;
 
     match result {
+        ExecuteResult::Exit(code, ref changes, _)
+            if code == RETURN_EXIT_CODE =>
+        {
+            // Extract actual return code from $? in changes
+            changes
+                .iter()
+                .rev()
+                .find_map(|c| match c {
+                    EnvChange::SetShellVar(name, val) if name == "?" => {
+                        val.parse::<i32>().ok()
+                    }
+                    _ => None,
+                })
+                .unwrap_or(0)
+        }
         ExecuteResult::Exit(code, _, _) => code,
         ExecuteResult::Continue(exit_code, _, _) => exit_code,
     }
@@ -655,6 +671,16 @@ async fn execute_command(
         CommandInner::Case(case_clause) => {
             execute_case_clause(case_clause, &mut state, stdin, stdout, stderr)
                 .await
+        }
+        CommandInner::Function(func_def) => {
+            // Function definition: register the function in the state
+            let change = EnvChange::DefineFunction(
+                func_def.name.clone(),
+                func_def.body,
+            );
+            state.apply_change(&change);
+            changes.push(change);
+            ExecuteResult::Continue(0, changes, Vec::new())
         }
         CommandInner::ArithmeticExpression(arithmetic) => {
             // The state can be changed
@@ -1788,15 +1814,135 @@ fn execute_command_args(
         };
         match command_context.state.resolve_custom_command(&command_name) {
             Some(command) => command.execute(command_context),
-            None => execute_unresolved_command_name(
-                UnresolvedCommandName {
-                    name: command_name,
-                    base_dir: command_context.state.cwd().to_path_buf(),
-                },
-                command_context,
-            ),
+            None => {
+                // Check for shell functions before external commands
+                if let Some(func_body) =
+                    command_context.state.get_function(&command_name).cloned()
+                {
+                    execute_shell_function(
+                        func_body,
+                        command_context.args,
+                        command_context.state,
+                        command_context.stdin,
+                        command_context.stdout,
+                        command_context.stderr,
+                    )
+                } else {
+                    execute_unresolved_command_name(
+                        UnresolvedCommandName {
+                            name: command_name,
+                            base_dir: command_context.state.cwd().to_path_buf(),
+                        },
+                        command_context,
+                    )
+                }
+            }
         }
     }
+}
+
+fn execute_shell_function(
+    body: crate::parser::SequentialList,
+    args: Vec<String>,
+    mut state: ShellState,
+    stdin: ShellPipeReader,
+    stdout: ShellPipeWriter,
+    stderr: ShellPipeWriter,
+) -> FutureExecuteResult {
+    async move {
+        // Save existing positional parameters
+        let mut saved_positional: Vec<(String, Option<String>)> = Vec::new();
+        let old_count = state
+            .get_var("#")
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(0);
+        for i in 1..=old_count.max(args.len()) {
+            let key = i.to_string();
+            saved_positional.push((key.clone(), state.get_var(&key).cloned()));
+        }
+        let saved_hash = state.get_var("#").cloned();
+        let saved_at = state.get_var("@").cloned();
+        let saved_star = state.get_var("*").cloned();
+
+        // Set new positional parameters from function arguments
+        state.set_shell_var("#", &args.len().to_string());
+        let joined = args.join(" ");
+        state.set_shell_var("@", &joined);
+        state.set_shell_var("*", &joined);
+        for (i, arg) in args.iter().enumerate() {
+            state.set_shell_var(&(i + 1).to_string(), arg);
+        }
+        // Unset any excess positional params from previous context
+        for i in (args.len() + 1)..=old_count {
+            // Can't unset shell vars directly, set to empty and remove
+            state.apply_change(&EnvChange::UnsetVar(i.to_string()));
+        }
+
+        // Execute the function body
+        let result = execute_sequential_list(
+            body,
+            state.clone(),
+            stdin,
+            stdout,
+            stderr,
+            AsyncCommandBehavior::Yield,
+        )
+        .await;
+
+        // Restore positional parameters
+        for (key, old_val) in &saved_positional {
+            match old_val {
+                Some(val) => state.set_shell_var(key, val),
+                None => {
+                    state.apply_change(&EnvChange::UnsetVar(key.clone()))
+                }
+            }
+        }
+        match &saved_hash {
+            Some(val) => state.set_shell_var("#", val),
+            None => state.apply_change(&EnvChange::UnsetVar("#".to_string())),
+        }
+        match &saved_at {
+            Some(val) => state.set_shell_var("@", val),
+            None => state.apply_change(&EnvChange::UnsetVar("@".to_string())),
+        }
+        match &saved_star {
+            Some(val) => state.set_shell_var("*", val),
+            None => state.apply_change(&EnvChange::UnsetVar("*".to_string())),
+        }
+
+        // Handle return exit code - convert to Continue with actual return value
+        match result {
+            ExecuteResult::Exit(code, changes, handles)
+                if code == RETURN_EXIT_CODE =>
+            {
+                // Extract the actual return code from $? in changes
+                let actual_code = changes
+                    .iter()
+                    .rev()
+                    .find_map(|c| match c {
+                        EnvChange::SetShellVar(name, val)
+                            if name == "?" =>
+                        {
+                            val.parse::<i32>().ok()
+                        }
+                        _ => None,
+                    })
+                    .unwrap_or(0);
+                ExecuteResult::Continue(actual_code, changes, handles)
+            }
+            ExecuteResult::Exit(code, changes, handles)
+                if code == BREAK_EXIT_CODE
+                    || code == CONTINUE_EXIT_CODE =>
+            {
+                // break/continue should not escape function scope
+                ExecuteResult::Continue(0, changes, handles)
+            }
+            // Normal exit or cancellation - propagate as-is
+            other => other,
+        }
+    }
+    .boxed_local()
 }
 
 pub async fn evaluate_args(

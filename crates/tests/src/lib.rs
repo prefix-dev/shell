@@ -1964,6 +1964,75 @@ async fn test_shift_builtin() {
         .await;
 }
 
+#[tokio::test]
+async fn test_function_definitions() {
+    // Basic function definition and call
+    TestBuilder::new()
+        .command("greet() { echo hello; } && greet")
+        .assert_stdout("hello\n")
+        .run()
+        .await;
+
+    // Function with regular variable in body
+    TestBuilder::new()
+        .command("X=world && show() { echo $X; } && show")
+        .assert_stdout("world\n")
+        .run()
+        .await;
+
+    // Function with multiple args
+    TestBuilder::new()
+        .command("add() { echo $1 $2 $3; } && add a b c")
+        .assert_stdout("a b c\n")
+        .run()
+        .await;
+
+    // Function with $# (argument count)
+    TestBuilder::new()
+        .command("count() { echo $#; } && count a b c")
+        .assert_stdout("3\n")
+        .run()
+        .await;
+
+    // Function with return value
+    TestBuilder::new()
+        .command("fail() { return 42; } && fail || echo $?")
+        .assert_stdout("42\n")
+        .run()
+        .await;
+
+    // Function that modifies variables (env changes propagate)
+    TestBuilder::new()
+        .command("setvar() { X=hello; } && setvar && echo $X")
+        .assert_stdout("hello\n")
+        .run()
+        .await;
+
+    // Nested function calls
+    TestBuilder::new()
+        .command("inner() { echo inner; } && outer() { inner; echo outer; } && outer")
+        .assert_stdout("inner\nouter\n")
+        .run()
+        .await;
+
+    // TODO: Function with conditional - needs grammar fix for `fi;` inside brace groups
+    // TestBuilder::new()
+    //     .command("check() { if [ $1 = yes ]; then echo yes; else echo no; fi; } && check yes && check no")
+    //     .assert_stdout("yes\nno\n")
+    //     .run()
+    //     .await;
+}
+
+#[tokio::test]
+async fn test_brace_group() {
+    // Brace group as compound command
+    TestBuilder::new()
+        .command("{ echo hello; echo world; }")
+        .assert_stdout("hello\nworld\n")
+        .run()
+        .await;
+}
+
 #[cfg(test)]
 fn no_such_file_error_text() -> &'static str {
     if cfg!(windows) {

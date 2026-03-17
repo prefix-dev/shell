@@ -170,6 +170,8 @@ pub enum CommandInner {
     Case(CaseClause),
     #[error("Invalid arithmetic expression")]
     ArithmeticExpression(Arithmetic),
+    #[error("Invalid function definition")]
+    Function(FunctionDefinition),
 }
 
 impl From<Command> for Sequence {
@@ -236,6 +238,15 @@ pub struct IfClause {
 pub struct CaseClause {
     pub word: Word,
     pub cases: Vec<(Vec<Word>, SequentialList)>,
+}
+
+#[cfg_attr(feature = "serialization", derive(serde::Serialize))]
+#[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
+#[derive(Debug, PartialEq, Eq, Clone, Error)]
+#[error("Invalid function definition")]
+pub struct FunctionDefinition {
+    pub name: String,
+    pub body: SequentialList,
 }
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
@@ -933,9 +944,7 @@ fn parse_command(pair: Pair<Rule>) -> Result<Command> {
     match inner.as_rule() {
         Rule::simple_command => parse_simple_command(inner),
         Rule::compound_command => parse_compound_command(inner),
-        Rule::function_definition => {
-            Err(miette!("Function definitions are not supported yet"))
-        }
+        Rule::function_definition => parse_function_definition(inner),
         _ => Err(miette!("Unexpected rule in command: {:?}", inner.as_rule())),
     }
 }
@@ -1071,9 +1080,7 @@ fn parse_while_loop(pair: Pair<Rule>, is_until: bool) -> Result<WhileLoop> {
 fn parse_compound_command(pair: Pair<Rule>) -> Result<Command> {
     let inner = pair.into_inner().next().unwrap();
     match inner.as_rule() {
-        Rule::brace_group => {
-            Err(miette!("Unsupported compound command brace_group"))
-        }
+        Rule::brace_group => parse_brace_group(inner),
         Rule::subshell => parse_subshell(inner),
         Rule::for_clause => {
             let for_loop = parse_for_loop(inner);
@@ -1137,6 +1144,65 @@ fn parse_subshell(pair: Pair<Rule>) -> Result<Command> {
     } else {
         Err(miette!("Unexpected end of input in subshell"))
     }
+}
+
+fn parse_brace_group(pair: Pair<Rule>) -> Result<Command> {
+    let mut items = Vec::new();
+    for inner in pair.into_inner() {
+        if inner.as_rule() == Rule::compound_list {
+            parse_compound_list(inner, &mut items)?;
+        }
+    }
+    Ok(Command {
+        inner: CommandInner::Subshell(Box::new(SequentialList { items })),
+        redirect: None,
+    })
+}
+
+fn parse_function_definition(pair: Pair<Rule>) -> Result<Command> {
+    let mut inner = pair.into_inner();
+    let fname = inner
+        .next()
+        .ok_or_else(|| miette!("Expected function name"))?;
+    let name = fname.as_str().to_string();
+
+    // Skip linebreak tokens, find function_body
+    let function_body = inner
+        .find(|p| p.as_rule() == Rule::function_body)
+        .ok_or_else(|| miette!("Expected function body"))?;
+
+    // function_body = compound_command ~ redirect_list?
+    let compound_command = function_body
+        .into_inner()
+        .next()
+        .ok_or_else(|| miette!("Expected compound command in function body"))?;
+
+    // Parse the compound command (usually a brace_group)
+    let body_inner = compound_command.into_inner().next().unwrap();
+    let mut items = Vec::new();
+    match body_inner.as_rule() {
+        Rule::brace_group => {
+            for inner in body_inner.into_inner() {
+                if inner.as_rule() == Rule::compound_list {
+                    parse_compound_list(inner, &mut items)?;
+                }
+            }
+        }
+        _ => {
+            return Err(miette!(
+                "Unsupported function body type: {:?}",
+                body_inner.as_rule()
+            ));
+        }
+    }
+
+    Ok(Command {
+        inner: CommandInner::Function(FunctionDefinition {
+            name,
+            body: SequentialList { items },
+        }),
+        redirect: None,
+    })
 }
 
 fn parse_if_clause(pair: Pair<Rule>) -> Result<IfClause> {

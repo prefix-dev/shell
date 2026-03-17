@@ -52,6 +52,8 @@ pub struct ShellState {
     last_command_exit_code: i32, // Exit code of the last command
     // The shell options to be modified using `set` command
     shell_options: HashMap<ShellOptions, bool>,
+    /// Shell functions defined with `name() { ... }`
+    functions: HashMap<String, crate::parser::SequentialList>,
 }
 
 #[allow(clippy::print_stdout)]
@@ -92,6 +94,7 @@ impl ShellState {
                 map.insert(ShellOptions::ExitOnError, true);
                 map
             },
+            functions: Default::default(),
         };
         // ensure the data is normalized
         for (name, value) in env_vars {
@@ -262,6 +265,11 @@ impl ShellState {
                 self.apply_env_var(name, value)
             }
             EnvChange::SetShellVar(name, value) => {
+                if name == "?" {
+                    if let Ok(code) = value.parse::<i32>() {
+                        self.last_command_exit_code = code;
+                    }
+                }
                 if self.env_vars.contains_key(name) {
                     self.apply_env_var(name, value);
                 } else {
@@ -293,10 +301,18 @@ impl ShellState {
             EnvChange::SetShellOptions(option, value) => {
                 self.set_shell_option(*option, *value);
             }
+            EnvChange::DefineFunction(name, body) => {
+                self.functions.insert(name.clone(), body.clone());
+            }
         }
     }
 
     pub fn set_shell_var(&mut self, name: &str, value: &str) {
+        if name == "?" {
+            if let Ok(code) = value.parse::<i32>() {
+                self.last_command_exit_code = code;
+            }
+        }
         self.shell_vars.insert(name.to_string(), value.to_string());
     }
 
@@ -353,9 +369,17 @@ impl ShellState {
     pub fn reset_cancellation_token(&mut self) {
         self.token = CancellationToken::default();
     }
+
+    /// Look up a shell function by name.
+    pub fn get_function(
+        &self,
+        name: &str,
+    ) -> Option<&crate::parser::SequentialList> {
+        self.functions.get(name)
+    }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, PartialOrd)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum EnvChange {
     /// `export ENV_VAR=VALUE`
     SetEnvVar(String, String),
@@ -371,6 +395,37 @@ pub enum EnvChange {
     Cd(PathBuf),
     /// `set -ex`
     SetShellOptions(ShellOptions, bool),
+    /// Define a shell function
+    DefineFunction(String, crate::parser::SequentialList),
+}
+
+impl PartialOrd for EnvChange {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        // Simple discriminant-based ordering; DefineFunction compares by name only
+        match (self, other) {
+            (EnvChange::SetEnvVar(a1, a2), EnvChange::SetEnvVar(b1, b2)) => {
+                (a1, a2).partial_cmp(&(b1, b2))
+            }
+            (EnvChange::SetShellVar(a1, a2), EnvChange::SetShellVar(b1, b2)) => {
+                (a1, a2).partial_cmp(&(b1, b2))
+            }
+            (EnvChange::AliasCommand(a1, a2), EnvChange::AliasCommand(b1, b2)) => {
+                (a1, a2).partial_cmp(&(b1, b2))
+            }
+            (EnvChange::UnAliasCommand(a), EnvChange::UnAliasCommand(b)) => {
+                a.partial_cmp(b)
+            }
+            (EnvChange::UnsetVar(a), EnvChange::UnsetVar(b)) => a.partial_cmp(b),
+            (EnvChange::Cd(a), EnvChange::Cd(b)) => a.partial_cmp(b),
+            (EnvChange::SetShellOptions(a1, a2), EnvChange::SetShellOptions(b1, b2)) => {
+                (a1, a2).partial_cmp(&(b1, b2))
+            }
+            (EnvChange::DefineFunction(a, _), EnvChange::DefineFunction(b, _)) => {
+                a.partial_cmp(b)
+            }
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Debug, PartialOrd)]
@@ -392,6 +447,7 @@ pub const CANCELLATION_EXIT_CODE: i32 = 130;
 // and are caught by loop execution functions.
 pub const BREAK_EXIT_CODE: i32 = -100;
 pub const CONTINUE_EXIT_CODE: i32 = -101;
+pub const RETURN_EXIT_CODE: i32 = -102;
 
 #[derive(Debug)]
 pub enum ExecuteResult {

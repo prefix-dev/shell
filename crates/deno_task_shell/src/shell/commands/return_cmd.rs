@@ -4,14 +4,13 @@ use futures::future::LocalBoxFuture;
 
 use super::ShellCommand;
 use super::ShellCommandContext;
+use crate::shell::types::EnvChange;
 use crate::shell::types::ExecuteResult;
+use crate::shell::types::RETURN_EXIT_CODE;
 
 /// The `return` builtin exits from a function or sourced script with
-/// the specified exit code (default 0). It uses a sentinel exit code
-/// to propagate through the execution stack.
-///
-/// Currently, since functions aren't fully implemented, `return` acts
-/// like `exit` for sourced scripts.
+/// the specified exit code. Uses RETURN_EXIT_CODE sentinel so the
+/// function executor can catch it and extract the actual return value.
 pub struct ReturnCommand;
 
 impl ShellCommand for ReturnCommand {
@@ -20,7 +19,6 @@ impl ShellCommand for ReturnCommand {
         context: ShellCommandContext,
     ) -> LocalBoxFuture<'static, ExecuteResult> {
         let exit_code = if context.args.is_empty() {
-            // Default: return with the exit status of the last command
             context
                 .state
                 .get_var("?")
@@ -39,11 +37,14 @@ impl ShellCommand for ReturnCommand {
             }
         };
 
-        // Use Exit variant to stop execution of the current scope
-        // (function or sourced script)
+        // Use RETURN_EXIT_CODE sentinel so function executor catches it.
+        // Store the actual return value in $? via an env change.
         Box::pin(futures::future::ready(ExecuteResult::Exit(
-            exit_code,
-            Vec::new(),
+            RETURN_EXIT_CODE,
+            vec![EnvChange::SetShellVar(
+                "?".to_string(),
+                exit_code.to_string(),
+            )],
             Vec::new(),
         )))
     }
