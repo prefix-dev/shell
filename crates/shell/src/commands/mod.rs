@@ -5,7 +5,6 @@ use futures::{future::LocalBoxFuture, FutureExt};
 
 use uu_ls::uumain as uu_ls;
 
-use crate::execute;
 
 pub mod command_cmd;
 pub mod date;
@@ -150,31 +149,55 @@ fn execute_ls(context: ShellCommandContext) -> ExecuteResult {
 
 impl ShellCommand for SourceCommand {
     fn execute(&self, context: ShellCommandContext) -> LocalBoxFuture<'static, ExecuteResult> {
-        if context.args.len() != 1 {
-            return Box::pin(futures::future::ready(ExecuteResult::from_exit_code(1)));
-        }
+        async move {
+            if context.args.is_empty() {
+                let _ = context
+                    .stderr
+                    .clone()
+                    .write_line("source: filename argument required");
+                return ExecuteResult::Continue(2, Vec::new(), Vec::new());
+            }
 
-        let script = context.args[0].clone();
-        let script_file = context.state.cwd().join(script);
-        match fs::read_to_string(&script_file) {
-            Ok(content) => {
-                let state = context.state.clone();
-                async move {
-                    execute::execute_inner(&content, Some(script_file.display().to_string()), state)
-                        .await
-                        .unwrap_or_else(|e| {
-                            eprintln!("Could not source script: {:?}", script_file);
-                            eprintln!("Error: {}", e);
-                            ExecuteResult::from_exit_code(1)
-                        })
+            let filename = &context.args[0];
+            let script_file = if std::path::Path::new(filename).is_absolute() {
+                std::path::PathBuf::from(filename)
+            } else {
+                context.state.cwd().join(filename)
+            };
+
+            let contents = match fs::read_to_string(&script_file) {
+                Ok(c) => c,
+                Err(err) => {
+                    let _ = context.stderr.clone().write_line(&format!(
+                        "source: {}: {err}",
+                        script_file.display()
+                    ));
+                    return ExecuteResult::Continue(1, Vec::new(), Vec::new());
                 }
-                .boxed_local()
-            }
-            Err(e) => {
-                eprintln!("Could not read file: {:?} ({})", script_file, e);
-                Box::pin(futures::future::ready(ExecuteResult::from_exit_code(1)))
-            }
+            };
+
+            let parsed = match deno_task_shell::parser::parse(&contents) {
+                Ok(list) => list,
+                Err(err) => {
+                    let _ = context
+                        .stderr
+                        .clone()
+                        .write_line(&format!("source: {err}"));
+                    return ExecuteResult::Continue(2, Vec::new(), Vec::new());
+                }
+            };
+
+            deno_task_shell::execute_sequential_list(
+                parsed,
+                context.state,
+                context.stdin,
+                context.stdout,
+                context.stderr,
+                deno_task_shell::AsyncCommandBehavior::Wait,
+            )
+            .await
         }
+        .boxed_local()
     }
 }
 

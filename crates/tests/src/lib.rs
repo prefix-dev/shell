@@ -1789,6 +1789,181 @@ async fn test_type_builtin() {
         .await;
 }
 
+#[tokio::test]
+async fn test_eval() {
+    // eval should parse and execute a string as a command
+    TestBuilder::new()
+        .command("eval 'echo hello world'")
+        .assert_stdout("hello world\n")
+        .run()
+        .await;
+
+    // eval with variable expansion
+    TestBuilder::new()
+        .command("X=42 && eval 'echo $X'")
+        .assert_stdout("42\n")
+        .run()
+        .await;
+
+    // eval with empty string
+    TestBuilder::new()
+        .command("eval ''")
+        .assert_exit_code(0)
+        .run()
+        .await;
+
+    // eval with no args
+    TestBuilder::new()
+        .command("eval")
+        .assert_exit_code(0)
+        .run()
+        .await;
+
+    // eval with multiple args (joined by space)
+    TestBuilder::new()
+        .command("eval echo hello")
+        .assert_stdout("hello\n")
+        .run()
+        .await;
+}
+
+#[tokio::test]
+async fn test_source() {
+    // source a file that echoes
+    TestBuilder::new()
+        .file("test.sh", "echo sourced")
+        .command("source test.sh")
+        .assert_stdout("sourced\n")
+        .run()
+        .await;
+
+    // source a file that sets a variable
+    TestBuilder::new()
+        .file("test.sh", "X=from_source")
+        .command("source test.sh && echo $X")
+        .assert_stdout("from_source\n")
+        .run()
+        .await;
+
+    // dot command (alias for source)
+    TestBuilder::new()
+        .file("test.sh", "echo dotted")
+        .command(". test.sh")
+        .assert_stdout("dotted\n")
+        .run()
+        .await;
+
+    // source non-existent file
+    TestBuilder::new()
+        .command("source nonexistent_file.sh")
+        .assert_exit_code(1)
+        .check_stdout(false)
+        .run()
+        .await;
+
+    // source with no args
+    TestBuilder::new()
+        .command("source")
+        .assert_exit_code(2)
+        .check_stdout(false)
+        .run()
+        .await;
+}
+
+#[tokio::test]
+async fn test_local_builtin() {
+    // local should set a shell variable
+    TestBuilder::new()
+        .command("local X=hello && echo $X")
+        .assert_stdout("hello\n")
+        .run()
+        .await;
+
+    // local with multiple vars
+    TestBuilder::new()
+        .command("local A=1 B=2 && echo $A $B")
+        .assert_stdout("1 2\n")
+        .run()
+        .await;
+
+    // local with invalid identifier
+    TestBuilder::new()
+        .command("local 1bad=val")
+        .assert_exit_code(1)
+        .check_stdout(false)
+        .run()
+        .await;
+}
+
+#[tokio::test]
+async fn test_return_builtin() {
+    // return exits with specified code
+    TestBuilder::new()
+        .command("return 0")
+        .assert_exit_code(0)
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("return 42")
+        .assert_exit_code(42)
+        .run()
+        .await;
+
+    // return stops execution (in sourced script context)
+    TestBuilder::new()
+        .file("ret.sh", "echo before\nreturn 5\necho after")
+        .command("source ret.sh")
+        .assert_exit_code(5)
+        .check_stdout(false)
+        .run()
+        .await;
+}
+
+#[tokio::test]
+async fn test_trap_builtin() {
+    // trap -l should list signals
+    TestBuilder::new()
+        .command("trap -l")
+        .assert_exit_code(0)
+        .check_stdout(false)
+        .run()
+        .await;
+
+    // trap with handler and signal
+    TestBuilder::new()
+        .command("trap 'echo caught' INT")
+        .assert_exit_code(0)
+        .run()
+        .await;
+
+    // trap with invalid signal
+    TestBuilder::new()
+        .command("trap 'echo x' INVALIDSIG")
+        .assert_exit_code(1)
+        .check_stdout(false)
+        .run()
+        .await;
+
+    // trap with no args
+    TestBuilder::new()
+        .command("trap")
+        .assert_exit_code(0)
+        .run()
+        .await;
+}
+
+#[tokio::test]
+async fn test_shift_builtin() {
+    // shift without positional params should fail (nothing to shift)
+    TestBuilder::new()
+        .command("shift")
+        .assert_exit_code(1)
+        .check_stdout(false)
+        .run()
+        .await;
+}
+
 #[cfg(test)]
 fn no_such_file_error_text() -> &'static str {
     if cfg!(windows) {

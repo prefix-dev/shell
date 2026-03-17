@@ -5,16 +5,21 @@ mod cat;
 mod cd;
 mod cp_mv;
 mod echo;
+mod eval;
 mod executable;
 mod exit;
 mod export;
 mod head;
+mod local_cmd;
 mod mkdir;
 mod printf;
 mod pwd;
 mod read_cmd;
+mod return_cmd;
 mod rm;
+mod shift;
 mod sleep;
+mod trap;
 mod unset;
 mod xargs;
 
@@ -121,6 +126,26 @@ pub fn builtin_commands() -> HashMap<String, Rc<dyn ShellCommand>> {
         (
             "read".to_string(),
             Rc::new(read_cmd::ReadCommand) as Rc<dyn ShellCommand>,
+        ),
+        (
+            "eval".to_string(),
+            Rc::new(eval::EvalCommand) as Rc<dyn ShellCommand>,
+        ),
+        (
+            "shift".to_string(),
+            Rc::new(shift::ShiftCommand) as Rc<dyn ShellCommand>,
+        ),
+        (
+            "local".to_string(),
+            Rc::new(local_cmd::LocalCommand) as Rc<dyn ShellCommand>,
+        ),
+        (
+            "return".to_string(),
+            Rc::new(return_cmd::ReturnCommand) as Rc<dyn ShellCommand>,
+        ),
+        (
+            "trap".to_string(),
+            Rc::new(trap::TrapCommand) as Rc<dyn ShellCommand>,
         ),
     ])
 }
