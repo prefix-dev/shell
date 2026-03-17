@@ -1698,6 +1698,8 @@ pub enum EvaluateWordTextError {
     NoFilesMatched { pattern: String },
     #[error("Failed to get home directory")]
     FailedToGetHomeDirectory(miette::Error),
+    #[error("{0}")]
+    FailedExpanding(String),
 }
 
 impl EvaluateWordTextError {
@@ -1888,6 +1890,40 @@ fn expand_braces(
     }
 }
 
+/// Generates a numeric range with the given step, handling direction automatically.
+fn generate_range(
+    start: i32,
+    end: i32,
+    step: Option<&i32>,
+) -> Result<Vec<i32>, Error> {
+    let is_reverse = start > end;
+    let mut step_val = step.copied().unwrap_or(if is_reverse { -1 } else { 1 });
+
+    // If step is provided and its sign doesn't match the direction, flip it
+    if step.is_some() && (is_reverse != (step_val < 0)) {
+        step_val = -step_val;
+    }
+
+    if step_val == 0 {
+        return Err(miette!("Invalid step value: 0"));
+    }
+
+    let mut result = Vec::new();
+    let mut current = start;
+    if step_val > 0 {
+        while current <= end {
+            result.push(current);
+            current += step_val;
+        }
+    } else {
+        while current >= end {
+            result.push(current);
+            current += step_val;
+        }
+    }
+    Ok(result)
+}
+
 /// Expands a sequence like {1..10} or {a..z} or {1..10..2}
 fn expand_sequence(
     start: &str,
@@ -1898,76 +1934,56 @@ fn expand_sequence(
     if let (Ok(start_num), Ok(end_num)) =
         (start.parse::<i32>(), end.parse::<i32>())
     {
-        let is_reverse = start_num > end_num;
-        let mut step_val =
-            step.copied().unwrap_or(if is_reverse { -1 } else { 1 });
-
-        // If step is provided and its sign doesn't match the direction, flip it
-        if step.is_some() && (is_reverse != (step_val < 0)) {
-            step_val = -step_val;
-        }
-
-        if step_val == 0 {
-            return Err(miette!("Invalid step value: 0"));
-        }
-
-        let mut result = Vec::new();
-        if step_val > 0 {
-            let mut current = start_num;
-            while current <= end_num {
-                result.push(current.to_string());
-                current += step_val;
-            }
-        } else {
-            let mut current = start_num;
-            while current >= end_num {
-                result.push(current.to_string());
-                current += step_val;
-            }
-        }
-        Ok(result)
+        let values = generate_range(start_num, end_num, step)?;
+        Ok(values.into_iter().map(|v| v.to_string()).collect())
     }
     // Try to parse as single characters
     else if start.len() == 1 && end.len() == 1 {
-        let start_char = start.chars().next().unwrap();
-        let end_char = end.chars().next().unwrap();
-        let is_reverse = start_char > end_char;
-        let mut step_val =
-            step.copied().unwrap_or(if is_reverse { -1 } else { 1 });
-
-        // If step is provided and direction is reverse, negate the step
-        // Or if step is provided and direction is forward, ensure step is positive
-        if step.is_some() && (is_reverse && step_val > 0)
-            || (!is_reverse && step_val < 0)
-        {
-            step_val = -step_val;
-        }
-
-        if step_val == 0 {
-            return Err(miette!("Invalid step value: 0"));
-        }
-
-        let mut result = Vec::new();
-        if step_val > 0 {
-            let mut current = start_char as i32;
-            let end_val = end_char as i32;
-            while current <= end_val {
-                result.push((current as u8 as char).to_string());
-                current += step_val;
-            }
-        } else {
-            let mut current = start_char as i32;
-            let end_val = end_char as i32;
-            while current >= end_val {
-                result.push((current as u8 as char).to_string());
-                current += step_val;
-            }
-        }
-        Ok(result)
+        let start_char = start.chars().next().unwrap() as i32;
+        let end_char = end.chars().next().unwrap() as i32;
+        let values = generate_range(start_char, end_char, step)?;
+        Ok(values
+            .into_iter()
+            .filter_map(|v| char::from_u32(v as u32))
+            .map(|c| c.to_string())
+            .collect())
     } else {
         // If it's not a valid sequence, return it as-is (bash behavior)
         Ok(vec![format!("{{{}..{}}}", start, end)])
     }
+}
+
+/// Pre-processes word parts to expand brace expansions at the word level.
+/// This ensures prefixes and suffixes are correctly combined with each
+/// expanded element (e.g., `pre{a,b}post` → `preapost`, `prebpost`).
+fn expand_brace_word_parts(
+    parts: Vec<WordPart>,
+) -> Result<Vec<Vec<WordPart>>, Error> {
+    let brace_idx = parts
+        .iter()
+        .position(|p| matches!(p, WordPart::BraceExpansion(_)));
+
+    let Some(idx) = brace_idx else {
+        return Ok(vec![parts]);
+    };
+
+    let prefix = &parts[..idx];
+    let suffix = &parts[idx + 1..];
+
+    let WordPart::BraceExpansion(ref expansion) = parts[idx] else {
+        unreachable!()
+    };
+
+    let expanded = expand_braces(expansion)?;
+    let mut result = Vec::new();
+    for element in expanded {
+        let mut word_parts: Vec<WordPart> = prefix.to_vec();
+        word_parts.push(WordPart::Text(element));
+        word_parts.extend(suffix.iter().cloned());
+        // Recursively expand in case there are more brace expansions
+        result.extend(expand_brace_word_parts(word_parts)?);
+    }
+    Ok(result)
 }
 
 fn evaluate_word_parts(
@@ -2196,14 +2212,12 @@ fn evaluate_word_parts(
                                 .push(TextPart::Text(exit_code.to_string()));
                             continue;
                         }
-                        WordPart::BraceExpansion(brace_expansion) => {
-                            let expanded = expand_braces(&brace_expansion)?;
-                            Ok(Some(Text::new(
-                                expanded
-                                    .into_iter()
-                                    .map(TextPart::Text)
-                                    .collect(),
-                            )))
+                        WordPart::BraceExpansion(_) => {
+                            // Brace expansions are handled at the word level
+                            // in evaluate_word_parts before this function is called.
+                            unreachable!(
+                                "BraceExpansion should be expanded before evaluation"
+                            )
                         }
                     };
 
@@ -2254,14 +2268,47 @@ fn evaluate_word_parts(
         .boxed_local()
     }
 
-    evaluate_word_parts_inner(
-        parts,
-        IsQuoted::No,
-        eval_glob,
-        state,
-        stdin,
-        stderr,
-    )
+    // Expand brace expansions at the word level first, so that
+    // prefixes/suffixes combine correctly with each expanded element.
+    let expanded_words = match expand_brace_word_parts(parts) {
+        Ok(words) => words,
+        Err(e) => {
+            return async move {
+                Err(EvaluateWordTextError::FailedExpanding(e.to_string()))
+            }
+            .boxed_local()
+        }
+    };
+
+    if expanded_words.len() <= 1 {
+        let word_parts = expanded_words.into_iter().next().unwrap_or_default();
+        evaluate_word_parts_inner(
+            word_parts,
+            IsQuoted::No,
+            eval_glob,
+            state,
+            stdin,
+            stderr,
+        )
+    } else {
+        async move {
+            let mut result = WordPartsResult::new(Vec::new(), Vec::new());
+            for word_parts in expanded_words {
+                let word_result = evaluate_word_parts_inner(
+                    word_parts,
+                    IsQuoted::No,
+                    eval_glob,
+                    state,
+                    stdin.clone(),
+                    stderr.clone(),
+                )
+                .await?;
+                result.extend(word_result);
+            }
+            Ok(result)
+        }
+        .boxed_local()
+    }
 }
 
 async fn evaluate_command_substitution(
