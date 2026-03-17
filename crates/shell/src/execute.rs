@@ -15,17 +15,20 @@ pub async fn execute_inner(
     let stdout = ShellPipeWriter::stdout();
     let stdin = ShellPipeReader::stdin();
 
-    if let Err(e) = list {
-        if let Some(filename) = &filename {
-            stderr.write_all(format!("Filename: {:?}\n", filename).as_bytes())?;
+    let list = match list {
+        Ok(list) => list,
+        Err(e) => {
+            if let Some(filename) = &filename {
+                stderr.write_all(format!("Filename: {:?}\n", filename).as_bytes())?;
+            }
+            stderr.write_all(format!("Syntax error: {:?}", e).as_bytes())?;
+            return Ok(ExecuteResult::Exit(1, vec![], vec![]));
         }
-        stderr.write_all(format!("Syntax error: {:?}", e).as_bytes())?;
-        return Ok(ExecuteResult::Exit(1, vec![], vec![]));
-    }
+    };
 
     // spawn a sequential list and pipe its output to the environment
     let result = execute_sequential_list(
-        list.unwrap(),
+        list,
         state,
         stdin,
         stdout,

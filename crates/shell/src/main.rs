@@ -65,7 +65,9 @@ async fn init_state(norc: bool, var_args: &[String]) -> miette::Result<ShellStat
         current_exe.to_string_lossy().to_string(),
     );
 
-    let cwd = std::env::current_dir().unwrap();
+    let cwd = std::env::current_dir()
+        .into_diagnostic()
+        .context("Failed to get current working directory")?;
     let mut state =
         ShellState::new(env_vars, &cwd, commands::get_commands()).with_shell_vars(shell_vars);
 
@@ -174,7 +176,9 @@ async fn interactive(state: Option<ShellState>, norc: bool, args: &[String]) -> 
             display_cwd = format!("\x1b[34m{display_cwd}\x1b[0m");
             git_branch = format!("\x1b[32m{git_branch}\x1b[0m");
             let color_prompt = replace_placeholders(ps1, &display_cwd, &git_branch);
-            rl.helper_mut().unwrap().colored_prompt = color_prompt;
+            if let Some(helper) = rl.helper_mut() {
+                helper.colored_prompt = color_prompt;
+            }
             rl.readline(&prompt)
         };
 
@@ -257,6 +261,8 @@ fn get_script_content(
             Ok((content, Some(path.display().to_string())))
         }
         (_, Some(cmd)) => Ok((cmd, None)),
-        (None, None) => unreachable!(),
+        (None, None) => Err(miette::miette!(
+            "Either a script file or command must be provided"
+        )),
     }
 }

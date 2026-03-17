@@ -77,9 +77,9 @@ FILE_NAME_PENDING_WORD = ${
     ))+
 }
 
-UNQUOTED_ESCAPE_CHAR = ${ ("\\" ~ "$" | "$" ~ !"(" ~  !"{" ~ !VARIABLE) | "\\" ~ (" " | "`" | "\"" | "(" | ")") }
-QUOTED_ESCAPE_CHAR = ${ "\\" ~ "$" | "$" ~ !"(" ~ !"{" ~ !(ASCII_DIGIT | VARIABLE) | "\\" ~ ("`" | "\"" | "(" | ")" | "'") }
-PARAMETER_ESCAPE_CHAR = ${ "\\" ~ "$" | "$" ~ !"(" ~ !"{" ~ !VARIABLE | "\\" ~ "}" }
+UNQUOTED_ESCAPE_CHAR = ${ ("\\" ~ "$" | "$" ~ !"(" ~  !"{" ~ !VARIABLE ~ !SPECIAL_PARAM) | "\\" ~ (" " | "`" | "\"" | "(" | ")") }
+QUOTED_ESCAPE_CHAR = ${ "\\" ~ "$" | "$" ~ !"(" ~ !"{" ~ !VARIABLE ~ !SPECIAL_PARAM | "\\" ~ ("`" | "\"" | "(" | ")" | "'") }
+PARAMETER_ESCAPE_CHAR = ${ "\\" ~ "$" | "$" ~ !"(" ~ !"{" ~ !VARIABLE ~ !SPECIAL_PARAM | "\\" ~ "}" }
 
 UNQUOTED_CHAR = ${ ("\\" ~ " ") | !("]]" | "[[" | "(" | ")" | "<" | ">" | "|" | "&" | ";" | "\"" | "'" | "$") ~ ANY }
 QUOTED_CHAR = ${ !"\"" ~ ANY }
@@ -212,8 +212,8 @@ pipe_sequence = !{ command ~ ((StdoutStderr | Stdout) ~ linebreak ~ pipe_sequenc
 
 command = !{
     compound_command ~ redirect_list? |
-    simple_command |
-    function_definition
+    function_definition |
+    simple_command
 }
 
 compound_command = {
@@ -268,26 +268,32 @@ bitwise_or = { "|" }
 logical_and = { "&&" }
 logical_or = { "||" }
 
-unary_arithmetic_expr = !{
-    (unary_arithmetic_op | post_arithmetic_op) ~ (parentheses_expr | VARIABLE | NUMBER) |
-    (parentheses_expr | VARIABLE | NUMBER) ~ post_arithmetic_op
-}
-
-unary_arithmetic_op = _{
-    unary_plus | unary_minus | logical_not | bitwise_not
-}
-
 unary_plus = { "+" }
 unary_minus = { "-" }
 logical_not = { "!" }
 bitwise_not = { "~" }
+increment = { "++" }
+decrement = { "--" }
+
+unary_arithmetic_expr = !{
+    unary_pre_arithmetic_expr | unary_post_arithmetic_expr
+}
+
+unary_pre_arithmetic_expr = !{
+    pre_arithmetic_op ~ (parentheses_expr | VARIABLE | NUMBER)
+}
+
+unary_post_arithmetic_expr = !{
+    (parentheses_expr | VARIABLE | NUMBER) ~ post_arithmetic_op
+}
+
+pre_arithmetic_op= !{
+    increment | decrement | unary_plus | unary_minus | logical_not | bitwise_not
+}
 
 post_arithmetic_op = !{
     increment | decrement
 }
-
-increment = { "++" }
-decrement = { "--" }
 
 assignment_operator = _{
     assign | multiply_assign | divide_assign | modulo_assign | add_assign | subtract_assign |
@@ -367,8 +373,8 @@ unary_conditional_expression = !{
 }
 
 file_conditional_op = !{
-    "-a" | "-b" | "-c" | "-d" | "-e" | "-f" | "-g" | "-h" | "-k" | 
-    "-p" | "-r" | "-s" | "-u" | "-w" | "-x" | "-G" | "-L" | 
+    "-a" | "-b" | "-c" | "-d" | "-e" | "-f" | "-g" | "-h" | "-k" |
+    "-p" | "-r" | "-s" | "-t" | "-u" | "-w" | "-x" | "-G" | "-L" |
     "-N" | "-O" | "-S"
 }
 

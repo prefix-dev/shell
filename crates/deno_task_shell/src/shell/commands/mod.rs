@@ -5,14 +5,21 @@ mod cat;
 mod cd;
 mod cp_mv;
 mod echo;
+mod eval;
 mod executable;
 mod exit;
 mod export;
 mod head;
+mod local_cmd;
 mod mkdir;
+mod printf;
 mod pwd;
+mod read_cmd;
+mod return_cmd;
 mod rm;
+mod shift;
 mod sleep;
+mod trap;
 mod unset;
 mod xargs;
 
@@ -31,6 +38,8 @@ use super::types::FutureExecuteResult;
 use super::types::ShellPipeReader;
 use super::types::ShellPipeWriter;
 use super::types::ShellState;
+use super::types::BREAK_EXIT_CODE;
+use super::types::CONTINUE_EXIT_CODE;
 
 pub fn builtin_commands() -> HashMap<String, Rc<dyn ShellCommand>> {
     HashMap::from([
@@ -98,6 +107,46 @@ pub fn builtin_commands() -> HashMap<String, Rc<dyn ShellCommand>> {
             "xargs".to_string(),
             Rc::new(xargs::XargsCommand) as Rc<dyn ShellCommand>,
         ),
+        (
+            "break".to_string(),
+            Rc::new(BreakCommand) as Rc<dyn ShellCommand>,
+        ),
+        (
+            "continue".to_string(),
+            Rc::new(ContinueCommand) as Rc<dyn ShellCommand>,
+        ),
+        (
+            ":".to_string(),
+            Rc::new(ExitCodeCommand(0)) as Rc<dyn ShellCommand>,
+        ),
+        (
+            "printf".to_string(),
+            Rc::new(printf::PrintfCommand) as Rc<dyn ShellCommand>,
+        ),
+        (
+            "read".to_string(),
+            Rc::new(read_cmd::ReadCommand) as Rc<dyn ShellCommand>,
+        ),
+        (
+            "eval".to_string(),
+            Rc::new(eval::EvalCommand) as Rc<dyn ShellCommand>,
+        ),
+        (
+            "shift".to_string(),
+            Rc::new(shift::ShiftCommand) as Rc<dyn ShellCommand>,
+        ),
+        (
+            "local".to_string(),
+            Rc::new(local_cmd::LocalCommand) as Rc<dyn ShellCommand>,
+        ),
+        (
+            "return".to_string(),
+            Rc::new(return_cmd::ReturnCommand) as Rc<dyn ShellCommand>,
+        ),
+        (
+            "trap".to_string(),
+            Rc::new(trap::TrapCommand) as Rc<dyn ShellCommand>,
+        ),
     ])
 }
 
@@ -151,6 +200,36 @@ impl ShellCommand for ExitCodeCommand {
         // ignores additional arguments
         Box::pin(futures::future::ready(ExecuteResult::from_exit_code(
             self.0,
+        )))
+    }
+}
+
+struct BreakCommand;
+
+impl ShellCommand for BreakCommand {
+    fn execute(
+        &self,
+        _context: ShellCommandContext,
+    ) -> LocalBoxFuture<'static, ExecuteResult> {
+        Box::pin(futures::future::ready(ExecuteResult::Exit(
+            BREAK_EXIT_CODE,
+            Vec::new(),
+            Vec::new(),
+        )))
+    }
+}
+
+struct ContinueCommand;
+
+impl ShellCommand for ContinueCommand {
+    fn execute(
+        &self,
+        _context: ShellCommandContext,
+    ) -> LocalBoxFuture<'static, ExecuteResult> {
+        Box::pin(futures::future::ready(ExecuteResult::Exit(
+            CONTINUE_EXIT_CODE,
+            Vec::new(),
+            Vec::new(),
         )))
     }
 }

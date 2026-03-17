@@ -15,12 +15,17 @@ use std::rc::Rc;
 use std::str::FromStr;
 
 use futures::future::LocalBoxFuture;
+use miette::miette;
 use miette::Error;
 use miette::IntoDiagnostic;
 use miette::Result;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
+use crate::parser::ArithmeticPart;
+use crate::parser::PostArithmeticOp;
+use crate::parser::PreArithmeticOp;
+use crate::parser::UnaryArithmeticOp;
 use crate::shell::fs_util;
 
 use super::commands::builtin_commands;
@@ -52,6 +57,8 @@ pub struct ShellState {
     last_command_exit_code: i32, // Exit code of the last command
     // The shell options to be modified using `set` command
     shell_options: HashMap<ShellOptions, bool>,
+    /// Shell functions defined with `name() { ... }`
+    functions: HashMap<String, crate::parser::SequentialList>,
 }
 
 #[allow(clippy::print_stdout)]
@@ -92,6 +99,7 @@ impl ShellState {
                 map.insert(ShellOptions::ExitOnError, true);
                 map
             },
+            functions: Default::default(),
         };
         // ensure the data is normalized
         for (name, value) in env_vars {
@@ -262,6 +270,11 @@ impl ShellState {
                 self.apply_env_var(name, value)
             }
             EnvChange::SetShellVar(name, value) => {
+                if name == "?" {
+                    if let Ok(code) = value.parse::<i32>() {
+                        self.last_command_exit_code = code;
+                    }
+                }
                 if self.env_vars.contains_key(name) {
                     self.apply_env_var(name, value);
                 } else {
@@ -293,10 +306,18 @@ impl ShellState {
             EnvChange::SetShellOptions(option, value) => {
                 self.set_shell_option(*option, *value);
             }
+            EnvChange::DefineFunction(name, body) => {
+                self.functions.insert(name.clone(), body.clone());
+            }
         }
     }
 
     pub fn set_shell_var(&mut self, name: &str, value: &str) {
+        if name == "?" {
+            if let Ok(code) = value.parse::<i32>() {
+                self.last_command_exit_code = code;
+            }
+        }
         self.shell_vars.insert(name.to_string(), value.to_string());
     }
 
@@ -353,9 +374,17 @@ impl ShellState {
     pub fn reset_cancellation_token(&mut self) {
         self.token = CancellationToken::default();
     }
+
+    /// Look up a shell function by name.
+    pub fn get_function(
+        &self,
+        name: &str,
+    ) -> Option<&crate::parser::SequentialList> {
+        self.functions.get(name)
+    }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, PartialOrd)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum EnvChange {
     /// `export ENV_VAR=VALUE`
     SetEnvVar(String, String),
@@ -371,6 +400,43 @@ pub enum EnvChange {
     Cd(PathBuf),
     /// `set -ex`
     SetShellOptions(ShellOptions, bool),
+    /// Define a shell function
+    DefineFunction(String, crate::parser::SequentialList),
+}
+
+impl PartialOrd for EnvChange {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        // Simple discriminant-based ordering; DefineFunction compares by name only
+        match (self, other) {
+            (EnvChange::SetEnvVar(a1, a2), EnvChange::SetEnvVar(b1, b2)) => {
+                (a1, a2).partial_cmp(&(b1, b2))
+            }
+            (
+                EnvChange::SetShellVar(a1, a2),
+                EnvChange::SetShellVar(b1, b2),
+            ) => (a1, a2).partial_cmp(&(b1, b2)),
+            (
+                EnvChange::AliasCommand(a1, a2),
+                EnvChange::AliasCommand(b1, b2),
+            ) => (a1, a2).partial_cmp(&(b1, b2)),
+            (EnvChange::UnAliasCommand(a), EnvChange::UnAliasCommand(b)) => {
+                a.partial_cmp(b)
+            }
+            (EnvChange::UnsetVar(a), EnvChange::UnsetVar(b)) => {
+                a.partial_cmp(b)
+            }
+            (EnvChange::Cd(a), EnvChange::Cd(b)) => a.partial_cmp(b),
+            (
+                EnvChange::SetShellOptions(a1, a2),
+                EnvChange::SetShellOptions(b1, b2),
+            ) => (a1, a2).partial_cmp(&(b1, b2)),
+            (
+                EnvChange::DefineFunction(a, _),
+                EnvChange::DefineFunction(b, _),
+            ) => a.partial_cmp(b),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Debug, PartialOrd)]
@@ -386,6 +452,13 @@ pub type FutureExecuteResult = LocalBoxFuture<'static, ExecuteResult>;
 // https://unix.stackexchange.com/a/99117
 // SIGINT (2) + 128
 pub const CANCELLATION_EXIT_CODE: i32 = 130;
+
+// Internal sentinel exit codes for loop control flow.
+// These are used to signal break/continue through ExecuteResult::Exit
+// and are caught by loop execution functions.
+pub const BREAK_EXIT_CODE: i32 = -100;
+pub const CONTINUE_EXIT_CODE: i32 = -101;
+pub const RETURN_EXIT_CODE: i32 = -102;
 
 #[derive(Debug)]
 pub enum ExecuteResult {
@@ -690,6 +763,179 @@ impl ArithmeticResult {
         self.value = value;
     }
 
+    pub fn unary_op(
+        &self,
+        operand: &ArithmeticPart,
+        op: UnaryArithmeticOp,
+    ) -> Result<ArithmeticResult, Error> {
+        match op {
+            UnaryArithmeticOp::Post(op_type) => match &self.value {
+                ArithmeticValue::Integer(val) => match operand {
+                    ArithmeticPart::Variable(name) => {
+                        let mut new_changes = self.changes.clone();
+                        new_changes.push(EnvChange::SetShellVar(
+                            name.to_string(),
+                            match op_type {
+                                PostArithmeticOp::Increment => {
+                                    (*val + 1).to_string()
+                                }
+                                PostArithmeticOp::Decrement => {
+                                    (*val - 1).to_string()
+                                }
+                            },
+                        ));
+                        Ok(ArithmeticResult {
+                            value: ArithmeticValue::Integer(*val),
+                            changes: new_changes,
+                        })
+                    }
+                    _ => Err(miette!(
+                        "Invalid arithmetic result type for post-increment: {}",
+                        self
+                    )),
+                },
+                ArithmeticValue::Float(val) => match operand {
+                    ArithmeticPart::Variable(name) => {
+                        let mut new_changes = self.changes.clone();
+                        new_changes.push(EnvChange::SetShellVar(
+                            name.to_string(),
+                            match op_type {
+                                PostArithmeticOp::Increment => {
+                                    (*val + 1.0).to_string()
+                                }
+                                PostArithmeticOp::Decrement => {
+                                    (*val - 1.0).to_string()
+                                }
+                            },
+                        ));
+                        Ok(ArithmeticResult {
+                            value: ArithmeticValue::Float(*val),
+                            changes: new_changes,
+                        })
+                    }
+                    _ => Err(miette!(
+                        "Invalid arithmetic result type for post-increment: {}",
+                        self
+                    )),
+                },
+            },
+            UnaryArithmeticOp::Pre(op_type) => match &self.value {
+                ArithmeticValue::Integer(val) => match operand {
+                    ArithmeticPart::Variable(name) => {
+                        let mut new_changes = self.changes.clone();
+                        if op_type == PreArithmeticOp::Increment
+                            || op_type == PreArithmeticOp::Decrement
+                        {
+                            new_changes.push(EnvChange::SetShellVar(
+                                name.to_string(),
+                                match op_type {
+                                    PreArithmeticOp::Increment => {
+                                        (*val + 1).to_string()
+                                    }
+                                    PreArithmeticOp::Decrement => {
+                                        (*val - 1).to_string()
+                                    }
+                                    _ => Err(miette!(
+                                        "No change to ENV need for: {}",
+                                        self
+                                    ))?,
+                                },
+                            ));
+                        }
+
+                        Ok(ArithmeticResult {
+                            value: match op_type {
+                                PreArithmeticOp::Increment => {
+                                    ArithmeticValue::Integer(*val + 1)
+                                }
+                                PreArithmeticOp::Decrement => {
+                                    ArithmeticValue::Integer(*val - 1)
+                                }
+                                PreArithmeticOp::Plus => {
+                                    ArithmeticValue::Integer((*val).abs())
+                                }
+                                PreArithmeticOp::Minus => {
+                                    ArithmeticValue::Integer(-(*val).abs())
+                                }
+                                PreArithmeticOp::BitwiseNot => {
+                                    ArithmeticValue::Integer(!*val)
+                                }
+                                PreArithmeticOp::LogicalNot => {
+                                    ArithmeticValue::Integer(if *val == 0 {
+                                        1
+                                    } else {
+                                        0
+                                    })
+                                }
+                            },
+                            changes: new_changes,
+                        })
+                    }
+                    _ => Err(miette!(
+                        "Invalid arithmetic result type for pre-increment: {}",
+                        self
+                    )),
+                },
+                ArithmeticValue::Float(val) => match operand {
+                    ArithmeticPart::Variable(name) => {
+                        let mut new_changes = self.changes.clone();
+                        if op_type == PreArithmeticOp::Increment
+                            || op_type == PreArithmeticOp::Decrement
+                        {
+                            new_changes.push(EnvChange::SetShellVar(
+                                name.to_string(),
+                                match op_type {
+                                    PreArithmeticOp::Increment => {
+                                        (*val + 1.0).to_string()
+                                    }
+                                    PreArithmeticOp::Decrement => {
+                                        (*val - 1.0).to_string()
+                                    }
+                                    _ => Err(miette!(
+                                        "No change to ENV need for: {}",
+                                        self
+                                    ))?,
+                                },
+                            ));
+                        }
+
+                        Ok(ArithmeticResult {
+                            value: match op_type {
+                                PreArithmeticOp::Increment => {
+                                    ArithmeticValue::Float(*val + 1.0)
+                                }
+                                PreArithmeticOp::Decrement => {
+                                    ArithmeticValue::Float(*val - 1.0)
+                                }
+                                PreArithmeticOp::Plus => {
+                                    ArithmeticValue::Float((*val).abs())
+                                }
+                                PreArithmeticOp::Minus => {
+                                    ArithmeticValue::Float(-(*val).abs())
+                                }
+                                PreArithmeticOp::BitwiseNot => {
+                                    ArithmeticValue::Integer(!(*val as i64))
+                                }
+                                PreArithmeticOp::LogicalNot => {
+                                    ArithmeticValue::Float(if *val == 0.0 {
+                                        1.0
+                                    } else {
+                                        0.0
+                                    })
+                                }
+                            },
+                            changes: new_changes,
+                        })
+                    }
+                    _ => Err(miette!(
+                        "Invalid arithmetic result type for pre-increment: {}",
+                        self
+                    )),
+                },
+            },
+        }
+    }
+
     pub fn checked_add(
         &self,
         other: &ArithmeticResult,
@@ -991,45 +1237,6 @@ impl ArithmeticResult {
         })
     }
 
-    pub fn checked_neg(&self) -> Result<ArithmeticResult, Error> {
-        let result = match &self.value {
-            ArithmeticValue::Integer(val) => val
-                .checked_neg()
-                .map(ArithmeticValue::Integer)
-                .ok_or_else(|| miette::miette!("Integer overflow: -{}", val))?,
-            ArithmeticValue::Float(val) => {
-                let result = -val;
-                if result.is_finite() {
-                    ArithmeticValue::Float(result)
-                } else {
-                    miette::bail!("Float overflow: -{}", val);
-                }
-            }
-        };
-
-        Ok(ArithmeticResult {
-            value: result,
-            changes: self.changes.clone(),
-        })
-    }
-
-    pub fn checked_not(&self) -> Result<ArithmeticResult, Error> {
-        let result = match &self.value {
-            ArithmeticValue::Integer(val) => ArithmeticValue::Integer(!val),
-            ArithmeticValue::Float(_) => {
-                return Err(miette::miette!(
-                    "Invalid arithmetic result type for bitwise NOT: {}",
-                    self
-                ))
-            }
-        };
-
-        Ok(ArithmeticResult {
-            value: result,
-            changes: self.changes.clone(),
-        })
-    }
-
     pub fn checked_shl(
         &self,
         other: &ArithmeticResult,
@@ -1190,7 +1397,8 @@ impl From<String> for ArithmeticResult {
         } else if let Ok(float_val) = value.parse::<f64>() {
             ArithmeticResult::new(ArithmeticValue::Float(float_val))
         } else {
-            panic!("Invalid arithmetic result: {}", value);
+            // Treat unrecognized values as 0 (bash behavior for unset/non-numeric variables)
+            ArithmeticResult::new(ArithmeticValue::Integer(0))
         }
     }
 }

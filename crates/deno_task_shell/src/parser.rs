@@ -170,6 +170,8 @@ pub enum CommandInner {
     Case(CaseClause),
     #[error("Invalid arithmetic expression")]
     ArithmeticExpression(Arithmetic),
+    #[error("Invalid function definition")]
+    Function(FunctionDefinition),
 }
 
 impl From<Command> for Sequence {
@@ -236,6 +238,15 @@ pub struct IfClause {
 pub struct CaseClause {
     pub word: Word,
     pub cases: Vec<(Vec<Word>, SequentialList)>,
+}
+
+#[cfg_attr(feature = "serialization", derive(serde::Serialize))]
+#[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
+#[derive(Debug, PartialEq, Eq, Clone, Error)]
+#[error("Invalid function definition")]
+pub struct FunctionDefinition {
+    pub name: String,
+    pub body: SequentialList,
 }
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
@@ -499,11 +510,6 @@ pub enum ArithmeticPart {
         operator: UnaryArithmeticOp,
         operand: Box<ArithmeticPart>,
     },
-    #[error("Invalid post arithmetic expression")]
-    PostArithmeticExpr {
-        operand: Box<ArithmeticPart>,
-        operator: PostArithmeticOp,
-    },
     #[error("Invalid variable")]
     Variable(String),
     #[error("Invalid number")]
@@ -549,7 +555,9 @@ pub enum AssignmentOp {
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
 #[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
 #[derive(Debug, Clone, PartialEq, Eq, Copy)]
-pub enum UnaryArithmeticOp {
+pub enum PreArithmeticOp {
+    Increment,  // ++
+    Decrement,  // --
     Plus,       // +
     Minus,      // -
     LogicalNot, // !
@@ -558,10 +566,18 @@ pub enum UnaryArithmeticOp {
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
 #[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Copy)]
 pub enum PostArithmeticOp {
     Increment, // ++
     Decrement, // --
+}
+
+#[cfg_attr(feature = "serialization", derive(serde::Serialize))]
+#[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
+#[derive(Debug, Clone, PartialEq, Eq, Copy)]
+pub enum UnaryArithmeticOp {
+    Pre(PreArithmeticOp),
+    Post(PostArithmeticOp),
 }
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
@@ -676,11 +692,16 @@ pub fn parse(input: &str) -> Result<SequentialList> {
         miette::Error::new(e.into_miette()).context("Failed to parse input")
     })?;
 
-    parse_file(pairs.next().unwrap())
+    parse_file(pairs.next().ok_or_else(|| miette!("Empty parse result"))?)
 }
 
 fn parse_file(pairs: Pair<Rule>) -> Result<SequentialList> {
-    parse_complete_command(pairs.into_inner().next().unwrap())
+    parse_complete_command(
+        pairs
+            .into_inner()
+            .next()
+            .ok_or_else(|| miette!("Expected complete command"))?,
+    )
 }
 
 fn parse_complete_command(pair: Pair<Rule>) -> Result<SequentialList> {
@@ -794,11 +815,15 @@ fn parse_term(
 fn parse_and_or(pair: Pair<Rule>) -> Result<Sequence> {
     assert!(pair.as_rule() == Rule::and_or);
     let mut items = pair.into_inner();
-    let first_item = items.next().unwrap();
+    let first_item = items
+        .next()
+        .ok_or_else(|| miette!("Expected item in and_or list"))?;
     let mut current = match first_item.as_rule() {
         Rule::ASSIGNMENT_WORD => parse_shell_var(first_item)?,
         Rule::pipeline => parse_pipeline(first_item)?,
-        _ => unreachable!(),
+        rule => {
+            return Err(miette!("Unexpected rule in and_or list: {:?}", rule))
+        }
     };
 
     match items.next() {
@@ -811,10 +836,17 @@ fn parse_and_or(pair: Pair<Rule>) -> Result<Sequence> {
                 let op = match next_item.as_str() {
                     "&&" => BooleanListOperator::And,
                     "||" => BooleanListOperator::Or,
-                    _ => unreachable!(),
+                    other => {
+                        return Err(miette!(
+                            "Expected '&&' or '||', got '{}'",
+                            other
+                        ))
+                    }
                 };
 
-                let next_item = items.next().unwrap();
+                let next_item = items.next().ok_or_else(|| {
+                    miette!("Expected expression after boolean operator")
+                })?;
                 let next = parse_and_or(next_item)?;
                 current = Sequence::BooleanList(Box::new(BooleanList {
                     current,
@@ -925,9 +957,7 @@ fn parse_command(pair: Pair<Rule>) -> Result<Command> {
     match inner.as_rule() {
         Rule::simple_command => parse_simple_command(inner),
         Rule::compound_command => parse_compound_command(inner),
-        Rule::function_definition => {
-            Err(miette!("Function definitions are not supported yet"))
-        }
+        Rule::function_definition => parse_function_definition(inner),
         _ => Err(miette!("Unexpected rule in command: {:?}", inner.as_rule())),
     }
 }
@@ -1025,7 +1055,7 @@ fn parse_for_loop(pairs: Pair<Rule>) -> Result<ForLoop> {
 
     let wordlist = match inner.next() {
         Some(wordlist_pair) => parse_wordlist(wordlist_pair)?,
-        None => panic!("Expected wordlist in for loop"),
+        None => return Err(miette!("Expected wordlist in for loop")),
     };
 
     let body_pair = inner
@@ -1063,9 +1093,7 @@ fn parse_while_loop(pair: Pair<Rule>, is_until: bool) -> Result<WhileLoop> {
 fn parse_compound_command(pair: Pair<Rule>) -> Result<Command> {
     let inner = pair.into_inner().next().unwrap();
     match inner.as_rule() {
-        Rule::brace_group => {
-            Err(miette!("Unsupported compound command brace_group"))
-        }
+        Rule::brace_group => parse_brace_group(inner),
         Rule::subshell => parse_subshell(inner),
         Rule::for_clause => {
             let for_loop = parse_for_loop(inner);
@@ -1129,6 +1157,65 @@ fn parse_subshell(pair: Pair<Rule>) -> Result<Command> {
     } else {
         Err(miette!("Unexpected end of input in subshell"))
     }
+}
+
+fn parse_brace_group(pair: Pair<Rule>) -> Result<Command> {
+    let mut items = Vec::new();
+    for inner in pair.into_inner() {
+        if inner.as_rule() == Rule::compound_list {
+            parse_compound_list(inner, &mut items)?;
+        }
+    }
+    Ok(Command {
+        inner: CommandInner::Subshell(Box::new(SequentialList { items })),
+        redirect: None,
+    })
+}
+
+fn parse_function_definition(pair: Pair<Rule>) -> Result<Command> {
+    let mut inner = pair.into_inner();
+    let fname = inner
+        .next()
+        .ok_or_else(|| miette!("Expected function name"))?;
+    let name = fname.as_str().to_string();
+
+    // Skip linebreak tokens, find function_body
+    let function_body = inner
+        .find(|p| p.as_rule() == Rule::function_body)
+        .ok_or_else(|| miette!("Expected function body"))?;
+
+    // function_body = compound_command ~ redirect_list?
+    let compound_command = function_body
+        .into_inner()
+        .next()
+        .ok_or_else(|| miette!("Expected compound command in function body"))?;
+
+    // Parse the compound command (usually a brace_group)
+    let body_inner = compound_command.into_inner().next().unwrap();
+    let mut items = Vec::new();
+    match body_inner.as_rule() {
+        Rule::brace_group => {
+            for inner in body_inner.into_inner() {
+                if inner.as_rule() == Rule::compound_list {
+                    parse_compound_list(inner, &mut items)?;
+                }
+            }
+        }
+        _ => {
+            return Err(miette!(
+                "Unsupported function body type: {:?}",
+                body_inner.as_rule()
+            ));
+        }
+    }
+
+    Ok(Command {
+        inner: CommandInner::Function(FunctionDefinition {
+            name,
+            body: SequentialList { items },
+        }),
+        redirect: None,
+    })
 }
 
 fn parse_if_clause(pair: Pair<Rule>) -> Result<IfClause> {
@@ -1280,7 +1367,7 @@ fn parse_unary_conditional_expression(pair: Pair<Rule>) -> Result<Condition> {
             }
         },
         Rule::file_conditional_op => match operator.as_str() {
-            "-a" => UnaryOp::FileExists,
+            "-a" | "-e" => UnaryOp::FileExists,
             "-b" => UnaryOp::BlockSpecial,
             "-c" => UnaryOp::CharSpecial,
             "-d" => UnaryOp::Directory,
@@ -1291,6 +1378,7 @@ fn parse_unary_conditional_expression(pair: Pair<Rule>) -> Result<Condition> {
             "-p" => UnaryOp::NamedPipe,
             "-r" => UnaryOp::Readable,
             "-s" => UnaryOp::SizeNonZero,
+            "-t" => UnaryOp::TerminalFd,
             "-u" => UnaryOp::SetUserId,
             "-w" => UnaryOp::Writable,
             "-x" => UnaryOp::Executable,
@@ -1727,56 +1815,151 @@ fn parse_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
 
 fn parse_unary_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
     let mut inner = pair.into_inner();
-    let first = inner.next().unwrap();
+    let first = inner
+        .next()
+        .ok_or_else(|| miette!("Expected unary operator"))?;
 
     match first.as_rule() {
-        Rule::unary_arithmetic_op => {
-            let op = parse_unary_arithmetic_op(first)?;
-            let operand = parse_arithmetic_expr(inner.next().unwrap())?;
+        Rule::unary_pre_arithmetic_expr => unary_pre_arithmetic_expr(first),
+        Rule::unary_post_arithmetic_expr => unary_post_arithmetic_expr(first),
+        _ => Err(miette!(
+            "Unexpected rule in unary arithmetic expression: {:?}",
+            first.as_rule()
+        )),
+    }
+}
+
+fn unary_pre_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
+    let mut inner = pair.into_inner();
+    let first = inner
+        .next()
+        .ok_or_else(|| miette!("Expected unary pre operator"))?;
+    let second = inner.next().ok_or_else(|| miette!("Expected operand"))?;
+    let operand = match second.as_rule() {
+        Rule::parentheses_expr => {
+            let inner = second
+                .into_inner()
+                .next()
+                .ok_or_else(|| miette!("Expected expression in parentheses"))?;
+            let parts = parse_arithmetic_sequence(inner)?;
+            Ok(ArithmeticPart::ParenthesesExpr(Box::new(Arithmetic {
+                parts,
+            })))
+        }
+        Rule::VARIABLE => {
+            Ok(ArithmeticPart::Variable(second.as_str().to_string()))
+        }
+        Rule::NUMBER => Ok(ArithmeticPart::Number(second.as_str().to_string())),
+        _ => Err(miette!(
+            "Unexpected rule in arithmetic expression: {:?}",
+            second.as_rule()
+        )),
+    }?;
+
+    match first.as_rule() {
+        Rule::pre_arithmetic_op => {
+            let op = parse_pre_arithmetic_op(first)?;
+            // Validate that increment/decrement are only applied to variables or expressions
+            if matches!(
+                op,
+                PreArithmeticOp::Increment | PreArithmeticOp::Decrement
+            ) && matches!(operand, ArithmeticPart::Number(_))
+            {
+                return Err(miette!(
+            "Increment/decrement operators cannot be applied to literal numbers"
+          ));
+            }
             Ok(ArithmeticPart::UnaryArithmeticExpr {
-                operator: op,
+                operator: UnaryArithmeticOp::Pre(op),
                 operand: Box::new(operand),
             })
         }
         Rule::post_arithmetic_op => {
-            let operand = parse_arithmetic_expr(inner.next().unwrap())?;
             let op = parse_post_arithmetic_op(first)?;
-            Ok(ArithmeticPart::PostArithmeticExpr {
+            Ok(ArithmeticPart::UnaryArithmeticExpr {
+                operator: UnaryArithmeticOp::Post(op),
                 operand: Box::new(operand),
-                operator: op,
             })
         }
-        _ => {
-            let operand = parse_arithmetic_expr(first)?;
-            let op = parse_post_arithmetic_op(inner.next().unwrap())?;
-            Ok(ArithmeticPart::PostArithmeticExpr {
-                operand: Box::new(operand),
-                operator: op,
-            })
-        }
+        _ => Err(miette!(
+            "Unexpected rule in unary arithmetic operator: {:?}",
+            first.as_rule()
+        )),
     }
 }
 
-fn parse_unary_arithmetic_op(pair: Pair<Rule>) -> Result<UnaryArithmeticOp> {
-    match pair.as_str() {
-        "+" => Ok(UnaryArithmeticOp::Plus),
-        "-" => Ok(UnaryArithmeticOp::Minus),
-        "!" => Ok(UnaryArithmeticOp::LogicalNot),
-        "~" => Ok(UnaryArithmeticOp::BitwiseNot),
+fn unary_post_arithmetic_expr(pair: Pair<Rule>) -> Result<ArithmeticPart> {
+    let mut inner = pair.into_inner();
+    let first = inner
+        .next()
+        .ok_or_else(|| miette!("Expected unary post operator"))?;
+    let second = inner.next().ok_or_else(|| miette!("Expected operand"))?;
+
+    let operand = match first.as_rule() {
+        Rule::parentheses_expr => {
+            let inner = first
+                .into_inner()
+                .next()
+                .ok_or_else(|| miette!("Expected expression in parentheses"))?;
+            let parts = parse_arithmetic_sequence(inner)?;
+            Ok(ArithmeticPart::ParenthesesExpr(Box::new(Arithmetic {
+                parts,
+            })))
+        }
+        Rule::VARIABLE => {
+            Ok(ArithmeticPart::Variable(first.as_str().to_string()))
+        }
+        Rule::NUMBER => Ok(ArithmeticPart::Number(first.as_str().to_string())),
         _ => Err(miette!(
-            "Invalid unary arithmetic operator: {}",
-            pair.as_str()
+            "Unexpected rule in arithmetic expression: {:?}",
+            first.as_rule()
+        )),
+    }?;
+
+    // Validate that increment/decrement are only applied to variables or expressions
+    if matches!(operand, ArithmeticPart::Number(_)) {
+        return Err(miette!(
+      "Increment/decrement operators cannot be applied to literal numbers"
+    ));
+    }
+
+    let op = parse_post_arithmetic_op(second)?;
+    Ok(ArithmeticPart::UnaryArithmeticExpr {
+        operator: UnaryArithmeticOp::Post(op),
+        operand: Box::new(operand),
+    })
+}
+
+fn parse_pre_arithmetic_op(pair: Pair<Rule>) -> Result<PreArithmeticOp> {
+    let first = pair
+        .into_inner()
+        .next()
+        .ok_or_else(|| miette!("Expected increment or decrement operator"))?;
+    match first.as_rule() {
+        Rule::increment => Ok(PreArithmeticOp::Increment),
+        Rule::decrement => Ok(PreArithmeticOp::Decrement),
+        Rule::unary_plus => Ok(PreArithmeticOp::Plus),
+        Rule::unary_minus => Ok(PreArithmeticOp::Minus),
+        Rule::logical_not => Ok(PreArithmeticOp::LogicalNot),
+        Rule::bitwise_not => Ok(PreArithmeticOp::BitwiseNot),
+        _ => Err(miette!(
+            "Unexpected rule in pre arithmetic operator: {:?}",
+            first.as_rule()
         )),
     }
 }
 
 fn parse_post_arithmetic_op(pair: Pair<Rule>) -> Result<PostArithmeticOp> {
-    match pair.as_str() {
-        "++" => Ok(PostArithmeticOp::Increment),
-        "--" => Ok(PostArithmeticOp::Decrement),
+    let first = pair
+        .into_inner()
+        .next()
+        .ok_or_else(|| miette!("Expected increment or decrement operator"))?;
+    match first.as_rule() {
+        Rule::increment => Ok(PostArithmeticOp::Increment),
+        Rule::decrement => Ok(PostArithmeticOp::Decrement),
         _ => Err(miette!(
-            "Invalid post arithmetic operator: {}",
-            pair.as_str()
+            "Unexpected rule in post arithmetic operator: {:?}",
+            first.as_rule()
         )),
     }
 }
