@@ -1539,6 +1539,142 @@ async fn test_comma_unquoted() {
 }
 
 #[tokio::test]
+async fn brace_expansion() {
+    // Basic comma-separated list
+    TestBuilder::new()
+        .command("echo {a,b,c}")
+        .assert_stdout("a b c\n")
+        .run()
+        .await;
+
+    // Numeric sequence
+    TestBuilder::new()
+        .command("echo {1..5}")
+        .assert_stdout("1 2 3 4 5\n")
+        .run()
+        .await;
+
+    // Character sequence
+    TestBuilder::new()
+        .command("echo {a..e}")
+        .assert_stdout("a b c d e\n")
+        .run()
+        .await;
+
+    // Reverse numeric sequence
+    TestBuilder::new()
+        .command("echo {5..1}")
+        .assert_stdout("5 4 3 2 1\n")
+        .run()
+        .await;
+
+    // Reverse character sequence
+    TestBuilder::new()
+        .command("echo {e..a}")
+        .assert_stdout("e d c b a\n")
+        .run()
+        .await;
+
+    // Numeric sequence with step
+    TestBuilder::new()
+        .command("echo {1..10..2}")
+        .assert_stdout("1 3 5 7 9\n")
+        .run()
+        .await;
+
+    // Numeric sequence with step (reverse)
+    TestBuilder::new()
+        .command("echo {10..1..2}")
+        .assert_stdout("10 8 6 4 2\n")
+        .run()
+        .await;
+
+    // Character sequence with step
+    TestBuilder::new()
+        .command("echo {a..z..5}")
+        .assert_stdout("a f k p u z\n")
+        .run()
+        .await;
+
+    // Empty elements in list
+    TestBuilder::new()
+        .command("echo {a,,b}")
+        .assert_stdout("a  b\n")
+        .run()
+        .await;
+
+    // Quoted braces should not expand
+    TestBuilder::new()
+        .command(r#"echo "{a,b,c}""#)
+        .assert_stdout("{a,b,c}\n")
+        .run()
+        .await;
+
+    // Mixed with other arguments
+    TestBuilder::new()
+        .command("echo start {a,b,c} end")
+        .assert_stdout("start a b c end\n")
+        .run()
+        .await;
+
+    // Prefix with brace expansion
+    TestBuilder::new()
+        .command("echo pre{a,b,c}")
+        .assert_stdout("prea preb prec\n")
+        .run()
+        .await;
+
+    // Suffix with brace expansion
+    TestBuilder::new()
+        .command("echo {a,b,c}post")
+        .assert_stdout("apost bpost cpost\n")
+        .run()
+        .await;
+
+    // Prefix and suffix
+    TestBuilder::new()
+        .command("echo pre{a,b,c}post")
+        .assert_stdout("preapost prebpost precpost\n")
+        .run()
+        .await;
+
+    // Multiple brace expansions (cartesian product)
+    TestBuilder::new()
+        .command("echo {a,b}{1,2}")
+        .assert_stdout("a1 a2 b1 b2\n")
+        .run()
+        .await;
+
+    // Brace expansion with dots in elements (e.g., filenames)
+    TestBuilder::new()
+        .command("echo {foo.txt,bar.txt}")
+        .assert_stdout("foo.txt bar.txt\n")
+        .run()
+        .await;
+
+    // Numeric sequence with prefix/suffix
+    TestBuilder::new()
+        .command("echo file{1..3}.txt")
+        .assert_stdout("file1.txt file2.txt file3.txt\n")
+        .run()
+        .await;
+
+    // Brace expansion with hyphens in elements
+    TestBuilder::new()
+        .command("echo {foo-bar,baz-qux}")
+        .assert_stdout("foo-bar baz-qux\n")
+        .run()
+        .await;
+
+    // Comma outside braces should not trigger expansion
+    TestBuilder::new()
+        .command("echo a,b,c")
+        .assert_stdout("a,b,c\n")
+        .run()
+        .await;
+}
+
+#[tokio::test]
 async fn file_test_operators() {
     // -f: regular file
     TestBuilder::new()
