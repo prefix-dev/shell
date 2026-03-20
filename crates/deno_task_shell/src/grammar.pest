@@ -84,8 +84,11 @@ PARAMETER_ESCAPE_CHAR = ${ "\\" ~ "$" | "$" ~ !"(" ~ !"{" ~ !VARIABLE ~ !SPECIAL
 UNQUOTED_CHAR = ${ ("\\" ~ " ") | !("]]" | "[[" | "(" | ")" | "<" | ">" | "|" | "&" | ";" | "\"" | "'" | "$") ~ ANY }
 QUOTED_CHAR = ${ !"\"" ~ ANY }
 
+INDIRECT_VARIABLE = ${ "!" ~ VARIABLE }
+
 VARIABLE_EXPANSION = ${
     "$" ~ (
+        "{" ~ INDIRECT_VARIABLE ~ VARIABLE_MODIFIER? ~ "}" |
         "{" ~ VARIABLE ~ VARIABLE_MODIFIER? ~ "}" |
         SPECIAL_PARAM |
         VARIABLE
@@ -120,13 +123,38 @@ VARIABLE_MODIFIER = _{
     VAR_DEFAULT_VALUE |
     VAR_ASSIGN_DEFAULT |
     VAR_ALTERNATE_VALUE |
-    VAR_SUBSTRING
+    VAR_SUBSTRING |
+    VAR_LONGEST_SUFFIX_REMOVE |
+    VAR_SHORTEST_SUFFIX_REMOVE |
+    VAR_LONGEST_PREFIX_REMOVE |
+    VAR_SHORTEST_PREFIX_REMOVE |
+    VAR_CHECK_UNSET |
+    VAR_CHECK_SET
 }
 
 VAR_DEFAULT_VALUE = !{ ":-" ~ PARAMETER_PENDING_WORD? }
 VAR_ASSIGN_DEFAULT = !{ ":=" ~ PARAMETER_PENDING_WORD }
 VAR_ALTERNATE_VALUE = !{ ":+" ~ PARAMETER_PENDING_WORD }
-VAR_SUBSTRING = !{ ":" ~ PARAMETER_PENDING_WORD ~ (":" ~ PARAMETER_PENDING_WORD)? } 
+VAR_SUBSTRING = !{ ":" ~ PARAMETER_PENDING_WORD ~ (":" ~ PARAMETER_PENDING_WORD)? }
+VAR_LONGEST_SUFFIX_REMOVE = !{ "%%" ~ PATTERN_PENDING_WORD }
+VAR_SHORTEST_SUFFIX_REMOVE = !{ "%" ~ PATTERN_PENDING_WORD }
+VAR_LONGEST_PREFIX_REMOVE = !{ "##" ~ PATTERN_PENDING_WORD }
+VAR_SHORTEST_PREFIX_REMOVE = !{ "#" ~ PATTERN_PENDING_WORD }
+VAR_CHECK_UNSET = !{ "-" ~ PARAMETER_PENDING_WORD? }
+VAR_CHECK_SET = !{ "+" ~ PARAMETER_PENDING_WORD? }
+
+// Like PARAMETER_PENDING_WORD but allows ":" in patterns
+PATTERN_PENDING_WORD = ${
+    ( !"}" ~ (
+        EXIT_STATUS |
+        PARAMETER_ESCAPE_CHAR |
+        "$" ~ ARITHMETIC_EXPRESSION |
+        SUB_COMMAND |
+        VARIABLE_EXPANSION |
+        QUOTED_WORD |
+        QUOTED_CHAR
+    ))+
+ }
 
 TILDE_PREFIX = ${
     "~" ~ (!(OPERATOR | WHITESPACE | NEWLINE | "/") ~ (
@@ -196,9 +224,11 @@ In = _{ "in" }
 Stdout = ${ "|" ~ !"|" ~ !"&"}
 StdoutStderr = { "|&" }
 
+Function = _{ "function" }
+
 RESERVED_WORD = _{
     (If | Then | Else | Elif | Fi | Done | Do |
-    Case | Esac | While | Until | For |
+    Case | Esac | While | Until | For | Function |
     Lbrace | Rbrace | Bang | In |
     StdoutStderr | Stdout) ~ &(WHITESPACE | NEWLINE | EOI)
 }
@@ -224,7 +254,8 @@ compound_command = {
     case_clause |
     if_clause |
     while_clause |
-    until_clause
+    until_clause |
+    conditional_expression
 }
 
 ARITHMETIC_EXPRESSION = !{ "((" ~ arithmetic_sequence ~ "))" }
@@ -350,19 +381,26 @@ pattern = !{
 }
 
 if_clause = !{
-    If ~ conditional_expression ~ 
+    If ~ if_condition ~
     linebreak ~ Then ~ linebreak ~ complete_command ~ linebreak ~
     else_part? ~ linebreak ~ Fi
 }
 
 else_part = !{
-    Elif ~ conditional_expression ~ linebreak ~ Then ~ complete_command ~ linebreak ~ else_part? |
+    Elif ~ if_condition ~ linebreak ~ Then ~ complete_command ~ linebreak ~ else_part? |
     Else ~ linebreak ~ complete_command
 }
 
+// The condition of an if/elif can be either a conditional expression or
+// a compound list (e.g., `if [ ... ] && [ ... ]; then` or `if command; then`).
+if_condition = !{ compound_list }
+
+condition_inner = !{ unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD }
+condition_chain_op = { "||" | "&&" }
+
 conditional_expression = !{
-    ("[[" ~ (unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD) ~ "]]" ~ ";"?) |
-    ("[" ~ (unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD) ~ "]" ~ ";"?) | 
+    ("[[" ~ condition_inner ~ (condition_chain_op ~ condition_inner)* ~ "]]" ~ ";"?) |
+    ("[" ~ (unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD) ~ "]" ~ ";"?) |
     ("test" ~ (unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD) ~ ";"?)
 }
 
@@ -401,10 +439,13 @@ binary_posix_conditional_op = !{
     "-eq" | "-ne" | "-lt" | "-le" | "-gt" | "-ge"
 }
 
+// Negation operator for [ ! expr ]
+condition_negation = { "!" }
+
 while_clause = !{ While ~ conditional_expression ~ do_group }
 until_clause = !{ Until ~ conditional_expression ~ do_group }
 
-function_definition = !{ fname ~ "(" ~ ")" ~ linebreak ~ function_body }
+function_definition = !{ (Function ~ fname ~ ("(" ~ ")")? | fname ~ "(" ~ ")") ~ linebreak ~ function_body }
 function_body = !{ compound_command ~ redirect_list? }
 
 fname = @{ RESERVED_WORD | NAME | ASSIGNMENT_WORD | UNQUOTED_PENDING_WORD }

@@ -660,6 +660,27 @@ async fn execute_command(
                 }
             }
         }
+        CommandInner::ConditionExpression(condition) => {
+            // Standalone conditional expression like [[ -d $DIR ]] or [ -f file ]
+            match evaluate_condition(
+                condition,
+                &mut state,
+                stdin,
+                stderr.clone(),
+            )
+            .await
+            {
+                Ok(condition_result) => {
+                    changes.extend(condition_result.changes);
+                    let exit_code = if condition_result.value { 0 } else { 1 };
+                    ExecuteResult::Continue(exit_code, changes, Vec::new())
+                }
+                Err(e) => {
+                    let _ = stderr.write_line(&e.to_string());
+                    ExecuteResult::Continue(2, changes, Vec::new())
+                }
+            }
+        }
     }
 }
 
@@ -1237,7 +1258,7 @@ async fn execute_if_clause(
     state: &mut ShellState,
     stdin: ShellPipeReader,
     stdout: ShellPipeWriter,
-    mut stderr: ShellPipeWriter,
+    stderr: ShellPipeWriter,
 ) -> ExecuteResult {
     let mut current_condition = if_clause.condition;
     let mut current_body = if_clause.then_body;
@@ -1245,86 +1266,87 @@ async fn execute_if_clause(
     let mut changes = Vec::new();
 
     loop {
-        let condition_result = evaluate_condition(
+        // Execute the condition as a compound_list and check exit code.
+        let condition_result = execute_sequential_list(
             current_condition,
-            state,
+            state.with_child_token(),
             stdin.clone(),
+            ShellPipeWriter::null(),
             stderr.clone(),
+            AsyncCommandBehavior::Wait,
         )
         .await;
-        match condition_result {
-            Ok(ConditionalResult {
-                value: true,
-                changes: env_changes,
-            }) => {
-                changes.extend(env_changes);
-                let exec_result = execute_sequential_list(
-                    current_body,
-                    state.clone(),
-                    stdin,
-                    stdout,
-                    stderr,
-                    AsyncCommandBehavior::Yield,
-                )
-                .await;
-                match exec_result {
-                    ExecuteResult::Exit(code, env_changes, handles) => {
-                        changes.extend(env_changes);
-                        return ExecuteResult::Exit(code, changes, handles);
-                    }
-                    ExecuteResult::Continue(code, env_changes, handles) => {
-                        changes.extend(env_changes);
-                        return ExecuteResult::Continue(code, changes, handles);
-                    }
+
+        let (condition_exit_code, env_changes) = match condition_result {
+            ExecuteResult::Exit(code, env_changes, _) => (code, env_changes),
+            ExecuteResult::Continue(code, env_changes, _) => {
+                (code, env_changes)
+            }
+        };
+        state.apply_changes(&env_changes);
+        changes.extend(env_changes);
+
+        if condition_exit_code == 0 {
+            // Condition succeeded — execute then body
+            let exec_result = execute_sequential_list(
+                current_body,
+                state.clone(),
+                stdin,
+                stdout,
+                stderr,
+                AsyncCommandBehavior::Yield,
+            )
+            .await;
+            match exec_result {
+                ExecuteResult::Exit(code, env_changes, handles) => {
+                    changes.extend(env_changes);
+                    return ExecuteResult::Exit(code, changes, handles);
+                }
+                ExecuteResult::Continue(code, env_changes, handles) => {
+                    changes.extend(env_changes);
+                    return ExecuteResult::Continue(code, changes, handles);
                 }
             }
-            Ok(ConditionalResult {
-                value: false,
-                changes: env_changes,
-            }) => {
-                changes.extend(env_changes);
-                match current_else {
-                    Some(ElsePart::Elif(elif_clause)) => {
-                        current_condition = elif_clause.condition;
-                        current_body = elif_clause.then_body;
-                        current_else = elif_clause.else_part;
-                    }
-                    Some(ElsePart::Else(else_body)) => {
-                        let exec_result = execute_sequential_list(
-                            else_body,
-                            state.clone(),
-                            stdin,
-                            stdout,
-                            stderr,
-                            AsyncCommandBehavior::Yield,
-                        )
-                        .await;
-                        match exec_result {
-                            ExecuteResult::Exit(code, env_changes, handles) => {
-                                changes.extend(env_changes);
-                                return ExecuteResult::Exit(
-                                    code, changes, handles,
-                                );
-                            }
-                            ExecuteResult::Continue(
-                                code,
-                                env_changes,
-                                handles,
-                            ) => {
-                                changes.extend(env_changes);
-                                return ExecuteResult::Continue(
-                                    code, changes, handles,
-                                );
-                            }
+        } else {
+            // Condition failed — check else/elif
+            match current_else {
+                Some(ElsePart::Elif(elif_clause)) => {
+                    current_condition = elif_clause.condition;
+                    current_body = elif_clause.then_body;
+                    current_else = elif_clause.else_part;
+                }
+                Some(ElsePart::Else(else_body)) => {
+                    let exec_result = execute_sequential_list(
+                        else_body,
+                        state.clone(),
+                        stdin,
+                        stdout,
+                        stderr,
+                        AsyncCommandBehavior::Yield,
+                    )
+                    .await;
+                    match exec_result {
+                        ExecuteResult::Exit(code, env_changes, handles) => {
+                            changes.extend(env_changes);
+                            return ExecuteResult::Exit(
+                                code, changes, handles,
+                            );
+                        }
+                        ExecuteResult::Continue(
+                            code,
+                            env_changes,
+                            handles,
+                        ) => {
+                            changes.extend(env_changes);
+                            return ExecuteResult::Continue(
+                                code, changes, handles,
+                            );
                         }
                     }
-                    None => {
-                        return ExecuteResult::Continue(0, changes, Vec::new());
-                    }
                 }
-            }
-            Err(err) => {
-                return err.into_exit_code(&mut stderr);
+                None => {
+                    return ExecuteResult::Continue(0, changes, Vec::new());
+                }
             }
         }
     }
@@ -1665,6 +1687,64 @@ async fn evaluate_condition(
                 }
             }
             .into())
+        }
+        ConditionInner::LogicalOr(left, right) => {
+            let left_result = Box::pin(evaluate_condition(
+                *left,
+                state,
+                stdin.clone(),
+                stderr.clone(),
+            ))
+            .await?;
+            changes.extend(left_result.changes);
+            if left_result.value {
+                Ok(ConditionalResult {
+                    value: true,
+                    changes,
+                })
+            } else {
+                let right_result = Box::pin(evaluate_condition(
+                    *right,
+                    state,
+                    stdin.clone(),
+                    stderr.clone(),
+                ))
+                .await?;
+                changes.extend(right_result.changes);
+                Ok(ConditionalResult {
+                    value: right_result.value,
+                    changes,
+                })
+            }
+        }
+        ConditionInner::LogicalAnd(left, right) => {
+            let left_result = Box::pin(evaluate_condition(
+                *left,
+                state,
+                stdin.clone(),
+                stderr.clone(),
+            ))
+            .await?;
+            changes.extend(left_result.changes);
+            if !left_result.value {
+                Ok(ConditionalResult {
+                    value: false,
+                    changes,
+                })
+            } else {
+                let right_result = Box::pin(evaluate_condition(
+                    *right,
+                    state,
+                    stdin.clone(),
+                    stderr.clone(),
+                ))
+                .await?;
+                changes.extend(right_result.changes);
+                Ok(ConditionalResult {
+                    value: right_result.value,
+                    changes,
+                })
+            }
         }
     }
 }
@@ -2139,7 +2219,170 @@ impl VariableModifier {
                     Ok((v.value.into(), Some(v.changes)))
                 }
             }
+            VariableModifier::LongestSuffixRemove(pattern) => {
+                let val = state.get_var(name).cloned().unwrap_or_default();
+                let pat = evaluate_word_no_glob(
+                    pattern.clone(),
+                    state,
+                    stdin,
+                    stderr,
+                )
+                .await
+                .into_diagnostic()?;
+                let result =
+                    remove_suffix(&val, &pat.value, true);
+                Ok((result.into(), Some(pat.changes)))
+            }
+            VariableModifier::ShortestSuffixRemove(pattern) => {
+                let val = state.get_var(name).cloned().unwrap_or_default();
+                let pat = evaluate_word_no_glob(
+                    pattern.clone(),
+                    state,
+                    stdin,
+                    stderr,
+                )
+                .await
+                .into_diagnostic()?;
+                let result =
+                    remove_suffix(&val, &pat.value, false);
+                Ok((result.into(), Some(pat.changes)))
+            }
+            VariableModifier::LongestPrefixRemove(pattern) => {
+                let val = state.get_var(name).cloned().unwrap_or_default();
+                let pat = evaluate_word_no_glob(
+                    pattern.clone(),
+                    state,
+                    stdin,
+                    stderr,
+                )
+                .await
+                .into_diagnostic()?;
+                let result =
+                    remove_prefix(&val, &pat.value, true);
+                Ok((result.into(), Some(pat.changes)))
+            }
+            VariableModifier::ShortestPrefixRemove(pattern) => {
+                let val = state.get_var(name).cloned().unwrap_or_default();
+                let pat = evaluate_word_no_glob(
+                    pattern.clone(),
+                    state,
+                    stdin,
+                    stderr,
+                )
+                .await
+                .into_diagnostic()?;
+                let result =
+                    remove_prefix(&val, &pat.value, false);
+                Ok((result.into(), Some(pat.changes)))
+            }
+            VariableModifier::CheckSet(word) => {
+                // ${var+word}: If var is SET (even if empty), substitute word
+                if state.get_var(name).is_some() {
+                    let v = evaluate_word(
+                        word.clone(),
+                        state,
+                        stdin,
+                        stderr,
+                    )
+                    .await
+                    .into_diagnostic()?;
+                    Ok((v.value.into(), Some(v.changes)))
+                } else {
+                    Ok(("".to_string().into(), None))
+                }
+            }
+            VariableModifier::CheckUnset(word) => {
+                // ${var-word}: If var is UNSET, substitute word
+                match state.get_var(name) {
+                    Some(v) => Ok((v.clone().into(), None)),
+                    None => {
+                        let v = evaluate_word(
+                            word.clone(),
+                            state,
+                            stdin,
+                            stderr,
+                        )
+                        .await
+                        .into_diagnostic()?;
+                        Ok((v.value.into(), Some(v.changes)))
+                    }
+                }
+            }
         }
+    }
+}
+
+/// Remove a suffix pattern from a string.
+/// Uses glob-style pattern matching where `*` matches any sequence of characters.
+fn remove_suffix(value: &str, pattern: &str, longest: bool) -> String {
+    let chars: Vec<char> = value.chars().collect();
+    if longest {
+        // Try removing from the beginning (longest match)
+        for i in 0..=chars.len() {
+            let suffix: String = chars[i..].iter().collect();
+            if glob_match(pattern, &suffix) {
+                return chars[..i].iter().collect();
+            }
+        }
+    } else {
+        // Try removing from the end (shortest match)
+        for i in (0..=chars.len()).rev() {
+            let suffix: String = chars[i..].iter().collect();
+            if glob_match(pattern, &suffix) {
+                return chars[..i].iter().collect();
+            }
+        }
+    }
+    value.to_string()
+}
+
+/// Remove a prefix pattern from a string.
+/// Uses glob-style pattern matching where `*` matches any sequence of characters.
+fn remove_prefix(value: &str, pattern: &str, longest: bool) -> String {
+    let chars: Vec<char> = value.chars().collect();
+    if longest {
+        // Try removing from the end (longest match)
+        for i in (0..=chars.len()).rev() {
+            let prefix: String = chars[..i].iter().collect();
+            if glob_match(pattern, &prefix) {
+                return chars[i..].iter().collect();
+            }
+        }
+    } else {
+        // Try removing from the beginning (shortest match)
+        for i in 0..=chars.len() {
+            let prefix: String = chars[..i].iter().collect();
+            if glob_match(pattern, &prefix) {
+                return chars[i..].iter().collect();
+            }
+        }
+    }
+    value.to_string()
+}
+
+/// Simple glob matching that supports `*` (match any sequence) and `?` (match single char).
+fn glob_match(pattern: &str, text: &str) -> bool {
+    let pat: Vec<char> = pattern.chars().collect();
+    let txt: Vec<char> = text.chars().collect();
+    glob_match_inner(&pat, &txt)
+}
+
+fn glob_match_inner(pattern: &[char], text: &[char]) -> bool {
+    match (pattern.first(), text.first()) {
+        (None, None) => true,
+        (Some('*'), _) => {
+            // Try matching * with zero chars, or consuming one char from text
+            glob_match_inner(&pattern[1..], text)
+                || (!text.is_empty()
+                    && glob_match_inner(pattern, &text[1..]))
+        }
+        (Some('?'), Some(_)) => {
+            glob_match_inner(&pattern[1..], &text[1..])
+        }
+        (Some(p), Some(t)) if p == t => {
+            glob_match_inner(&pattern[1..], &text[1..])
+        }
+        _ => false,
     }
 }
 
@@ -2395,11 +2638,21 @@ fn evaluate_word_parts(
                             current_text.push(TextPart::Text(text));
                             continue;
                         }
-                        WordPart::Variable(name, modifier) => {
+                        WordPart::Variable(name, modifier, indirect) => {
+                            // For indirect expansion (${!var}), first resolve
+                            // the variable name from the value of `name`
+                            let resolved_name = if indirect {
+                                state
+                                    .get_var(&name)
+                                    .map(|v| v.to_string())
+                                    .unwrap_or_default()
+                            } else {
+                                name.clone()
+                            };
                             if let Some(modifier) = modifier {
                                 let (text, env_changes) = modifier
                                     .apply(
-                                        &name,
+                                        &resolved_name,
                                         state,
                                         stdin.clone(),
                                         stderr.clone(),
@@ -2409,8 +2662,9 @@ fn evaluate_word_parts(
                                     result.with_changes(env_changes);
                                 }
                                 Ok(Some(text))
-                            } else if let Some(val) =
-                                state.get_var(&name).map(|v| v.to_string())
+                            } else if let Some(val) = state
+                                .get_var(&resolved_name)
+                                .map(|v| v.to_string())
                             {
                                 let t: Text = Text::new(
                                     [OtherText(val.clone().to_string())]
@@ -2420,7 +2674,7 @@ fn evaluate_word_parts(
                             } else {
                                 Err(miette::miette!(
                                     "Undefined variable: {}",
-                                    name
+                                    resolved_name
                                 ))
                             }
                         }

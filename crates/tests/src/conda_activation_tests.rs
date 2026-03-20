@@ -118,7 +118,6 @@ async fn conda_flang_deactivate() {
 // === Rust activation (uses [[ ]] and mkdir) ===
 
 #[tokio::test]
-#[ignore = "shell does not yet support [[ ]] double-bracket conditionals"]
 async fn conda_rust_activate() {
     // rust-activation-feedstock: recipe/activate.sh (preprocessed)
     // This tests [[ ]] conditionals, ${VAR:-default}, and complex variable exports
@@ -197,7 +196,6 @@ echo "$(_get_sourced_filename)"
 }
 
 #[tokio::test]
-#[ignore = "shell does not yet support `function name() {}` syntax (bash keyword-style function definition)"]
 async fn conda_clang_activate_function_keyword() {
     // clang-compiler-activation-feedstock uses `function name() {` syntax
     run_conda_script(
@@ -215,7 +213,6 @@ echo "$(_get_sourced_filename)"
 }
 
 #[tokio::test]
-#[ignore = "shell does not yet support ${!var} indirect variable expansion"]
 async fn conda_tc_activation_pattern() {
     // The _tc_activation function pattern from ctng/clang compiler activation scripts.
     // Tests local variables, for loops, if/elif/else, export, and unset.
@@ -333,4 +330,93 @@ echo "restored CC=$CC"
 "#,
     )
     .await;
+}
+
+#[tokio::test]
+async fn conda_pattern_suffix_remove() {
+    // Test ${var%%pattern} - simplest case
+    TestBuilder::new()
+        .command(r#"val="hello.world.txt"; echo "${val%%.*}""#)
+        .assert_stdout("hello\n")
+        .run()
+        .await;
+
+    // Test ${var%%,*}
+    TestBuilder::new()
+        .command(r#"val="CC,gcc"; echo "${val%%,*}""#)
+        .assert_stdout("CC\n")
+        .run()
+        .await;
+}
+
+#[tokio::test]
+async fn conda_pattern_prefix_remove() {
+    // Test ${var#pattern} and ${var##pattern}
+    TestBuilder::new()
+        .command(r#"val="CC,gcc"; echo "${val#*,}""#)
+        .assert_stdout("gcc\n")
+        .run()
+        .await;
+}
+
+#[tokio::test]
+async fn conda_check_set_modifier() {
+    // Test ${var+word} - substitute word if var is set
+    TestBuilder::new()
+        .command(r#"MY_VAR="hello"; echo "${MY_VAR+x}""#)
+        .assert_stdout("x\n")
+        .run()
+        .await;
+
+    // Unset var should produce empty
+    TestBuilder::new()
+        .command(r#"unset NONEXISTENT_VAR; echo "${NONEXISTENT_VAR+x}""#)
+        .assert_stdout("\n")
+        .run()
+        .await;
+}
+
+#[tokio::test]
+async fn conda_indirect_expansion() {
+    // Test ${!var}
+    TestBuilder::new()
+        .command(r#"MY_VAR="hello"; ref="MY_VAR"; echo "${!ref}""#)
+        .assert_stdout("hello\n")
+        .run()
+        .await;
+}
+
+#[tokio::test]
+async fn conda_indirect_with_check_set() {
+    // Test ${!var+x} - indirect + check-if-set
+    TestBuilder::new()
+        .command(
+            r#"MY_VAR="hello"; ref="MY_VAR"; echo "${!ref+x}""#,
+        )
+        .assert_stdout("x\n")
+        .run()
+        .await;
+}
+
+#[tokio::test]
+async fn conda_if_compound_condition() {
+    // Test if with compound conditions: if [ ... ] && [ ... ]; then
+    TestBuilder::new()
+        .command("if [ 1 = 1 ] && [ 2 = 2 ]; then echo yes; else echo no; fi")
+        .assert_stdout("yes\n")
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command("if [ 1 = 2 ] && [ 2 = 2 ]; then echo yes; else echo no; fi")
+        .assert_stdout("no\n")
+        .run()
+        .await;
+
+    // Test elif
+    TestBuilder::new()
+        .command(r#"FOO=2; if [[ $FOO == 1 ]]; then echo "one"; elif [[ $FOO -eq 2 ]]; then echo "two"; fi"#)
+        .assert_stdout("two\n")
+        .run()
+        .await;
 }

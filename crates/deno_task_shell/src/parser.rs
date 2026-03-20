@@ -172,6 +172,8 @@ pub enum CommandInner {
     ArithmeticExpression(Arithmetic),
     #[error("Invalid function definition")]
     Function(FunctionDefinition),
+    #[error("Invalid condition expression")]
+    ConditionExpression(Condition),
 }
 
 impl From<Command> for Sequence {
@@ -226,7 +228,7 @@ impl From<SimpleCommand> for Sequence {
 #[derive(Debug, PartialEq, Eq, Clone, Error)]
 #[error("Invalid if clause")]
 pub struct IfClause {
-    pub condition: Condition,
+    pub condition: SequentialList,
     pub then_body: SequentialList,
     pub else_part: Option<ElsePart>,
 }
@@ -300,6 +302,8 @@ pub enum ConditionInner {
         op: Option<UnaryOp>,
         right: Word,
     },
+    LogicalOr(Box<Condition>, Box<Condition>),
+    LogicalAnd(Box<Condition>, Box<Condition>),
 }
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
@@ -427,6 +431,18 @@ pub enum VariableModifier {
     DefaultValue(Word),
     AssignDefault(Word),
     AlternateValue(Word),
+    /// ${var%%pattern} - Remove longest matching suffix
+    LongestSuffixRemove(Word),
+    /// ${var%pattern} - Remove shortest matching suffix
+    ShortestSuffixRemove(Word),
+    /// ${var##pattern} - Remove longest matching prefix
+    LongestPrefixRemove(Word),
+    /// ${var#pattern} - Remove shortest matching prefix
+    ShortestPrefixRemove(Word),
+    /// ${var+word} - If var is set (even if empty), substitute word
+    CheckSet(Word),
+    /// ${var-word} - If var is unset, substitute word
+    CheckUnset(Word),
 }
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
@@ -452,7 +468,9 @@ pub enum WordPart {
     #[error("Invalid text")]
     Text(String),
     #[error("Invalid variable")]
-    Variable(String, Option<Box<VariableModifier>>),
+    /// Variable(name, modifier, indirect)
+    /// When indirect is true, the variable name is first resolved to get the actual variable name.
+    Variable(String, Option<Box<VariableModifier>>, bool),
     #[error("Invalid command")]
     Command(SequentialList),
     #[error("Invalid quoted string")]
@@ -1139,6 +1157,13 @@ fn parse_compound_command(pair: Pair<Rule>) -> Result<Command> {
                 redirect: None,
             })
         }
+        Rule::conditional_expression => {
+            let condition = parse_conditional_expression(inner)?;
+            Ok(Command {
+                inner: CommandInner::ConditionExpression(condition),
+                redirect: None,
+            })
+        }
         _ => Err(miette!(
             "Unexpected rule in compound_command: {:?}",
             inner.as_rule()
@@ -1218,12 +1243,20 @@ fn parse_function_definition(pair: Pair<Rule>) -> Result<Command> {
     })
 }
 
+fn parse_if_condition(pair: Pair<Rule>) -> Result<SequentialList> {
+    let mut items = Vec::new();
+    for inner in pair.into_inner() {
+        parse_compound_list(inner, &mut items)?;
+    }
+    Ok(SequentialList { items })
+}
+
 fn parse_if_clause(pair: Pair<Rule>) -> Result<IfClause> {
     let mut inner = pair.into_inner();
     let condition = inner
         .next()
         .ok_or_else(|| miette!("Expected condition after If"))?;
-    let condition = parse_conditional_expression(condition)?;
+    let condition = parse_if_condition(condition)?;
 
     let then_body_pair = inner
         .next()
@@ -1298,7 +1331,7 @@ fn parse_else_part(pair: Pair<Rule>) -> Result<ElsePart> {
             let condition = inner
                 .next()
                 .ok_or_else(|| miette!("Expected condition after Elif"))?;
-            let condition = parse_conditional_expression(condition)?;
+            let condition = parse_if_condition(condition)?;
 
             let then_body_pair = inner
                 .next()
@@ -1330,11 +1363,11 @@ fn parse_else_part(pair: Pair<Rule>) -> Result<ElsePart> {
     }
 }
 
-fn parse_conditional_expression(pair: Pair<Rule>) -> Result<Condition> {
+fn parse_condition_inner(pair: Pair<Rule>) -> Result<Condition> {
     let inner = pair
         .into_inner()
         .next()
-        .ok_or_else(|| miette!("Expected conditional expression content"))?;
+        .ok_or_else(|| miette!("Expected condition_inner content"))?;
 
     match inner.as_rule() {
         Rule::unary_conditional_expression => {
@@ -1344,10 +1377,74 @@ fn parse_conditional_expression(pair: Pair<Rule>) -> Result<Condition> {
             parse_binary_conditional_expression(inner)
         }
         _ => Err(miette!(
-            "Unexpected rule in conditional expression: {:?}",
+            "Unexpected rule in condition_inner: {:?}",
             inner.as_rule()
         )),
     }
+}
+
+fn parse_conditional_expression(pair: Pair<Rule>) -> Result<Condition> {
+    let mut inner = pair.into_inner();
+    let first = inner
+        .next()
+        .ok_or_else(|| miette!("Expected conditional expression content"))?;
+
+    let mut result = match first.as_rule() {
+        Rule::condition_inner => parse_condition_inner(first)?,
+        Rule::unary_conditional_expression => {
+            parse_unary_conditional_expression(first)?
+        }
+        Rule::binary_conditional_expression => {
+            parse_binary_conditional_expression(first)?
+        }
+        _ => {
+            return Err(miette!(
+                "Unexpected rule in conditional expression: {:?}",
+                first.as_rule()
+            ))
+        }
+    };
+
+    // Handle chained || and && operators
+    while let Some(op_pair) = inner.next() {
+        if op_pair.as_rule() != Rule::condition_chain_op {
+            continue;
+        }
+        let op_str = op_pair.as_str();
+        let next = inner
+            .next()
+            .ok_or_else(|| miette!("Expected condition after logical operator"))?;
+        let right = match next.as_rule() {
+            Rule::condition_inner => parse_condition_inner(next)?,
+            Rule::unary_conditional_expression => {
+                parse_unary_conditional_expression(next)?
+            }
+            Rule::binary_conditional_expression => {
+                parse_binary_conditional_expression(next)?
+            }
+            _ => {
+                return Err(miette!(
+                    "Unexpected rule after condition chain op: {:?}",
+                    next.as_rule()
+                ))
+            }
+        };
+        result = Condition {
+            condition_inner: if op_str == "||" {
+                ConditionInner::LogicalOr(
+                    Box::new(result),
+                    Box::new(right),
+                )
+            } else {
+                ConditionInner::LogicalAnd(
+                    Box::new(result),
+                    Box::new(right),
+                )
+            },
+        };
+    }
+
+    Ok(result)
 }
 
 fn parse_unary_conditional_expression(pair: Pair<Rule>) -> Result<Condition> {
@@ -1586,6 +1683,7 @@ fn parse_word(pair: Pair<Rule>) -> Result<Word> {
                     Rule::VARIABLE => parts.push(WordPart::Variable(
                         part.as_str().to_string(),
                         None,
+                        false,
                     )),
                     Rule::UNQUOTED_CHAR => {
                         if let Some(WordPart::Text(ref mut text)) =
@@ -1610,6 +1708,11 @@ fn parse_word(pair: Pair<Rule>) -> Result<Word> {
                         let arithmetic_expression =
                             parse_arithmetic_expression(part)?;
                         parts.push(WordPart::Arithmetic(arithmetic_expression));
+                    }
+                    Rule::VARIABLE_EXPANSION => {
+                        let variable_expansion =
+                            parse_variable_expansion(part)?;
+                        parts.push(variable_expansion);
                     }
                     _ => {
                         return Err(miette!(
@@ -1679,6 +1782,79 @@ fn parse_word(pair: Pair<Rule>) -> Result<Word> {
                     _ => {
                         return Err(miette!(
                             "Unexpected rule in PARAMETER_PENDING_WORD: {:?}",
+                            part.as_rule()
+                        ));
+                    }
+                }
+            }
+        }
+        Rule::PATTERN_PENDING_WORD => {
+            // Same as PARAMETER_PENDING_WORD but allows ":"
+            for part in pair.into_inner() {
+                match part.as_rule() {
+                    Rule::PARAMETER_ESCAPE_CHAR => {
+                        let mut chars = part.as_str().chars();
+                        let mut escaped_char = String::new();
+                        if let Some(c) = chars.next() {
+                            match c {
+                                '\\' => {
+                                    let next_char =
+                                        chars.next().unwrap_or('\0');
+                                    escaped_char.push(next_char);
+                                }
+                                _ => {
+                                    escaped_char.push(c);
+                                    break;
+                                }
+                            }
+                        }
+                        if let Some(WordPart::Text(ref mut text)) =
+                            parts.last_mut()
+                        {
+                            text.push_str(&escaped_char);
+                        } else {
+                            parts.push(WordPart::Text(escaped_char));
+                        }
+                    }
+                    Rule::VARIABLE_EXPANSION => {
+                        let variable_expansion =
+                            parse_variable_expansion(part)?;
+                        parts.push(variable_expansion);
+                    }
+                    Rule::QUOTED_WORD => {
+                        let quoted = parse_quoted_word(part)?;
+                        parts.push(quoted);
+                    }
+                    Rule::ARITHMETIC_EXPRESSION => {
+                        let arithmetic_expression =
+                            parse_arithmetic_expression(part)?;
+                        parts.push(WordPart::Arithmetic(
+                            arithmetic_expression,
+                        ));
+                    }
+                    Rule::SUB_COMMAND => {
+                        let command = parse_complete_command(
+                            part.into_inner().next().unwrap(),
+                        )?;
+                        parts.push(WordPart::Command(command));
+                    }
+                    Rule::QUOTED_CHAR => {
+                        if let Some(WordPart::Text(ref mut s)) =
+                            parts.last_mut()
+                        {
+                            s.push_str(part.as_str());
+                        } else {
+                            parts.push(WordPart::Text(
+                                part.as_str().to_string(),
+                            ));
+                        }
+                    }
+                    Rule::EXIT_STATUS => {
+                        parts.push(WordPart::ExitStatus);
+                    }
+                    _ => {
+                        return Err(miette!(
+                            "Unexpected rule in PATTERN_PENDING_WORD: {:?}",
                             part.as_rule()
                         ));
                     }
@@ -1969,7 +2145,17 @@ fn parse_variable_expansion(part: Pair<Rule>) -> Result<WordPart> {
     let variable = inner
         .next()
         .ok_or_else(|| miette!("Expected variable name"))?;
-    let variable_name = variable.as_str().to_string();
+    let indirect = variable.as_rule() == Rule::INDIRECT_VARIABLE;
+    let variable_name = if indirect {
+        // INDIRECT_VARIABLE is "!" ~ VARIABLE, extract just the variable name
+        variable
+            .into_inner()
+            .next()
+            .map(|v| v.as_str().to_string())
+            .unwrap_or_default()
+    } else {
+        variable.as_str().to_string()
+    };
 
     let modifier = inner.next();
     let parsed_modifier = if let Some(modifier) = modifier {
@@ -2011,6 +2197,46 @@ fn parse_variable_expansion(part: Pair<Rule>) -> Result<WordPart> {
                     value,
                 )?)))
             }
+            Rule::VAR_LONGEST_SUFFIX_REMOVE => {
+                let pattern = modifier.into_inner().next().unwrap();
+                Some(Box::new(VariableModifier::LongestSuffixRemove(
+                    parse_word(pattern)?,
+                )))
+            }
+            Rule::VAR_SHORTEST_SUFFIX_REMOVE => {
+                let pattern = modifier.into_inner().next().unwrap();
+                Some(Box::new(VariableModifier::ShortestSuffixRemove(
+                    parse_word(pattern)?,
+                )))
+            }
+            Rule::VAR_LONGEST_PREFIX_REMOVE => {
+                let pattern = modifier.into_inner().next().unwrap();
+                Some(Box::new(VariableModifier::LongestPrefixRemove(
+                    parse_word(pattern)?,
+                )))
+            }
+            Rule::VAR_SHORTEST_PREFIX_REMOVE => {
+                let pattern = modifier.into_inner().next().unwrap();
+                Some(Box::new(VariableModifier::ShortestPrefixRemove(
+                    parse_word(pattern)?,
+                )))
+            }
+            Rule::VAR_CHECK_SET => {
+                let value = if let Some(val) = modifier.into_inner().next() {
+                    parse_word(val)?
+                } else {
+                    Word::new_empty()
+                };
+                Some(Box::new(VariableModifier::CheckSet(value)))
+            }
+            Rule::VAR_CHECK_UNSET => {
+                let value = if let Some(val) = modifier.into_inner().next() {
+                    parse_word(val)?
+                } else {
+                    Word::new_empty()
+                };
+                Some(Box::new(VariableModifier::CheckUnset(value)))
+            }
             _ => {
                 return Err(miette!(
                     "Unexpected rule in variable expansion modifier: {:?}",
@@ -2021,7 +2247,7 @@ fn parse_variable_expansion(part: Pair<Rule>) -> Result<WordPart> {
     } else {
         None
     };
-    Ok(WordPart::Variable(variable_name, parsed_modifier))
+    Ok(WordPart::Variable(variable_name, parsed_modifier, indirect))
 }
 
 fn parse_brace_expansion(pair: Pair<Rule>) -> Result<BraceExpansion> {
@@ -2573,6 +2799,7 @@ mod test {
                         Word(vec![WordPart::Variable(
                             "MY_ENV".to_string(),
                             None,
+                            false,
                         )]),
                     ],
                 }
