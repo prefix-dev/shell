@@ -1328,15 +1328,9 @@ async fn execute_if_clause(
                     match exec_result {
                         ExecuteResult::Exit(code, env_changes, handles) => {
                             changes.extend(env_changes);
-                            return ExecuteResult::Exit(
-                                code, changes, handles,
-                            );
+                            return ExecuteResult::Exit(code, changes, handles);
                         }
-                        ExecuteResult::Continue(
-                            code,
-                            env_changes,
-                            handles,
-                        ) => {
+                        ExecuteResult::Continue(code, env_changes, handles) => {
                             changes.extend(env_changes);
                             return ExecuteResult::Continue(
                                 code, changes, handles,
@@ -2229,8 +2223,7 @@ impl VariableModifier {
                 )
                 .await
                 .into_diagnostic()?;
-                let result =
-                    remove_suffix(&val, &pat.value, true);
+                let result = remove_suffix(&val, &pat.value, true);
                 Ok((result.into(), Some(pat.changes)))
             }
             VariableModifier::ShortestSuffixRemove(pattern) => {
@@ -2243,8 +2236,7 @@ impl VariableModifier {
                 )
                 .await
                 .into_diagnostic()?;
-                let result =
-                    remove_suffix(&val, &pat.value, false);
+                let result = remove_suffix(&val, &pat.value, false);
                 Ok((result.into(), Some(pat.changes)))
             }
             VariableModifier::LongestPrefixRemove(pattern) => {
@@ -2257,8 +2249,7 @@ impl VariableModifier {
                 )
                 .await
                 .into_diagnostic()?;
-                let result =
-                    remove_prefix(&val, &pat.value, true);
+                let result = remove_prefix(&val, &pat.value, true);
                 Ok((result.into(), Some(pat.changes)))
             }
             VariableModifier::ShortestPrefixRemove(pattern) => {
@@ -2271,21 +2262,15 @@ impl VariableModifier {
                 )
                 .await
                 .into_diagnostic()?;
-                let result =
-                    remove_prefix(&val, &pat.value, false);
+                let result = remove_prefix(&val, &pat.value, false);
                 Ok((result.into(), Some(pat.changes)))
             }
             VariableModifier::CheckSet(word) => {
                 // ${var+word}: If var is SET (even if empty), substitute word
                 if state.get_var(name).is_some() {
-                    let v = evaluate_word(
-                        word.clone(),
-                        state,
-                        stdin,
-                        stderr,
-                    )
-                    .await
-                    .into_diagnostic()?;
+                    let v = evaluate_word(word.clone(), state, stdin, stderr)
+                        .await
+                        .into_diagnostic()?;
                     Ok((v.value.into(), Some(v.changes)))
                 } else {
                     Ok(("".to_string().into(), None))
@@ -2296,14 +2281,10 @@ impl VariableModifier {
                 match state.get_var(name) {
                     Some(v) => Ok((v.clone().into(), None)),
                     None => {
-                        let v = evaluate_word(
-                            word.clone(),
-                            state,
-                            stdin,
-                            stderr,
-                        )
-                        .await
-                        .into_diagnostic()?;
+                        let v =
+                            evaluate_word(word.clone(), state, stdin, stderr)
+                                .await
+                                .into_diagnostic()?;
                         Ok((v.value.into(), Some(v.changes)))
                     }
                 }
@@ -2373,12 +2354,9 @@ fn glob_match_inner(pattern: &[char], text: &[char]) -> bool {
         (Some('*'), _) => {
             // Try matching * with zero chars, or consuming one char from text
             glob_match_inner(&pattern[1..], text)
-                || (!text.is_empty()
-                    && glob_match_inner(pattern, &text[1..]))
+                || (!text.is_empty() && glob_match_inner(pattern, &text[1..]))
         }
-        (Some('?'), Some(_)) => {
-            glob_match_inner(&pattern[1..], &text[1..])
-        }
+        (Some('?'), Some(_)) => glob_match_inner(&pattern[1..], &text[1..]),
         (Some(p), Some(t)) if p == t => {
             glob_match_inner(&pattern[1..], &text[1..])
         }

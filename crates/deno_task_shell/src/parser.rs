@@ -1411,9 +1411,9 @@ fn parse_conditional_expression(pair: Pair<Rule>) -> Result<Condition> {
             continue;
         }
         let op_str = op_pair.as_str();
-        let next = inner
-            .next()
-            .ok_or_else(|| miette!("Expected condition after logical operator"))?;
+        let next = inner.next().ok_or_else(|| {
+            miette!("Expected condition after logical operator")
+        })?;
         let right = match next.as_rule() {
             Rule::condition_inner => parse_condition_inner(next)?,
             Rule::unary_conditional_expression => {
@@ -1431,15 +1431,9 @@ fn parse_conditional_expression(pair: Pair<Rule>) -> Result<Condition> {
         };
         result = Condition {
             condition_inner: if op_str == "||" {
-                ConditionInner::LogicalOr(
-                    Box::new(result),
-                    Box::new(right),
-                )
+                ConditionInner::LogicalOr(Box::new(result), Box::new(right))
             } else {
-                ConditionInner::LogicalAnd(
-                    Box::new(result),
-                    Box::new(right),
-                )
+                ConditionInner::LogicalAnd(Box::new(result), Box::new(right))
             },
         };
     }
@@ -1828,9 +1822,7 @@ fn parse_word(pair: Pair<Rule>) -> Result<Word> {
                     Rule::ARITHMETIC_EXPRESSION => {
                         let arithmetic_expression =
                             parse_arithmetic_expression(part)?;
-                        parts.push(WordPart::Arithmetic(
-                            arithmetic_expression,
-                        ));
+                        parts.push(WordPart::Arithmetic(arithmetic_expression));
                     }
                     Rule::SUB_COMMAND => {
                         let command = parse_complete_command(

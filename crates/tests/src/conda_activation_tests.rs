@@ -390,9 +390,7 @@ async fn conda_indirect_expansion() {
 async fn conda_indirect_with_check_set() {
     // Test ${!var+x} - indirect + check-if-set
     TestBuilder::new()
-        .command(
-            r#"MY_VAR="hello"; ref="MY_VAR"; echo "${!ref+x}""#,
-        )
+        .command(r#"MY_VAR="hello"; ref="MY_VAR"; echo "${!ref+x}""#)
         .assert_stdout("x\n")
         .run()
         .await;
