@@ -22,7 +22,7 @@ pub async fn execute_inner(
                 stderr.write_all(format!("Filename: {:?}\n", filename).as_bytes())?;
             }
             stderr.write_all(format!("Syntax error: {:?}", e).as_bytes())?;
-            return Ok(ExecuteResult::Exit(1, vec![], vec![]));
+            return Ok(ExecuteResult::Continue(1, vec![], vec![]));
         }
     };
 
