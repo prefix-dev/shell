@@ -1,6 +1,7 @@
 // Copyright 2018-2024 the Deno authors. MIT license.
 #![cfg(test)]
 
+mod conda_activation_tests;
 mod test_builder;
 mod test_runner;
 
