@@ -395,13 +395,13 @@ else_part = !{
 // a compound list (e.g., `if [ ... ] && [ ... ]; then` or `if command; then`).
 if_condition = !{ compound_list }
 
-condition_inner = !{ unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD }
+condition_inner = !{ condition_negation? ~ (unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD) }
 condition_chain_op = { "||" | "&&" }
 
 conditional_expression = !{
     ("[[" ~ condition_inner ~ (condition_chain_op ~ condition_inner)* ~ "]]" ~ ";"?) |
-    ("[" ~ (unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD) ~ "]" ~ ";"?) |
-    ("test" ~ (unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD) ~ ";"?)
+    ("[" ~ condition_negation? ~ (unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD) ~ "]" ~ ";"?) |
+    ("test" ~ condition_negation? ~ (unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD) ~ ";"?)
 }
 
 unary_conditional_expression = !{

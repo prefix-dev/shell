@@ -117,3 +117,17 @@ false
 
 # > if [[ 1 -eq 2 || 2 -eq 2 ]]; then echo true; else echo false; fi
 # true
+
+# Negation with [ ! ]
+> if [ ! -f /tmp/nonexistent_file_xyz ]; then echo "ok"; else echo "fail"; fi
+ok
+
+> if [ ! -d /tmp ]; then echo "fail"; else echo "ok"; fi
+ok
+
+# Negation with [[ ! ]]
+> if [[ ! -f /tmp/nonexistent_file_xyz ]]; then echo "ok"; else echo "fail"; fi
+ok
+
+> if [[ ! "hello" == "world" ]]; then echo "ok"; else echo "fail"; fi
+ok

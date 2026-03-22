@@ -421,6 +421,62 @@ async fn resolve_redirect_pipe(
             resolve_redirect_word_pipe(word, &redirect.op, state, stdin, stderr)
                 .await
         }
+        IoFile::HereDoc(heredoc) => {
+            let mut body = heredoc.body.clone();
+            if heredoc.strip_tabs {
+                body = body
+                    .lines()
+                    .map(|l| l.trim_start_matches('\t'))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+            }
+            if !heredoc.quoted {
+                // Expand variables in the body line by line
+                let mut expanded_lines = Vec::new();
+                for line in body.split('\n') {
+                    // Parse each line as a double-quoted string for variable expansion
+                    let escaped_line =
+                        line.replace('\\', "\\\\").replace('"', "\\\"");
+                    let parse_input = format!("echo \"{}\"", escaped_line);
+                    match crate::parser::parse(&parse_input) {
+                        Ok(seq) => {
+                            let (reader, writer) =
+                                crate::shell::types::pipe();
+                            let handle = reader.pipe_to_string_handle();
+                            let sub_state = state.clone();
+                            let _ = execute_sequential_list(
+                                seq,
+                                sub_state,
+                                stdin.clone(),
+                                writer,
+                                stderr.clone(),
+                                AsyncCommandBehavior::Wait,
+                            )
+                            .await;
+                            let output =
+                                handle.await.unwrap_or_default();
+                            // Remove trailing newline added by echo
+                            let trimmed = output
+                                .strip_suffix('\n')
+                                .unwrap_or(&output);
+                            expanded_lines.push(trimmed.to_string());
+                        }
+                        Err(_) => {
+                            expanded_lines.push(line.to_string());
+                        }
+                    }
+                }
+                body = expanded_lines.join("\n");
+            }
+            // Add trailing newline if body is non-empty
+            if !body.is_empty() && !body.ends_with('\n') {
+                body.push('\n');
+            }
+            let (reader, mut writer) = crate::shell::types::pipe();
+            let _ = ShellPipeWriter::write_all(&mut writer, body.as_bytes());
+            drop(writer);
+            Ok(RedirectPipe::Input(reader, None))
+        }
         IoFile::Fd(fd) => match &redirect.op {
             RedirectOp::Input(RedirectOpInput::Redirect) => {
                 let _ = stderr.write_line(
@@ -1710,6 +1766,20 @@ async fn evaluate_condition(
                     changes,
                 })
             }
+        }
+        ConditionInner::Negation(inner) => {
+            let inner_result = Box::pin(evaluate_condition(
+                *inner,
+                state,
+                stdin.clone(),
+                stderr.clone(),
+            ))
+            .await?;
+            changes.extend(inner_result.changes);
+            Ok(ConditionalResult {
+                value: !inner_result.value,
+                changes,
+            })
         }
         ConditionInner::LogicalAnd(left, right) => {
             let left_result = Box::pin(evaluate_condition(
