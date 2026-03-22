@@ -103,3 +103,15 @@ This is a tempname.
 >         ;;
 > esac
 Letter is between A and C.
+
+> val="hello"
+> case "$val" in hello) echo "matched" ;; *) echo "no match" ;; esac
+matched
+
+> val="world"
+> case "$val" in hello) echo "matched" ;; *) echo "no match" ;; esac
+no match
+
+> val="~/.local"
+> case "$val" in '~' | '~'/*) echo "tilde" ;; *) echo "other" ;; esac
+tilde

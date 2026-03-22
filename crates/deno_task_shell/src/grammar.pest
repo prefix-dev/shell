@@ -481,7 +481,7 @@ here_end = @{ ("\"" ~ UNQUOTED_PENDING_WORD ~ "\"") | UNQUOTED_PENDING_WORD }
 
 newline_list = _{ NEWLINE+ }
 linebreak = _{ NEWLINE* }
-separator_op = { "&" | ";" }
+separator_op = { "&" | ";" ~ !";" }
 separator = _{ separator_op ~ linebreak | newline_list }
 
 wordlist = !{ UNQUOTED_PENDING_WORD+ }
