@@ -131,3 +131,38 @@ ok
 
 > if [[ ! "hello" == "world" ]]; then echo "ok"; else echo "fail"; fi
 ok
+
+# Negation with -n and -z
+> if [ ! -n "" ]; then echo "ok"; else echo "fail"; fi
+ok
+
+> if [ ! -z "hello" ]; then echo "ok"; else echo "fail"; fi
+ok
+
+> if [ ! -z "" ]; then echo "fail"; else echo "ok"; fi
+ok
+
+# Negation with numeric comparison
+> if [ ! 5 -eq 3 ]; then echo "ok"; else echo "fail"; fi
+ok
+
+> if [ ! 5 -gt 10 ]; then echo "ok"; else echo "fail"; fi
+ok
+
+# Negation in compound conditions
+> if [ ! -f /tmp/nonexistent_xyz ] && [ -d /tmp ]; then echo "ok"; else echo "fail"; fi
+ok
+
+> if [ ! -f /tmp/nonexistent_xyz ] || [ ! -d /tmp ]; then echo "ok"; else echo "fail"; fi
+ok
+
+# test builtin with negation
+> if test ! -f /tmp/nonexistent_xyz; then echo "ok"; else echo "fail"; fi
+ok
+
+# Bare word in [[ ]] (implicit -n check)
+> if [[ "notempty" ]]; then echo "ok"; else echo "fail"; fi
+ok
+
+> if [[ "" ]]; then echo "fail"; else echo "ok"; fi
+ok
