@@ -118,15 +118,15 @@ false
 # > if [[ 1 -eq 2 || 2 -eq 2 ]]; then echo true; else echo false; fi
 # true
 
-# Negation with [ ! ]
-> if [ ! -f /tmp/nonexistent_file_xyz ]; then echo "ok"; else echo "fail"; fi
+# Negation with [ ! ] (use string tests to avoid platform-specific paths)
+> if [ ! "hello" = "world" ]; then echo "ok"; else echo "fail"; fi
 ok
 
-> if [ ! -d /tmp ]; then echo "fail"; else echo "ok"; fi
+> if [ ! "hello" = "hello" ]; then echo "fail"; else echo "ok"; fi
 ok
 
 # Negation with [[ ! ]]
-> if [[ ! -f /tmp/nonexistent_file_xyz ]]; then echo "ok"; else echo "fail"; fi
+> if [[ ! "abc" == "xyz" ]]; then echo "ok"; else echo "fail"; fi
 ok
 
 > if [[ ! "hello" == "world" ]]; then echo "ok"; else echo "fail"; fi
@@ -149,15 +149,15 @@ ok
 > if [ ! 5 -gt 10 ]; then echo "ok"; else echo "fail"; fi
 ok
 
-# Negation in compound conditions
-> if [ ! -f /tmp/nonexistent_xyz ] && [ -d /tmp ]; then echo "ok"; else echo "fail"; fi
+# Negation in compound conditions (string-based, cross-platform)
+> if [ ! "a" = "b" ] && [ "c" = "c" ]; then echo "ok"; else echo "fail"; fi
 ok
 
-> if [ ! -f /tmp/nonexistent_xyz ] || [ ! -d /tmp ]; then echo "ok"; else echo "fail"; fi
+> if [ ! "a" = "b" ] || [ ! "c" = "c" ]; then echo "ok"; else echo "fail"; fi
 ok
 
 # test builtin with negation
-> if test ! -f /tmp/nonexistent_xyz; then echo "ok"; else echo "fail"; fi
+> if test ! "x" = "y"; then echo "ok"; else echo "fail"; fi
 ok
 
 # Bare word in [[ ]] (implicit -n check)
