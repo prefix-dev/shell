@@ -440,8 +440,7 @@ async fn resolve_redirect_pipe(
                     let parse_input = format!("echo \"{}\"", escaped_line);
                     match crate::parser::parse(&parse_input) {
                         Ok(seq) => {
-                            let (reader, writer) =
-                                crate::shell::types::pipe();
+                            let (reader, writer) = crate::shell::types::pipe();
                             let handle = reader.pipe_to_string_handle();
                             let sub_state = state.clone();
                             let _ = execute_sequential_list(
@@ -453,12 +452,10 @@ async fn resolve_redirect_pipe(
                                 AsyncCommandBehavior::Wait,
                             )
                             .await;
-                            let output =
-                                handle.await.unwrap_or_default();
+                            let output = handle.await.unwrap_or_default();
                             // Remove trailing newline added by echo
-                            let trimmed = output
-                                .strip_suffix('\n')
-                                .unwrap_or(&output);
+                            let trimmed =
+                                output.strip_suffix('\n').unwrap_or(&output);
                             expanded_lines.push(trimmed.to_string());
                         }
                         Err(_) => {

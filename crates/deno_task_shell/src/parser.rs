@@ -724,7 +724,7 @@ pub fn debug_parse(input: &str) {
 use std::cell::RefCell;
 
 thread_local! {
-    static HEREDOC_BODIES: RefCell<Vec<HereDoc>> = RefCell::new(Vec::new());
+    static HEREDOC_BODIES: RefCell<Vec<HereDoc>> = const { RefCell::new(Vec::new()) };
 }
 
 /// Pre-process input to extract heredoc bodies before PEG parsing.
@@ -753,8 +753,7 @@ fn preprocess_heredocs(input: &str) -> String {
             };
             if trimmed == *delim {
                 // End of this heredoc body
-                let (delim, quoted, strip_tabs, body_lines) =
-                    pending.remove(0);
+                let (delim, quoted, strip_tabs, body_lines) = pending.remove(0);
                 let body = body_lines.join("\n");
                 heredocs.push(HereDoc {
                     body,
@@ -793,8 +792,7 @@ fn preprocess_heredocs(input: &str) -> String {
                         // Found <<
                         let mut k = j + 2;
                         // Check for <<- (strip tabs)
-                        let strip_tabs =
-                            k < chars.len() && chars[k] == '-';
+                        let strip_tabs = k < chars.len() && chars[k] == '-';
                         if strip_tabs {
                             k += 1;
                         }
@@ -811,9 +809,7 @@ fn preprocess_heredocs(input: &str) -> String {
                             quoted = true;
                             let quote_char = chars[k];
                             k += 1;
-                            while k < chars.len()
-                                && chars[k] != quote_char
-                            {
+                            while k < chars.len() && chars[k] != quote_char {
                                 delim.push(chars[k]);
                                 k += 1;
                             }
