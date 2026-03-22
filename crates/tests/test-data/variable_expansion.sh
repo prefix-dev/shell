@@ -67,3 +67,12 @@ a}b
 > export VERSION="1.2.3"
 > echo "Version: ${VERSION:2}"
 Version: 2.3
+
+# Command substitution inside parameter expansion
+> export GREETING="hello"
+> echo "${GREETING:-$(echo fallback)}"
+hello
+
+> unset MISSING_VAR
+> echo "${MISSING_VAR:-$(echo fallback)}"
+fallback

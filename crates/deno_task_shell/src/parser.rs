@@ -1762,6 +1762,15 @@ fn parse_word(pair: Pair<Rule>) -> Result<Word> {
                             parse_arithmetic_expression(part)?;
                         parts.push(WordPart::Arithmetic(arithmetic_expression));
                     }
+                    Rule::SUB_COMMAND => {
+                        let command = parse_complete_command(
+                            part.into_inner().next().unwrap(),
+                        )?;
+                        parts.push(WordPart::Command(command));
+                    }
+                    Rule::EXIT_STATUS => {
+                        parts.push(WordPart::ExitStatus);
+                    }
                     Rule::QUOTED_CHAR => {
                         if let Some(WordPart::Text(ref mut s)) =
                             parts.last_mut()
