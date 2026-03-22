@@ -67,3 +67,44 @@ a}b
 > export VERSION="1.2.3"
 > echo "Version: ${VERSION:2}"
 Version: 2.3
+
+# Command substitution inside parameter expansion
+> export GREETING="hello"
+> echo "${GREETING:-$(echo fallback)}"
+hello
+
+> unset MISSING_VAR
+> echo "${MISSING_VAR:-$(echo fallback)}"
+fallback
+
+# Colons inside default values (e.g. URLs)
+> unset REPO_URL
+> echo "${REPO_URL:-https://github.com/prefix-dev/pixi}"
+https://github.com/prefix-dev/pixi
+
+> echo "${REPO_URL:-https://example.com:8080/path}"
+https://example.com:8080/path
+
+# Colons inside check-unset values
+> echo "${REPO_URL-https://default.example.com:443}"
+https://default.example.com:443
+
+# Nested defaults
+> unset A B
+> echo "${A:-${B:-deep_default}}"
+deep_default
+
+# Colons in alternate value
+> export HAS_VAL="yes"
+> echo "${HAS_VAL:+https://example.com:443/path}"
+https://example.com:443/path
+
+# Colons in assign default
+> unset ASSIGN_URL
+> echo "${ASSIGN_URL:=https://example.com:443}"
+https://example.com:443
+
+# Command substitution in default with pipes
+> unset MISSING
+> echo "${MISSING:-$(echo hello | tr h H)}"
+Hello

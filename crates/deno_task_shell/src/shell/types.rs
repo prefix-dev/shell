@@ -445,6 +445,8 @@ pub enum ShellOptions {
     ExitOnError,
     /// If set, the shell print a trace of simple commands when they are invoked `-x`
     PrintTrace,
+    /// If set, the shell will treat unset variables as an error during expansion `-u`
+    NoUnset,
 }
 
 pub type FutureExecuteResult = LocalBoxFuture<'static, ExecuteResult>;

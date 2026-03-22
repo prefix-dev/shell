@@ -103,3 +103,52 @@ This is a tempname.
 >         ;;
 > esac
 Letter is between A and C.
+
+> val="hello"
+> case "$val" in hello) echo "matched" ;; *) echo "no match" ;; esac
+matched
+
+> val="world"
+> case "$val" in hello) echo "matched" ;; *) echo "no match" ;; esac
+no match
+
+> val="~/.local"
+> case "$val" in '~' | '~'/*) echo "tilde" ;; *) echo "other" ;; esac
+tilde
+
+# Empty case body (just ;;)
+> case "x" in y) ;; *) echo "default" ;; esac
+default
+
+# Case with only default
+> case "anything" in *) echo "always matches" ;; esac
+always matches
+
+# Case without default (no match = no output)
+> case "x" in y) echo "y" ;; z) echo "z" ;; esac
+> echo "done"
+done
+
+# Inline with multiple commands separated by ;
+> case "a" in a) echo "first"; echo "second" ;; esac
+first
+second
+
+# Case with command substitution in word
+> val=$(echo hello)
+> case "$val" in hello) echo "matched cmd sub" ;; esac
+matched cmd sub
+
+# Nested case statements
+> outer="a"
+> inner="x"
+> case "$outer" in
+>     a)
+>         case "$inner" in
+>             x) echo "a-x" ;;
+>             *) echo "a-other" ;;
+>         esac
+>         ;;
+>     *) echo "other" ;;
+> esac
+a-x

@@ -132,16 +132,16 @@ VARIABLE_MODIFIER = _{
     VAR_CHECK_SET
 }
 
-VAR_DEFAULT_VALUE = !{ ":-" ~ PARAMETER_PENDING_WORD? }
-VAR_ASSIGN_DEFAULT = !{ ":=" ~ PARAMETER_PENDING_WORD }
-VAR_ALTERNATE_VALUE = !{ ":+" ~ PARAMETER_PENDING_WORD }
+VAR_DEFAULT_VALUE = !{ ":-" ~ PATTERN_PENDING_WORD? }
+VAR_ASSIGN_DEFAULT = !{ ":=" ~ PATTERN_PENDING_WORD }
+VAR_ALTERNATE_VALUE = !{ ":+" ~ PATTERN_PENDING_WORD }
 VAR_SUBSTRING = !{ ":" ~ PARAMETER_PENDING_WORD ~ (":" ~ PARAMETER_PENDING_WORD)? }
 VAR_LONGEST_SUFFIX_REMOVE = !{ "%%" ~ PATTERN_PENDING_WORD }
 VAR_SHORTEST_SUFFIX_REMOVE = !{ "%" ~ PATTERN_PENDING_WORD }
 VAR_LONGEST_PREFIX_REMOVE = !{ "##" ~ PATTERN_PENDING_WORD }
 VAR_SHORTEST_PREFIX_REMOVE = !{ "#" ~ PATTERN_PENDING_WORD }
-VAR_CHECK_UNSET = !{ "-" ~ PARAMETER_PENDING_WORD? }
-VAR_CHECK_SET = !{ "+" ~ PARAMETER_PENDING_WORD? }
+VAR_CHECK_UNSET = !{ "-" ~ PATTERN_PENDING_WORD? }
+VAR_CHECK_SET = !{ "+" ~ PATTERN_PENDING_WORD? }
 
 // Like PARAMETER_PENDING_WORD but allows ":" in patterns
 PATTERN_PENDING_WORD = ${
@@ -395,13 +395,13 @@ else_part = !{
 // a compound list (e.g., `if [ ... ] && [ ... ]; then` or `if command; then`).
 if_condition = !{ compound_list }
 
-condition_inner = !{ unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD }
+condition_inner = !{ condition_negation? ~ (unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD) }
 condition_chain_op = { "||" | "&&" }
 
 conditional_expression = !{
     ("[[" ~ condition_inner ~ (condition_chain_op ~ condition_inner)* ~ "]]" ~ ";"?) |
-    ("[" ~ (unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD) ~ "]" ~ ";"?) |
-    ("test" ~ (unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD) ~ ";"?)
+    ("[" ~ condition_negation? ~ (unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD) ~ "]" ~ ";"?) |
+    ("test" ~ condition_negation? ~ (unary_conditional_expression | binary_conditional_expression | UNQUOTED_PENDING_WORD) ~ ";"?)
 }
 
 unary_conditional_expression = !{
@@ -481,7 +481,7 @@ here_end = @{ ("\"" ~ UNQUOTED_PENDING_WORD ~ "\"") | UNQUOTED_PENDING_WORD }
 
 newline_list = _{ NEWLINE+ }
 linebreak = _{ NEWLINE* }
-separator_op = { "&" | ";" }
+separator_op = { "&" | ";" ~ !";" }
 separator = _{ separator_op ~ linebreak | newline_list }
 
 wordlist = !{ UNQUOTED_PENDING_WORD+ }

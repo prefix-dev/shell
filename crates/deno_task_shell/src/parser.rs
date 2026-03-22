@@ -302,6 +302,7 @@ pub enum ConditionInner {
         op: Option<UnaryOp>,
         right: Word,
     },
+    Negation(Box<Condition>),
     LogicalOr(Box<Condition>, Box<Condition>),
     LogicalAnd(Box<Condition>, Box<Condition>),
 }
@@ -632,6 +633,21 @@ pub enum IoFile {
     Word(Word),
     #[error("Invalid file descriptor")]
     Fd(u32),
+    #[error("Invalid heredoc")]
+    HereDoc(HereDoc),
+}
+
+#[cfg_attr(feature = "serialization", derive(serde::Serialize))]
+#[cfg_attr(feature = "serialization", serde(rename_all = "camelCase"))]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[error("Invalid heredoc")]
+pub struct HereDoc {
+    /// The raw body content of the heredoc
+    pub body: String,
+    /// Whether the delimiter was quoted (no variable expansion)
+    pub quoted: bool,
+    /// Whether to strip leading tabs (<<- syntax)
+    pub strip_tabs: bool,
 }
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
@@ -705,10 +721,160 @@ pub fn debug_parse(input: &str) {
     pest_ascii_tree::print_ascii_tree(parsed);
 }
 
+use std::cell::RefCell;
+
+thread_local! {
+    static HEREDOC_BODIES: RefCell<Vec<HereDoc>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Pre-process input to extract heredoc bodies before PEG parsing.
+///
+/// Heredoc bodies appear on lines after the command containing `<<DELIM`.
+/// The PEG grammar cannot handle this, so we strip the bodies and store
+/// them in a thread-local for retrieval during AST construction.
+fn preprocess_heredocs(input: &str) -> String {
+    let lines: Vec<&str> = input.split('\n').collect();
+    let mut output_lines: Vec<&str> = Vec::new();
+    let mut heredocs: Vec<HereDoc> = Vec::new();
+
+    // Pending heredocs: (delimiter, quoted, strip_tabs, body_lines)
+    let mut pending: Vec<(String, bool, bool, Vec<String>)> = Vec::new();
+    let mut i = 0;
+
+    while i < lines.len() {
+        if !pending.is_empty() {
+            // We're reading heredoc body lines
+            let line = lines[i];
+            let (ref delim, _, strip_tabs, _) = pending[0];
+            let trimmed = if strip_tabs {
+                line.trim_start_matches('\t')
+            } else {
+                line
+            };
+            if trimmed == *delim {
+                // End of this heredoc body
+                let (delim, quoted, strip_tabs, body_lines) = pending.remove(0);
+                let body = body_lines.join("\n");
+                heredocs.push(HereDoc {
+                    body,
+                    quoted,
+                    strip_tabs,
+                });
+                // If there are more pending heredocs, the next body starts
+                // on the next line. The delimiter line itself is consumed.
+                let _ = delim;
+            } else {
+                pending[0].3.push(line.to_string());
+            }
+            i += 1;
+            continue;
+        }
+
+        // Not in a heredoc body - scan the line for << patterns
+        let line = lines[i];
+        output_lines.push(line);
+
+        // Simple scanner: find << outside of quotes
+        let chars: Vec<char> = line.chars().collect();
+        let mut j = 0;
+        let mut in_single_quote = false;
+        let mut in_double_quote = false;
+
+        while j < chars.len() {
+            match chars[j] {
+                '\'' if !in_double_quote => in_single_quote = !in_single_quote,
+                '"' if !in_single_quote => in_double_quote = !in_double_quote,
+                '\\' if !in_single_quote => {
+                    j += 1; // skip escaped char
+                }
+                '<' if !in_single_quote && !in_double_quote => {
+                    if j + 1 < chars.len() && chars[j + 1] == '<' {
+                        // Found <<
+                        let mut k = j + 2;
+                        // Check for <<- (strip tabs)
+                        let strip_tabs = k < chars.len() && chars[k] == '-';
+                        if strip_tabs {
+                            k += 1;
+                        }
+                        // Skip whitespace after << or <<-
+                        while k < chars.len() && chars[k] == ' ' {
+                            k += 1;
+                        }
+                        // Read delimiter (possibly quoted)
+                        let mut delim = String::new();
+                        let mut quoted = false;
+                        if k < chars.len()
+                            && (chars[k] == '\'' || chars[k] == '"')
+                        {
+                            quoted = true;
+                            let quote_char = chars[k];
+                            k += 1;
+                            while k < chars.len() && chars[k] != quote_char {
+                                delim.push(chars[k]);
+                                k += 1;
+                            }
+                            if k < chars.len() {
+                                k += 1; // skip closing quote
+                            }
+                        } else {
+                            while k < chars.len()
+                                && chars[k] != ' '
+                                && chars[k] != '\t'
+                                && chars[k] != '\n'
+                                && chars[k] != ';'
+                                && chars[k] != '&'
+                                && chars[k] != '|'
+                                && chars[k] != ')'
+                                && chars[k] != '>'
+                                && chars[k] != '<'
+                            {
+                                delim.push(chars[k]);
+                                k += 1;
+                            }
+                        }
+                        if !delim.is_empty() {
+                            pending.push((
+                                delim,
+                                quoted,
+                                strip_tabs,
+                                Vec::new(),
+                            ));
+                            j = k;
+                            continue;
+                        }
+                    }
+                }
+                _ => {}
+            }
+            j += 1;
+        }
+        i += 1;
+    }
+
+    HEREDOC_BODIES.with(|hb| {
+        *hb.borrow_mut() = heredocs;
+    });
+
+    output_lines.join("\n")
+}
+
+fn take_next_heredoc() -> Option<HereDoc> {
+    HEREDOC_BODIES.with(|hb| {
+        let mut bodies = hb.borrow_mut();
+        if bodies.is_empty() {
+            None
+        } else {
+            Some(bodies.remove(0))
+        }
+    })
+}
+
 pub fn parse(input: &str) -> Result<SequentialList> {
-    let mut pairs = ShellParser::parse(Rule::FILE, input).map_err(|e| {
-        miette::Error::new(e.into_miette()).context("Failed to parse input")
-    })?;
+    let processed = preprocess_heredocs(input);
+    let mut pairs =
+        ShellParser::parse(Rule::FILE, &processed).map_err(|e| {
+            miette::Error::new(e.into_miette()).context("Failed to parse input")
+        })?;
 
     parse_file(pairs.next().ok_or_else(|| miette!("Empty parse result"))?)
 }
@@ -1364,23 +1530,51 @@ fn parse_else_part(pair: Pair<Rule>) -> Result<ElsePart> {
 }
 
 fn parse_condition_inner(pair: Pair<Rule>) -> Result<Condition> {
-    let inner = pair
-        .into_inner()
+    let mut parts = pair.into_inner();
+    let first = parts
         .next()
         .ok_or_else(|| miette!("Expected condition_inner content"))?;
 
-    match inner.as_rule() {
+    // Check for negation
+    let (negated, inner) = if first.as_rule() == Rule::condition_negation {
+        let next = parts
+            .next()
+            .ok_or_else(|| miette!("Expected expression after negation"))?;
+        (true, next)
+    } else {
+        (false, first)
+    };
+
+    let mut result = match inner.as_rule() {
         Rule::unary_conditional_expression => {
             parse_unary_conditional_expression(inner)
         }
         Rule::binary_conditional_expression => {
             parse_binary_conditional_expression(inner)
         }
+        Rule::UNQUOTED_PENDING_WORD => {
+            // Bare word in condition: treated as -n (non-empty string check)
+            let word = parse_word(inner)?;
+            Ok(Condition {
+                condition_inner: ConditionInner::Unary {
+                    op: Some(UnaryOp::NonEmptyString),
+                    right: word,
+                },
+            })
+        }
         _ => Err(miette!(
             "Unexpected rule in condition_inner: {:?}",
             inner.as_rule()
         )),
+    }?;
+
+    if negated {
+        result = Condition {
+            condition_inner: ConditionInner::Negation(Box::new(result)),
+        };
     }
+
+    Ok(result)
 }
 
 fn parse_conditional_expression(pair: Pair<Rule>) -> Result<Condition> {
@@ -1388,6 +1582,16 @@ fn parse_conditional_expression(pair: Pair<Rule>) -> Result<Condition> {
     let first = inner
         .next()
         .ok_or_else(|| miette!("Expected conditional expression content"))?;
+
+    // Check for negation
+    let (negated, first) = if first.as_rule() == Rule::condition_negation {
+        let next = inner
+            .next()
+            .ok_or_else(|| miette!("Expected expression after negation"))?;
+        (true, next)
+    } else {
+        (false, first)
+    };
 
     let mut result = match first.as_rule() {
         Rule::condition_inner => parse_condition_inner(first)?,
@@ -1397,6 +1601,16 @@ fn parse_conditional_expression(pair: Pair<Rule>) -> Result<Condition> {
         Rule::binary_conditional_expression => {
             parse_binary_conditional_expression(first)?
         }
+        Rule::UNQUOTED_PENDING_WORD => {
+            // Bare word in condition: treated as -n (non-empty string check)
+            let word = parse_word(first)?;
+            Condition {
+                condition_inner: ConditionInner::Unary {
+                    op: Some(UnaryOp::NonEmptyString),
+                    right: word,
+                },
+            }
+        }
         _ => {
             return Err(miette!(
                 "Unexpected rule in conditional expression: {:?}",
@@ -1404,6 +1618,12 @@ fn parse_conditional_expression(pair: Pair<Rule>) -> Result<Condition> {
             ))
         }
     };
+
+    if negated {
+        result = Condition {
+            condition_inner: ConditionInner::Negation(Box::new(result)),
+        };
+    }
 
     // Handle chained || and && operators
     while let Some(op_pair) = inner.next() {
@@ -1761,6 +1981,15 @@ fn parse_word(pair: Pair<Rule>) -> Result<Word> {
                         let arithmetic_expression =
                             parse_arithmetic_expression(part)?;
                         parts.push(WordPart::Arithmetic(arithmetic_expression));
+                    }
+                    Rule::SUB_COMMAND => {
+                        let command = parse_complete_command(
+                            part.into_inner().next().unwrap(),
+                        )?;
+                        parts.push(WordPart::Command(command));
+                    }
+                    Rule::EXIT_STATUS => {
+                        parts.push(WordPart::ExitStatus);
                     }
                     Rule::QUOTED_CHAR => {
                         if let Some(WordPart::Text(ref mut s)) =
@@ -2430,13 +2659,50 @@ fn parse_io_redirect(pair: Pair<Rule>) -> Result<Redirect> {
         None => return Err(miette!("Unexpected end of input in io_redirect")),
     };
 
-    let (op, io_file) = parse_io_file(op_and_file)?;
+    let (op, io_file) = match op_and_file.as_rule() {
+        Rule::io_file => parse_io_file(op_and_file)?,
+        Rule::io_here => parse_io_here(op_and_file)?,
+        _ => {
+            return Err(miette!(
+                "Expected io_file or io_here, got: {:?}",
+                op_and_file.as_rule()
+            ))
+        }
+    };
 
     Ok(Redirect {
         maybe_fd,
         op,
         io_file,
     })
+}
+
+fn parse_io_here(pair: Pair<Rule>) -> Result<(RedirectOp, IoFile)> {
+    let mut heredoc = take_next_heredoc().unwrap_or(HereDoc {
+        body: String::new(),
+        quoted: false,
+        strip_tabs: false,
+    });
+
+    // Check if DLESSDASH was used
+    let mut inner = pair.into_inner();
+    let op = inner.next().ok_or_else(|| miette!("Expected << or <<-"))?;
+    if op.as_rule() == Rule::DLESSDASH {
+        heredoc.strip_tabs = true;
+    }
+
+    // Check if delimiter was quoted in the here_end rule
+    if let Some(delim) = inner.next() {
+        let delim_str = delim.as_str();
+        if delim_str.starts_with('"') || delim_str.starts_with('\'') {
+            heredoc.quoted = true;
+        }
+    }
+
+    Ok((
+        RedirectOp::Input(RedirectOpInput::Redirect),
+        IoFile::HereDoc(heredoc),
+    ))
 }
 
 fn parse_io_file(pair: Pair<Rule>) -> Result<(RedirectOp, IoFile)> {
