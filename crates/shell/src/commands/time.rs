@@ -97,7 +97,28 @@ async fn execute_time(context: &mut ShellCommandContext) -> Result<(), i32> {
         return Err(1);
     }
 
-    let command_line = context.args.join(" ");
+    let command_line = context
+        .args
+        .iter()
+        .map(|arg| {
+            if arg.is_empty() {
+                "''".to_string()
+            } else if arg.contains(|c: char| {
+                c.is_whitespace()
+                    || matches!(
+                        c,
+                        '\'' | '"' | '\\' | '$' | '(' | ')' | '|' | '&' | ';' | '<' | '>'
+                            | '`' | '!' | '{' | '}' | '[' | ']' | '*' | '?' | '#' | '~'
+                    )
+            }) {
+                // Wrap in single quotes, escaping any internal single quotes
+                format!("'{}'", arg.replace('\'', "'\\''"))
+            } else {
+                arg.clone()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
 
     #[cfg(unix)]
     let before_usage = get_resource_usage();

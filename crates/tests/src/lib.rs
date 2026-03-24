@@ -2218,6 +2218,34 @@ async fn test_brace_group() {
         .await;
 }
 
+#[tokio::test]
+async fn time_preserves_quoted_args() {
+    // time should preserve quoted arguments when re-parsing the command
+    // Note: time's execute uses raw stdout, so we can't assert_stdout here.
+    // Instead we verify commands succeed (exit code 0) and stderr contains timing info.
+    TestBuilder::new()
+        .command(r#"time echo "hello world""#)
+        .assert_stderr_contains("real")
+        .assert_exit_code(0)
+        .run()
+        .await;
+
+    TestBuilder::new()
+        .command(r#"time echo 'hello world'"#)
+        .assert_stderr_contains("real")
+        .assert_exit_code(0)
+        .run()
+        .await;
+
+    // Arguments with special shell characters should be preserved
+    TestBuilder::new()
+        .command(r#"time echo "foo(bar)""#)
+        .assert_stderr_contains("real")
+        .assert_exit_code(0)
+        .run()
+        .await;
+}
+
 #[cfg(test)]
 fn no_such_file_error_text() -> &'static str {
     if cfg!(windows) {
