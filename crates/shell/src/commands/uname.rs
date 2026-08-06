@@ -18,7 +18,7 @@ fn display(uname: &UNameOutput) -> String {
     .into_iter()
     .flatten()
     {
-        output.push_str(name);
+        output.push_str(&name.to_string_lossy());
         output.push(' ');
     }
     output

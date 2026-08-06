@@ -6,13 +6,13 @@ edition = "2021"
 [dependencies]
 deno_task_shell = { path = "../deno_task_shell", features = ["shell"] }
 shell = { path = "../shell" }
-futures = "0.3.31"
-tokio = { version = "1.43.0", features = ["full"] }
+futures = "0.3.33"
+tokio = { version = "1.53.1", features = ["full"] }
 dirs = "6.0.0"
-miette = "7.5.0"
+miette = "7.6.0"
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"
 regex = "1"
-reqwest = { version = "0.12", features = ["blocking"] }
-tempfile = "3.16.0"
+reqwest = { version = "0.13", features = ["blocking"] }
+tempfile = "3.27.0"

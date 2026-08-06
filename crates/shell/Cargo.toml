@@ -23,28 +23,29 @@ path = "src/main.rs"
 [features]
 
 [dependencies]
-clap = { version = "4.5.28", features = ["derive"] }
+clap = { version = "4.6.5", features = ["derive"] }
 deno_task_shell = { path = "../deno_task_shell", features = ["shell"] }
-futures = "0.3.31"
-rustyline = { version = "15.0.0", features = ["derive"] }
-tokio = "1.43.0"
-uu_ls = "0.0.29"
+futures = "0.3.33"
+rustyline = { version = "18.0.1", features = ["derive"] }
+tokio = "1.53.1"
+uu_ls = "0.10.0"
 dirs = "6.0.0"
-which = "7.0.2"
-uu_uname = "0.0.29"
-uu_touch = "0.0.29"
-uu_date = "0.0.29"
-miette = { version = "7.5.0", features = ["fancy"] }
-filetime = "0.2.25"
-chrono = "0.4.39"
-parse_datetime = "0.8.0"
+which = "8.0.5"
+uu_uname = "0.10.0"
+uu_touch = "0.10.0"
+uu_date = "0.10.0"
+miette = { version = "7.6.0", features = ["fancy"] }
+filetime = "0.2.29"
+chrono = "0.4.45"
+jiff = "0.2.35"
+parse_datetime = "0.15.0"
 dtparse = "2.0.1"
-windows-sys = { version = "0.59.0", features = ["Win32_Foundation", "Win32_System_Threading"] }
-ctrlc = "3.4.5"
-libc = "0.2.170"
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_Threading"] }
+ctrlc = "3.5.2"
+libc = "0.2.189"
 
 [dev-dependencies]
-tempfile = "3.14.0"
+tempfile = "3.27.0"
 
 [package.metadata.release]
 # Dont publish the binary

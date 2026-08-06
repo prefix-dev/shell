@@ -15,26 +15,26 @@ shell = ["futures", "glob", "os_pipe", "path-dedot", "tokio", "tokio-util"]
 serialization = ["serde"]
 
 [dependencies]
-futures = { version = "0.3.31", optional = true }
-glob = { version = "0.3.2", optional = true }
-path-dedot = { version = "3.1.1", optional = true }
+futures = { version = "0.3.33", optional = true }
+glob = { version = "0.3.4", optional = true }
+path-dedot = { version = "4.0.1", optional = true }
 tokio = { version = "1", features = ["fs", "io-std", "io-util", "macros", "process", "rt-multi-thread", "sync", "time"], optional = true }
-tokio-util = { version = "0.7.13", optional = true }
-os_pipe = { version = "1.2.1", optional = true }
+tokio-util = { version = "0.7.19", optional = true }
+os_pipe = { version = "1.2.3", optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
-thiserror = "2.0.11"
-pest = { version="2.7.15", features = ["miette-error"] }
-pest_derive = "2.7.15"
+thiserror = "2.0.19"
+pest = { version="2.8.8", features = ["miette-error"] }
+pest_derive = "2.8.8"
 dirs = "6.0.0"
 pest_ascii_tree = "0.1.0"
-miette = { version = "7.5.0", features = ["fancy"] }
+miette = { version = "7.6.0", features = ["fancy"] }
 lazy_static = "1.5.0"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
 [dev-dependencies]
-tempfile = "3.16.0"
-parking_lot = "0.12.3"
-serde_json = "1.0.138"
+tempfile = "3.27.0"
+parking_lot = "0.12.5"
+serde_json = "1.0.151"
 pretty_assertions = "1.4.1"

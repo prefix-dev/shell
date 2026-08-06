@@ -9,6 +9,7 @@ use chrono::{DateTime, Duration, Local, NaiveDateTime, TimeZone, Timelike};
 use deno_task_shell::{ExecuteResult, ShellCommand, ShellCommandContext};
 use filetime::{set_file_times, set_symlink_file_times, FileTime};
 use futures::future::LocalBoxFuture;
+use jiff::{tz::TimeZone as JiffTimeZone, Timestamp};
 use miette::{miette, IntoDiagnostic, Result};
 use uu_touch::{options, uu_app as uu_touch};
 
@@ -344,8 +345,19 @@ fn parse_date(ref_time: DateTime<Local>, s: &str) -> Result<FileTime> {
                     .map_err(|_| miette!("Unable to parse date: {s}"))
             } else {
                 // Use ref_time as a base for relative date parsing
+                let ref_time = Timestamp::new(
+                    ref_time.timestamp(),
+                    ref_time.timestamp_subsec_nanos() as i32,
+                )
+                .map_err(|_| miette!("Unable to parse date: {s}"))?
+                .to_zoned(JiffTimeZone::system());
                 parse_datetime::parse_datetime_at_date(ref_time, s)
-                    .map(|dt| datetime_to_filetime(&dt))
+                    .map(|dt| {
+                        FileTime::from_unix_time(
+                            dt.unix_epoch_second(),
+                            dt.subsec_nanosecond() as u32,
+                        )
+                    })
                     .map_err(|_| miette!("Unable to parse date: {s}"))
             }
         }
