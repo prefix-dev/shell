@@ -787,61 +787,57 @@ fn preprocess_heredocs(input: &str) -> String {
                 '\\' if !in_single_quote => {
                     j += 1; // skip escaped char
                 }
-                '<' if !in_single_quote && !in_double_quote => {
-                    if j + 1 < chars.len() && chars[j + 1] == '<' {
-                        // Found <<
-                        let mut k = j + 2;
-                        // Check for <<- (strip tabs)
-                        let strip_tabs = k < chars.len() && chars[k] == '-';
-                        if strip_tabs {
+                '<' if !in_single_quote
+                    && !in_double_quote
+                    && j + 1 < chars.len()
+                    && chars[j + 1] == '<' =>
+                {
+                    // Found <<
+                    let mut k = j + 2;
+                    // Check for <<- (strip tabs)
+                    let strip_tabs = k < chars.len() && chars[k] == '-';
+                    if strip_tabs {
+                        k += 1;
+                    }
+                    // Skip whitespace after << or <<-
+                    while k < chars.len() && chars[k] == ' ' {
+                        k += 1;
+                    }
+                    // Read delimiter (possibly quoted)
+                    let mut delim = String::new();
+                    let mut quoted = false;
+                    if k < chars.len() && (chars[k] == '\'' || chars[k] == '"')
+                    {
+                        quoted = true;
+                        let quote_char = chars[k];
+                        k += 1;
+                        while k < chars.len() && chars[k] != quote_char {
+                            delim.push(chars[k]);
                             k += 1;
                         }
-                        // Skip whitespace after << or <<-
-                        while k < chars.len() && chars[k] == ' ' {
-                            k += 1;
+                        if k < chars.len() {
+                            k += 1; // skip closing quote
                         }
-                        // Read delimiter (possibly quoted)
-                        let mut delim = String::new();
-                        let mut quoted = false;
-                        if k < chars.len()
-                            && (chars[k] == '\'' || chars[k] == '"')
+                    } else {
+                        while k < chars.len()
+                            && chars[k] != ' '
+                            && chars[k] != '\t'
+                            && chars[k] != '\n'
+                            && chars[k] != ';'
+                            && chars[k] != '&'
+                            && chars[k] != '|'
+                            && chars[k] != ')'
+                            && chars[k] != '>'
+                            && chars[k] != '<'
                         {
-                            quoted = true;
-                            let quote_char = chars[k];
+                            delim.push(chars[k]);
                             k += 1;
-                            while k < chars.len() && chars[k] != quote_char {
-                                delim.push(chars[k]);
-                                k += 1;
-                            }
-                            if k < chars.len() {
-                                k += 1; // skip closing quote
-                            }
-                        } else {
-                            while k < chars.len()
-                                && chars[k] != ' '
-                                && chars[k] != '\t'
-                                && chars[k] != '\n'
-                                && chars[k] != ';'
-                                && chars[k] != '&'
-                                && chars[k] != '|'
-                                && chars[k] != ')'
-                                && chars[k] != '>'
-                                && chars[k] != '<'
-                            {
-                                delim.push(chars[k]);
-                                k += 1;
-                            }
                         }
-                        if !delim.is_empty() {
-                            pending.push((
-                                delim,
-                                quoted,
-                                strip_tabs,
-                                Vec::new(),
-                            ));
-                            j = k;
-                            continue;
-                        }
+                    }
+                    if !delim.is_empty() {
+                        pending.push((delim, quoted, strip_tabs, Vec::new()));
+                        j = k;
+                        continue;
                     }
                 }
                 _ => {}
