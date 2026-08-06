@@ -22,7 +22,7 @@ fn execute_printenv(context: &mut ShellCommandContext) -> Result<(), i32> {
     if args.is_empty() {
         // Print all environment variables
         let mut vars: Vec<_> = env_vars.iter().collect();
-        vars.sort_by(|(a, _), (b, _)| a.cmp(b));
+        vars.sort_by_key(|(key, _)| *key);
 
         for (key, value) in vars {
             context
