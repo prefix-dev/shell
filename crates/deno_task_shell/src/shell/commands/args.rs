@@ -15,16 +15,16 @@ impl ArgKind<'_> {
     pub fn bail_unsupported(&self) -> Result<()> {
         match self {
             ArgKind::Arg(arg) => {
-                bail!("unsupported argument: {}", arg)
+                bail!("unsupported argument: {}", arg);
             }
             ArgKind::LongFlag(name) => {
-                bail!("unsupported flag: --{}", name)
+                bail!("unsupported flag: --{}", name);
             }
             ArgKind::ShortFlag(name) => {
-                bail!("unsupported flag: -{}", name)
+                bail!("unsupported flag: -{}", name);
             }
             ArgKind::PlusFlag(name) => {
-                bail!("unsupported flag: +{}", name)
+                bail!("unsupported flag: +{}", name);
             }
         }
     }

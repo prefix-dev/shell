@@ -170,7 +170,7 @@ async fn parse_shebang_args(
     context: &mut ShellCommandContext,
 ) -> Result<Vec<String>> {
     fn err_unsupported(text: &str) -> Result<Vec<String>> {
-        miette::bail!("unsupported shebang. Please report this as a bug (https://github.com/prefix.dev/shell).\n\nShebang: {}", text)
+        miette::bail!("unsupported shebang. Please report this as a bug (https://github.com/prefix.dev/shell).\n\nShebang: {}", text);
     }
 
     let mut args = crate::parser::parse(text)?;

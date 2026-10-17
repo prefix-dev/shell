@@ -98,11 +98,13 @@ fn delimit_blanks(text: &str) -> Result<Vec<String>> {
                             break;
                         }
                         match c {
-                            '\n' => bail!("{}", UNMATCHED_MESSAGE),
+                            '\n' => {
+                                bail!("{}", UNMATCHED_MESSAGE);
+                            }
                             _ => current.push(c),
                         }
                         if chars.peek().is_none() {
-                            bail!("{}", UNMATCHED_MESSAGE)
+                            bail!("{}", UNMATCHED_MESSAGE);
                         }
                     }
                 }
@@ -147,8 +149,12 @@ fn parse_args(args: Vec<String>) -> Result<XargsFlags> {
                     Some('t') => '\t',
                     Some('\\') => '\\',
                     Some('0') => '\0',
-                    None => bail!("expected character following escape"),
-                    _ => bail!("unsupported/not implemented escape character"),
+                    None => {
+                        bail!("expected character following escape");
+                    }
+                    _ => {
+                        bail!("unsupported/not implemented escape character");
+                    }
                 };
             }
 
@@ -197,7 +203,9 @@ fn parse_args(args: Vec<String>) -> Result<XargsFlags> {
                 Some(ArgKind::Arg(arg)) => {
                     delimiter = Some(parse_delimiter(arg)?);
                 }
-                _ => bail!("expected delimiter argument following -d"),
+                _ => {
+                    bail!("expected delimiter argument following -d");
+                }
             },
             ArgKind::LongFlag(flag) => {
                 if let Some(arg) = flag.strip_prefix("delimiter=") {
@@ -211,7 +219,7 @@ fn parse_args(args: Vec<String>) -> Result<XargsFlags> {
     }
 
     if is_null_delimited && delimiter.is_some() {
-        bail!("cannot specify both null and delimiter flag")
+        bail!("cannot specify both null and delimiter flag");
     }
 
     Ok(XargsFlags {

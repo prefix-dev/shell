@@ -241,7 +241,7 @@ impl TestBuilder {
         let state = ShellState::new(
             self.env_vars.clone(),
             &cwd,
-            self.custom_commands.drain().collect(),
+            std::mem::take(&mut self.custom_commands),
         );
         let exit_code = local_set
             .run_until(execute_with_pipes(list, state, stdin, stdout, stderr))
