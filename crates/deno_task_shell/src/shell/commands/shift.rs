@@ -70,11 +70,14 @@ impl ShellCommand for ShiftCommand {
             changes.push(EnvChange::UnsetVar(idx.to_string()));
         }
 
-        // Update $# (parameter count)
+        // Update $# (parameter count), $@ and $*
         changes.push(EnvChange::SetShellVar(
             "#".to_string(),
             remaining.len().to_string(),
         ));
+        let joined = remaining.join(" ");
+        changes.push(EnvChange::SetShellVar("@".to_string(), joined.clone()));
+        changes.push(EnvChange::SetShellVar("*".to_string(), joined));
 
         Box::pin(futures::future::ready(ExecuteResult::Continue(
             0,

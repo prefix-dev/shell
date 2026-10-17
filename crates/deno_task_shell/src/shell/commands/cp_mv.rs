@@ -78,15 +78,15 @@ async fn do_copy_operation(
             if to.path.exists() && to.path.is_file() {
                 bail!("destination was a file");
             } else if to.path.is_symlink() {
-                bail!("no support for copying to symlinks")
+                bail!("no support for copying to symlinks");
             } else if from.path.is_symlink() {
-                bail!("no support for copying from symlinks")
+                bail!("no support for copying from symlinks");
             } else {
                 copy_dir_recursively(from.path.clone(), to.path.clone())
                     .await?;
             }
         } else {
-            bail!("source was a directory; maybe specify -r")
+            bail!("source was a directory; maybe specify -r");
         }
     } else {
         tokio::fs::copy(&from.path, &to.path)

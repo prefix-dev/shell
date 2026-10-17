@@ -1460,7 +1460,8 @@ async fn test_set() {
         echo "hi"
         "#,
         )
-        .assert_stdout("+ echo hi\nhi\n")
+        .assert_stdout("hi\n")
+        .assert_stderr("+ echo hi\n")
         .run()
         .await;
 
@@ -1471,7 +1472,8 @@ async fn test_set() {
         echo "hi" && echo "This should be printed" || echo "This should not be printed"
         "#,
         )
-        .assert_stdout("+ echo hi\nhi\n+ echo This should be printed\nThis should be printed\n")
+        .assert_stdout("hi\nThis should be printed\n")
+        .assert_stderr("+ echo hi\n+ echo This should be printed\n")
         .run()
         .await;
 
@@ -1483,7 +1485,8 @@ async fn test_set() {
         echo $FOO
         "#,
         )
-        .assert_stdout("+ FOO=1\n+ echo 1\n1\n")
+        .assert_stdout("1\n")
+        .assert_stderr("+ FOO=1\n+ echo 1\n")
         .run()
         .await;
 
@@ -1497,7 +1500,8 @@ async fn test_set() {
         echo "This should be printed"
         "#,
         )
-        .assert_stdout("+ FOO=1\n+ echo 1\n1\n+ set +x\nThis should be printed\n")
+        .assert_stdout("1\nThis should be printed\n")
+        .assert_stderr("+ FOO=1\n+ echo 1\n+ set +x\n")
         .run()
         .await;
 
@@ -1507,7 +1511,22 @@ async fn test_set() {
             echo $((10 + 20))
         "#,
         )
-        .assert_stdout("+ echo 30\n30\n")
+        .assert_stdout("30\n")
+        .assert_stderr("+ echo 30\n")
+        .run()
+        .await;
+
+    // The trace goes to stderr, so it is not captured by command
+    // substitution (prefix-dev/shell#293)
+    TestBuilder::new()
+        .command(
+            r#"set -x
+            v=$(echo hello)
+            echo "v=[$v]"
+        "#,
+        )
+        .assert_stdout("v=[hello]\n")
+        .assert_stderr("+ echo hello\n+ v=hello\n+ echo v=[hello]\n")
         .run()
         .await;
 }

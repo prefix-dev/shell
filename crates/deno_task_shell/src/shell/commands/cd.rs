@@ -45,7 +45,7 @@ fn execute_cd(
     let path = if args.is_empty() {
         "~".to_string()
     } else if args.len() > 1 {
-        bail!("too many arguments")
+        bail!("too many arguments");
     } else {
         args[0].clone()
     };
@@ -57,7 +57,7 @@ fn execute_cd(
         .unwrap_or_else(|_| fs_util::canonicalize_path(&new_dir).unwrap());
 
     if !new_dir.is_dir() {
-        bail!("{}: Not a directory", path)
+        bail!("{}: Not a directory", path);
     }
     Ok(new_dir)
 }

@@ -134,7 +134,9 @@ fn parse_args(args: Vec<String>) -> Result<HeadFlags> {
                 Some(ArgKind::Arg(arg)) => {
                     lines = Some(arg.parse::<u64>().into_diagnostic()?);
                 }
-                _ => bail!("expected a value following -n"),
+                _ => {
+                    bail!("expected a value following -n");
+                }
             },
             ArgKind::LongFlag(flag) => {
                 if flag == "lines" || flag == "lines=" {

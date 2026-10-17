@@ -47,7 +47,9 @@ fn execute_set(args: Vec<String>) -> Result<(i32, Vec<EnvChange>)> {
             ArgKind::PlusFlag('u') => {
                 env_changes.push(EnvChange::SetShellOptions(ShellOptions::NoUnset, false));
             }
-            _ => bail!(format!("Unsupported argument: {:?}", arg)),
+            _ => {
+                bail!(format!("Unsupported argument: {:?}", arg));
+            }
         }
     }
     Ok((0, env_changes))
