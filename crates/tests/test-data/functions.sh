@@ -61,3 +61,20 @@ first
 > f() { echo second; }
 > f
 second
+
+# Braced positional parameters (prefix-dev/shell#292)
+> braced() { echo "[${1}x] [${2:-none}] [${3-unset}] [${@}] [${*}]"; }
+> braced a b
+[ax] [b] [unset] [a b] [a b]
+
+# Default value for a missing positional parameter
+> dir() { d="${1:-.}"; echo "$d"; }
+> dir
+> dir build
+.
+build
+
+# Multi-digit braced positional parameter
+> tenth() { echo "${10:-none}"; }
+> tenth 1 2 3 4 5 6 7 8 9 ten
+ten
