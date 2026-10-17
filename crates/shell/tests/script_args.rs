@@ -52,3 +52,25 @@ echo "all=[$@]"
 "#;
     assert_eq!(run_script("no_args.sh", script, &[]), "count=0\nall=[]\n");
 }
+
+#[test]
+fn script_forwards_arguments() {
+    // "$@" keeps each script argument as a separate word, also after shift
+    let script = r#"build_dir="${1:-.}"
+if [ "$#" -gt 0 ]; then
+    shift
+fi
+echo "build_dir=$build_dir"
+for a in -S . "$@"; do
+    echo "[$a]"
+done
+"#;
+    assert_eq!(
+        run_script("forward.sh", script, &["build", "-DA=1", "-DB=x y"]),
+        "build_dir=build\n[-S]\n[.]\n[-DA=1]\n[-DB=x y]\n"
+    );
+    assert_eq!(
+        run_script("forward_none.sh", script, &[]),
+        "build_dir=.\n[-S]\n[.]\n"
+    );
+}

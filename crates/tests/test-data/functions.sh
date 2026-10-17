@@ -78,3 +78,39 @@ build
 > tenth() { echo "${10:-none}"; }
 > tenth 1 2 3 4 5 6 7 8 9 ten
 ten
+
+# "$@" expands to one word per positional parameter (prefix-dev/shell#291)
+> count() { echo $#; }
+> fwd() { count "$@"; }
+> fwd a 'b c' d
+> fwd
+> fwd ""
+3
+0
+1
+
+> each() { for a in "$@"; do echo "[$a]"; done }
+> each a 'b c'
+[a]
+[b c]
+
+# Text around "$@" joins the first and last parameters
+> words() { for a in "pre$@post"; do echo "[$a]"; done }
+> words a b
+> words
+[prea]
+[bpost]
+[prepost]
+
+# Unquoted $@ also gives one word per parameter
+> count() { echo $#; }
+> fwd() { count $@; }
+> fwd a b c
+3
+
+# shift updates "$@" and "$*"
+> rest() { shift; echo "$*"; for a in "$@"; do echo "[$a]"; done }
+> rest a b 'c d'
+b c d
+[b]
+[c d]
