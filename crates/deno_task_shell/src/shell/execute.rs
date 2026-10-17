@@ -251,7 +251,7 @@ fn execute_sequence(
     sequence: Sequence,
     mut state: ShellState,
     stdin: ShellPipeReader,
-    mut stdout: ShellPipeWriter,
+    stdout: ShellPipeWriter,
     mut stderr: ShellPipeWriter,
 ) -> FutureExecuteResult {
     // requires boxed async because of recursive async
@@ -274,7 +274,7 @@ fn execute_sequence(
 
                 if state.print_trace() {
                     let _ =
-                        stdout.write_line(&format!("+ {}={}", var.name, value));
+                        stderr.write_line(&format!("+ {}={}", var.name, value));
                 }
 
                 ExecuteResult::Continue(
@@ -1814,7 +1814,7 @@ async fn execute_simple_command(
     command: SimpleCommand,
     state: &mut ShellState,
     stdin: ShellPipeReader,
-    mut stdout: ShellPipeWriter,
+    stdout: ShellPipeWriter,
     mut stderr: ShellPipeWriter,
 ) -> ExecuteResult {
     let args =
@@ -1846,7 +1846,7 @@ async fn execute_simple_command(
         changes.extend(word_result.changes);
 
         if state.print_trace() {
-            let _ = stdout.write_line(&format!(
+            let _ = stderr.write_line(&format!(
                 "+ {:}={:}",
                 env_var.name, word_result.value
             ));
@@ -1854,7 +1854,7 @@ async fn execute_simple_command(
     }
 
     if state.print_trace() {
-        let _ = stdout.write_line(&format!("+ {:}", args.join(" ")));
+        let _ = stderr.write_line(&format!("+ {:}", args.join(" ")));
     }
 
     let result = execute_command_args(args, state, stdin, stdout, stderr).await;
