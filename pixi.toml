@@ -3,7 +3,7 @@ authors = ["The prefix-dev/shell team <hi@prefix.dev>"]
 channels = ["conda-forge"]
 name = "shell"
 platforms = ["win-64"]
-version = "0.3.0"
+version = "0.3.1"
 preview = ["pixi-build"]
 
 [tasks]
