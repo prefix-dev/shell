@@ -61,3 +61,56 @@ first
 > f() { echo second; }
 > f
 second
+
+# Braced positional parameters (prefix-dev/shell#292)
+> braced() { echo "[${1}x] [${2:-none}] [${3-unset}] [${@}] [${*}]"; }
+> braced a b
+[ax] [b] [unset] [a b] [a b]
+
+# Default value for a missing positional parameter
+> dir() { d="${1:-.}"; echo "$d"; }
+> dir
+> dir build
+.
+build
+
+# Multi-digit braced positional parameter
+> tenth() { echo "${10:-none}"; }
+> tenth 1 2 3 4 5 6 7 8 9 ten
+ten
+
+# "$@" expands to one word per positional parameter (prefix-dev/shell#291)
+> count() { echo $#; }
+> fwd() { count "$@"; }
+> fwd a 'b c' d
+> fwd
+> fwd ""
+3
+0
+1
+
+> each() { for a in "$@"; do echo "[$a]"; done }
+> each a 'b c'
+[a]
+[b c]
+
+# Text around "$@" joins the first and last parameters
+> words() { for a in "pre$@post"; do echo "[$a]"; done }
+> words a b
+> words
+[prea]
+[bpost]
+[prepost]
+
+# Unquoted $@ also gives one word per parameter
+> count() { echo $#; }
+> fwd() { count $@; }
+> fwd a b c
+3
+
+# shift updates "$@" and "$*"
+> rest() { shift; echo "$*"; for a in "$@"; do echo "[$a]"; done }
+> rest a b 'c d'
+b c d
+[b]
+[c d]

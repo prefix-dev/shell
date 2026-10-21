@@ -38,7 +38,9 @@ fn parse_names(mut args: Vec<String>) -> Result<Vec<String>> {
             // Running the actual `unset` with no argument completes with success.
             Ok(args)
         }
-        Some(flag) if flag == "-f" => bail!("unsupported flag: -f"),
+        Some(flag) if flag == "-f" => {
+            bail!("unsupported flag: -f");
+        }
         Some(flag) if flag == "-v" => {
             // It's fine to use `swap_remove` (instead of `remove`) because the order
             // of args doesn't matter for `unset` command.

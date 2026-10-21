@@ -58,11 +58,13 @@ fn parse_args(args: Vec<String>) -> Result<i32> {
             let arg = paths.remove(0).to_string();
             match arg.parse::<i32>() {
                 Ok(value) => Ok(value),
-                Err(_) => bail!("numeric argument required."),
+                Err(_) => {
+                    bail!("numeric argument required.");
+                }
             }
         }
         _ => {
-            bail!("too many arguments")
+            bail!("too many arguments");
         }
     }
 }

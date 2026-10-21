@@ -90,6 +90,8 @@ VARIABLE_EXPANSION = ${
     "$" ~ (
         "{" ~ INDIRECT_VARIABLE ~ VARIABLE_MODIFIER? ~ "}" |
         "{" ~ VARIABLE ~ VARIABLE_MODIFIER? ~ "}" |
+        "{" ~ ARGNUM ~ VARIABLE_MODIFIER? ~ "}" |
+        "{" ~ BRACED_ALL_PARAMS ~ "}" |
         SPECIAL_PARAM |
         VARIABLE
     )
@@ -117,6 +119,8 @@ BRACE_STEP = ${
 
 SPECIAL_PARAM = ${ ARGNUM | "@" | "#" | "?" | "$" | "*" }
 ARGNUM = ${ ASCII_NONZERO_DIGIT ~ ASCII_DIGIT* | "0" }
+// ${@} and ${*}; modifiers such as ${@:2} (slicing) are not supported
+BRACED_ALL_PARAMS = ${ "@" | "*" }
 VARIABLE = ${ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 
 VARIABLE_MODIFIER = _{

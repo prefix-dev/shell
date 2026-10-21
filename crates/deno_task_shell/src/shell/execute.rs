@@ -251,7 +251,7 @@ fn execute_sequence(
     sequence: Sequence,
     mut state: ShellState,
     stdin: ShellPipeReader,
-    mut stdout: ShellPipeWriter,
+    stdout: ShellPipeWriter,
     mut stderr: ShellPipeWriter,
 ) -> FutureExecuteResult {
     // requires boxed async because of recursive async
@@ -274,7 +274,7 @@ fn execute_sequence(
 
                 if state.print_trace() {
                     let _ =
-                        stdout.write_line(&format!("+ {}={}", var.name, value));
+                        stderr.write_line(&format!("+ {}={}", var.name, value));
                 }
 
                 ExecuteResult::Continue(
@@ -1814,7 +1814,7 @@ async fn execute_simple_command(
     command: SimpleCommand,
     state: &mut ShellState,
     stdin: ShellPipeReader,
-    mut stdout: ShellPipeWriter,
+    stdout: ShellPipeWriter,
     mut stderr: ShellPipeWriter,
 ) -> ExecuteResult {
     let args =
@@ -1846,7 +1846,7 @@ async fn execute_simple_command(
         changes.extend(word_result.changes);
 
         if state.print_trace() {
-            let _ = stdout.write_line(&format!(
+            let _ = stderr.write_line(&format!(
                 "+ {:}={:}",
                 env_var.name, word_result.value
             ));
@@ -1854,7 +1854,7 @@ async fn execute_simple_command(
     }
 
     if state.print_trace() {
-        let _ = stdout.write_line(&format!("+ {:}", args.join(" ")));
+        let _ = stderr.write_line(&format!("+ {:}", args.join(" ")));
     }
 
     let result = execute_command_args(args, state, stdin, stdout, stderr).await;
@@ -2553,6 +2553,26 @@ fn expand_brace_word_parts(
     Ok(result)
 }
 
+/// Whether a variable expansion is `$@` or `${@}` without a modifier.
+fn is_all_params(
+    name: &str,
+    modifier: &Option<Box<VariableModifier>>,
+    indirect: bool,
+) -> bool {
+    name == "@" && modifier.is_none() && !indirect
+}
+
+/// The positional parameters `$1` to `${N}`, where N is `$#`.
+fn positional_params(state: &ShellState) -> Vec<String> {
+    let count = state
+        .get_var("#")
+        .and_then(|n| n.parse::<usize>().ok())
+        .unwrap_or(0);
+    (1..=count)
+        .map(|i| state.get_var(&i.to_string()).cloned().unwrap_or_default())
+        .collect()
+}
+
 fn evaluate_word_parts(
     parts: Vec<WordPart>,
     state: &mut ShellState,
@@ -2676,7 +2696,8 @@ fn evaluate_word_parts(
         async move {
             let mut result = WordPartsResult::new(Vec::new(), Vec::new());
             let mut current_text = Vec::new();
-            for part in parts {
+            let mut parts = std::collections::VecDeque::from(parts);
+            while let Some(part) = parts.pop_front() {
                 let evaluation_result_text: Result<Option<Text>, Error> =
                     match part {
                         WordPart::Text(text) => {
@@ -2694,7 +2715,18 @@ fn evaluate_word_parts(
                             } else {
                                 name.clone()
                             };
-                            if let Some(modifier) = modifier {
+                            if is_all_params(&resolved_name, &modifier, indirect)
+                            {
+                                // Unquoted $@ expands to one word per
+                                // non-empty positional parameter
+                                Ok(Some(Text::new(
+                                    positional_params(state)
+                                        .into_iter()
+                                        .filter(|p| !p.is_empty())
+                                        .map(OtherText)
+                                        .collect(),
+                                )))
+                            } else if let Some(modifier) = modifier {
                                 let (text, env_changes) = modifier
                                     .apply(
                                         &resolved_name,
@@ -2734,9 +2766,51 @@ fn evaluate_word_parts(
                             .await;
                             Ok(Some(cmd.into()))
                         }
-                        WordPart::Quoted(parts) => {
+                        WordPart::Quoted(mut quoted_parts) => {
+                            // "$@" expands to one word per positional
+                            // parameter: "pre$@post" with parameters a and b
+                            // gives "prea" and "bpost", and with no
+                            // parameters "$@" gives no word at all.
+                            if let Some(idx) = quoted_parts.iter().position(|p| {
+                                matches!(p, WordPart::Variable(name, modifier, indirect)
+                                    if is_all_params(name, modifier, *indirect))
+                            }) {
+                                let after = quoted_parts.split_off(idx + 1);
+                                quoted_parts.pop();
+                                if !quoted_parts.is_empty() {
+                                    let res = evaluate_word_parts_inner(
+                                        quoted_parts,
+                                        IsQuoted::Yes,
+                                        eval_glob,
+                                        state,
+                                        stdin.clone(),
+                                        stderr.clone(),
+                                    )
+                                    .await?;
+                                    result.with_changes(res.changes);
+                                    current_text
+                                        .push(TextPart::Quoted(res.value.join(" ")));
+                                }
+                                let params = positional_params(state);
+                                let count = params.len();
+                                for (i, param) in params.into_iter().enumerate() {
+                                    current_text.push(TextPart::Quoted(param));
+                                    if i + 1 < count {
+                                        result.extend(evaluate_word_text(
+                                            state,
+                                            std::mem::take(&mut current_text),
+                                            is_quoted,
+                                            eval_glob,
+                                        )?);
+                                    }
+                                }
+                                if !after.is_empty() {
+                                    parts.push_front(WordPart::Quoted(after));
+                                }
+                                continue;
+                            }
                             let res = evaluate_word_parts_inner(
-                                parts,
+                                quoted_parts,
                                 IsQuoted::Yes,
                                 eval_glob,
                                 state,
